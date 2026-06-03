@@ -1,0 +1,161 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.buildlog/
+.history
+.svn/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+/build/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# iOS/macOS
+**/ios/**/*.mode1v3
+**/ios/**/*.mode2v3
+**/ios/**/*.moved-aside
+**/ios/**/*.pbxuser
+**/ios/**/*.perspectivev3
+**/ios/**/*sync/
+**/ios/**/.sconsign.dblite
+**/ios/**/.tags*
+**/ios/**/.vagrant/
+**/ios/**/DerivedData/
+**/ios/**/Icon?
+**/ios/**/Icon??
+**/ios/**/Icon???
+**/ios/**/Icon????
+**/ios/**/Icon?????
+**/ios/**/Icon??????
+**/ios/**/Icon?????? Lock
+**/ios/**/Icon???? Lock
+**/ios/**/Icon??? Lock
+**/ios/**/Icon?? Lock
+**/ios/**/Icon? Lock
+**/ios/**/Icon Lock
+**/ios/**/Iconm
+**/ios/**/Icond
+**/ios/**/Iconc
+**/ios/**/Iconbuild/
+**/ios/**/ConvertedCode/
+**/ios/**/Flutter/Flutter.framework
+**/ios/**/Flutter/Flutter.podspec
+**/ios/**/Flutter/Generated.xcconfig
+**/ios/**/Flutter/ephemeralx/
+**/ios/**/Pods/
+**/ios/**/.symlinks/
+**/ios/**/.dart_tool/
+**/ios/**/.flutter-plugins*
+**/ios/**/.packages
+**/ios/**/.pub-cache/
+**/ios/**/.pub/
+**/ios/**/build/
+**/ios/**/flutter_assets/
+**/ios/**/flutter_export_environment.sh
+**/ios/**/GeneratedPluginRegistrant.*
+**/ios/**/google_maps_flutter_ios/
+**/ios/**/connectivity_plus/
+**/ios/**/package_info_plus/
+**/ios/**/path_provider_ios/
+**/ios/**/screen_retriever/
+**/ios/**/share_plus/
+**/ios/**/shared_preferences_ios/
+**/ios/**/wakelock_plus/
+
+# Android/gradle
+**/android/**/gradle-wrapper.jar
+**/android/.gradle
+**/android/captures/
+**/android/gradlew
+**/android/gradlew.bat
+**/android/local.properties
+**/android/**/GeneratedPluginRegistrant.java
+**/android/key.properties
+*.jks
+*.keystore
+
+# iOS/macOS
+**/ios/**/*.mode1v3
+**/ios/**/*.mode2v3
+**/ios/**/*.moved-aside
+**/ios/**/*.pbxuser
+**/ios/**/*.perspectivev3
+**/ios/**/*sync/
+**/ios/**/.sconsign.dblite
+**/ios/**/.tags*
+**/ios/**/.vagrant/
+**/ios/**/DerivedData/
+**/ios/**/Icon?
+**/ios/**/Icon??
+**/ios/**/Icon???
+**/ios/**/Icon????
+**/ios/**/Icon?????
+**/ios/**/Icon??
+**/ios/**/Icon????? Lock
+**/ios/**/Icon???? Lock
+**/ios/**/Icon??? Lock
+**/ios/**/Icon?? Lock
+**/ios/**/Icon? Lock
+**/ios/**/Iconm
+**/ios/**/Icond
+**/ios/**/Iconc
+**/ios/**/Iconbuild/
+**/ios/**/ConvertedCode/
+
+# Web
+lib/generated_plugin_registrant.dart
+
+# Windows
+windows/flutter/generated_plugins.cmake
+windows/flutter/generated_plugins.cmake.in
+windows/flutter/generated_plugins_config.cmake
+windows/flutter/GeneratedPluginRegistrant.cpp
+windows/flutter/GeneratedPluginRegistrant.h
+
+# macOS
+macos/Flutter/GeneratedPluginRegistrant.swift
+macos/Flutter/Flutter-Debug.xcconfig
+macos/Flutter/Flutter-Release.xcconfig
+macos/Flutter/Flutter-Profile.xcconfig
+
+# Linux
+linux/flutter/generated_plugins.cmake
+linux/flutter/generated_plugins.cmake.in
+linux/flutter/generated_plugins_config.cmake
+linux/flutter/GeneratedPluginRegistrant.cpp
+linux/flutter/GeneratedPluginRegistrant.h
+linux/flutter/linux_plugins_plugin_build.gmk
+
+# Coverage
+coverage/
+
+# Exceptions to above rules.
+!/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages

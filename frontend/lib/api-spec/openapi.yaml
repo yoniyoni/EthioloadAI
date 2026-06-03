@@ -1,0 +1,1496 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: FreightLink Ethiopia - AI-Powered Freight Exchange Platform
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: users
+    description: User profile operations
+  - name: drivers
+    description: Driver profile and verification
+  - name: vehicles
+    description: Vehicle management
+  - name: freight
+    description: Freight request operations
+  - name: applications
+    description: Freight application operations
+  - name: matching
+    description: AI matching and recommendations
+  - name: ratings
+    description: Rating and review operations
+  - name: tracking
+    description: Real-time GPS tracking
+  - name: admin
+    description: Admin management operations
+  - name: analytics
+    description: Platform analytics
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  # --- AUTH ---
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "201":
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Bad request
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized
+
+  # --- USERS ---
+  /users/me:
+    patch:
+      operationId: updateMe
+      tags: [users]
+      summary: Update current user profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{id}:
+    get:
+      operationId: getUserById
+      tags: [users]
+      summary: Get user by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Not found
+
+  # --- DRIVERS ---
+  /drivers/profile:
+    post:
+      operationId: createDriverProfile
+      tags: [drivers]
+      summary: Create or update driver profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DriverProfileInput"
+      responses:
+        "201":
+          description: Driver profile created/updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Driver"
+
+  /drivers:
+    get:
+      operationId: listDrivers
+      tags: [drivers]
+      summary: List all drivers (admin / shipper)
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, submitted, under_review, approved, active, suspended]
+        - in: query
+          name: available
+          schema:
+            type: boolean
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of drivers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriverList"
+
+  /drivers/me:
+    get:
+      operationId: getMyDriverProfile
+      tags: [drivers]
+      summary: Get current user's driver profile
+      responses:
+        "200":
+          description: Driver profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Driver"
+        "404":
+          description: No driver profile
+
+  /drivers/{id}:
+    get:
+      operationId: getDriverById
+      tags: [drivers]
+      summary: Get driver by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Driver
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Driver"
+        "404":
+          description: Not found
+
+  /drivers/{id}/status:
+    patch:
+      operationId: updateDriverStatus
+      tags: [drivers]
+      summary: Update driver verification status (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DriverStatusUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Driver"
+
+  # --- VEHICLES ---
+  /vehicles:
+    post:
+      operationId: createVehicle
+      tags: [vehicles]
+      summary: Register a new vehicle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VehicleInput"
+      responses:
+        "201":
+          description: Vehicle created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+
+  /vehicles/my:
+    get:
+      operationId: listMyVehicles
+      tags: [vehicles]
+      summary: List current driver's vehicles
+      responses:
+        "200":
+          description: Vehicles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Vehicle"
+
+  /vehicles/{id}:
+    get:
+      operationId: getVehicleById
+      tags: [vehicles]
+      summary: Get vehicle by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Vehicle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+    patch:
+      operationId: updateVehicle
+      tags: [vehicles]
+      summary: Update vehicle info
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VehicleUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+
+  # --- FREIGHT REQUESTS ---
+  /freight:
+    get:
+      operationId: listFreight
+      tags: [freight]
+      summary: List freight requests
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [draft, posted, matched, accepted, in_transit, delivered, completed, cancelled]
+        - in: query
+          name: shipperId
+          schema:
+            type: integer
+        - in: query
+          name: cargoType
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Freight list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FreightList"
+
+    post:
+      operationId: createFreight
+      tags: [freight]
+      summary: Create a freight request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FreightInput"
+      responses:
+        "201":
+          description: Freight created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FreightRequest"
+
+  /freight/my:
+    get:
+      operationId: listMyFreight
+      tags: [freight]
+      summary: List current shipper's freight requests
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+      responses:
+        "200":
+          description: My freight
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FreightRequest"
+
+  /freight/{id}:
+    get:
+      operationId: getFreightById
+      tags: [freight]
+      summary: Get freight request by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Freight request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FreightRequest"
+        "404":
+          description: Not found
+
+    patch:
+      operationId: updateFreight
+      tags: [freight]
+      summary: Update freight request
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FreightUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FreightRequest"
+
+    delete:
+      operationId: deleteFreight
+      tags: [freight]
+      summary: Delete (cancel) a freight request
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /freight/{id}/status:
+    patch:
+      operationId: updateFreightStatus
+      tags: [freight]
+      summary: Update freight status
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FreightStatusUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FreightRequest"
+
+  # --- APPLICATIONS ---
+  /freight/{id}/applications:
+    get:
+      operationId: listFreightApplications
+      tags: [applications]
+      summary: List applications for a freight request
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Applications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FreightApplication"
+
+    post:
+      operationId: applyForFreight
+      tags: [applications]
+      summary: Driver applies for a freight request
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplicationInput"
+      responses:
+        "201":
+          description: Application submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FreightApplication"
+
+  /applications/{id}/status:
+    patch:
+      operationId: updateApplicationStatus
+      tags: [applications]
+      summary: Accept or reject an application
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplicationStatusUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FreightApplication"
+
+  /drivers/my-applications:
+    get:
+      operationId: listMyApplications
+      tags: [applications]
+      summary: List current driver's applications
+      responses:
+        "200":
+          description: Applications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FreightApplication"
+
+  # --- MATCHING ---
+  /freight/{id}/matches:
+    get:
+      operationId: getFreightMatches
+      tags: [matching]
+      summary: Get AI-matched drivers for a freight request
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Matched drivers ranked by score
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MatchedDriver"
+
+  /predict/price:
+    get:
+      operationId: predictPrice
+      tags: [matching]
+      summary: AI price prediction
+      parameters:
+        - in: query
+          name: weightTons
+          required: true
+          schema:
+            type: number
+        - in: query
+          name: distanceKm
+          required: true
+          schema:
+            type: number
+        - in: query
+          name: cargoType
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Price prediction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PricePrediction"
+
+  /recommend/vehicle:
+    get:
+      operationId: recommendVehicle
+      tags: [matching]
+      summary: Recommend vehicle type for cargo
+      parameters:
+        - in: query
+          name: weightTons
+          required: true
+          schema:
+            type: number
+        - in: query
+          name: cargoType
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: distanceKm
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Vehicle recommendation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VehicleRecommendation"
+
+  # --- RATINGS ---
+  /ratings:
+    post:
+      operationId: createRating
+      tags: [ratings]
+      summary: Submit a rating after delivery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RatingInput"
+      responses:
+        "201":
+          description: Rating submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Rating"
+
+  /ratings/driver/{id}:
+    get:
+      operationId: getDriverRatings
+      tags: [ratings]
+      summary: Get all ratings for a driver
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Ratings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Rating"
+
+  # --- TRACKING ---
+  /tracking:
+    post:
+      operationId: postTrackingUpdate
+      tags: [tracking]
+      summary: Driver posts GPS location update
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrackingInput"
+      responses:
+        "201":
+          description: Location recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrackingLocation"
+
+  /tracking/{freightId}:
+    get:
+      operationId: getTrackingHistory
+      tags: [tracking]
+      summary: Get tracking history for a freight
+      parameters:
+        - in: path
+          name: freightId
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Tracking points
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TrackingLocation"
+
+  /tracking/{freightId}/latest:
+    get:
+      operationId: getLatestTracking
+      tags: [tracking]
+      summary: Get latest GPS location for a freight
+      parameters:
+        - in: path
+          name: freightId
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Latest location
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrackingLocation"
+        "404":
+          description: No tracking data
+
+  # --- ADMIN ---
+  /admin/stats:
+    get:
+      operationId: getAdminStats
+      tags: [admin]
+      summary: Platform-wide statistics (admin only)
+      responses:
+        "200":
+          description: Platform stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [admin]
+      summary: List all users (admin only)
+      parameters:
+        - in: query
+          name: role
+          schema:
+            type: string
+            enum: [admin, shipper, driver, fleet_owner, support]
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Users
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserList"
+
+  /admin/freight:
+    get:
+      operationId: listAdminFreight
+      tags: [admin]
+      summary: List all freight requests (admin)
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: All freight
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FreightList"
+
+  /admin/analytics/routes:
+    get:
+      operationId: getPopularRoutes
+      tags: [analytics]
+      summary: Get most popular freight routes
+      responses:
+        "200":
+          description: Popular routes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PopularRoute"
+
+  /admin/analytics/revenue:
+    get:
+      operationId: getRevenueStats
+      tags: [analytics]
+      summary: Revenue over time
+      responses:
+        "200":
+          description: Revenue data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RevenuePoint"
+
+  /admin/analytics/cargo:
+    get:
+      operationId: getCargoTypeStats
+      tags: [analytics]
+      summary: Freight breakdown by cargo type
+      responses:
+        "200":
+          description: Cargo stats
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CargoStat"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+
+    # --- AUTH SCHEMAS ---
+    RegisterInput:
+      type: object
+      required: [name, email, password, phone, role]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+        phone:
+          type: string
+        role:
+          type: string
+          enum: [shipper, driver, fleet_owner]
+
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      required: [token, user]
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+
+    # --- USER SCHEMAS ---
+    User:
+      type: object
+      required: [id, name, email, phone, role, createdAt]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        role:
+          type: string
+          enum: [admin, shipper, driver, fleet_owner, support]
+        avatarUrl:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        businessName:
+          type: ["string", "null"]
+        preferredLanguage:
+          type: string
+          default: "en"
+        isVerified:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    UserUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        address:
+          type: string
+        businessName:
+          type: string
+        avatarUrl:
+          type: string
+        preferredLanguage:
+          type: string
+          enum: [en, am, om, ti]
+
+    UserList:
+      type: object
+      required: [users, total]
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        total:
+          type: integer
+
+    # --- DRIVER SCHEMAS ---
+    Driver:
+      type: object
+      required: [id, userId, status, createdAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        user:
+          $ref: "#/components/schemas/User"
+        licenseNumber:
+          type: ["string", "null"]
+        nationalId:
+          type: ["string", "null"]
+        yearsExperience:
+          type: ["integer", "null"]
+        status:
+          type: string
+          enum: [pending, submitted, under_review, approved, active, suspended]
+        rating:
+          type: number
+        totalDeliveries:
+          type: integer
+        successRate:
+          type: number
+        cancellationRate:
+          type: number
+        currentLatitude:
+          type: ["number", "null"]
+        currentLongitude:
+          type: ["number", "null"]
+        isAvailable:
+          type: boolean
+        vehicles:
+          type: array
+          items:
+            $ref: "#/components/schemas/Vehicle"
+        createdAt:
+          type: string
+          format: date-time
+
+    DriverList:
+      type: object
+      required: [drivers, total]
+      properties:
+        drivers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Driver"
+        total:
+          type: integer
+
+    DriverProfileInput:
+      type: object
+      properties:
+        licenseNumber:
+          type: string
+        nationalId:
+          type: string
+        yearsExperience:
+          type: integer
+        currentLatitude:
+          type: number
+        currentLongitude:
+          type: number
+
+    DriverStatusUpdate:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [pending, submitted, under_review, approved, active, suspended]
+        notes:
+          type: string
+
+    # --- VEHICLE SCHEMAS ---
+    Vehicle:
+      type: object
+      required: [id, driverId, truckType, plateNumber, capacityTons, createdAt]
+      properties:
+        id:
+          type: integer
+        driverId:
+          type: integer
+        truckType:
+          type: string
+          enum: [pickup, light_truck, medium_truck, heavy_truck, tanker, refrigerated, flatbed, tipper]
+        plateNumber:
+          type: string
+        capacityTons:
+          type: number
+        volumeM3:
+          type: ["number", "null"]
+        fuelType:
+          type: string
+          enum: [diesel, petrol, gas, electric]
+        isAvailable:
+          type: boolean
+        photoUrl:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    VehicleInput:
+      type: object
+      required: [truckType, plateNumber, capacityTons, fuelType]
+      properties:
+        truckType:
+          type: string
+          enum: [pickup, light_truck, medium_truck, heavy_truck, tanker, refrigerated, flatbed, tipper]
+        plateNumber:
+          type: string
+        capacityTons:
+          type: number
+        volumeM3:
+          type: number
+        fuelType:
+          type: string
+          enum: [diesel, petrol, gas, electric]
+        photoUrl:
+          type: string
+
+    VehicleUpdate:
+      type: object
+      properties:
+        capacityTons:
+          type: number
+        volumeM3:
+          type: number
+        isAvailable:
+          type: boolean
+        photoUrl:
+          type: string
+
+    # --- FREIGHT SCHEMAS ---
+    FreightRequest:
+      type: object
+      required: [id, shipperId, pickupLocation, deliveryLocation, cargoType, weightTons, status, createdAt]
+      properties:
+        id:
+          type: integer
+        shipperId:
+          type: integer
+        shipper:
+          $ref: "#/components/schemas/User"
+        matchedDriverId:
+          type: ["integer", "null"]
+        pickupLocation:
+          type: string
+        pickupLatitude:
+          type: ["number", "null"]
+        pickupLongitude:
+          type: ["number", "null"]
+        deliveryLocation:
+          type: string
+        deliveryLatitude:
+          type: ["number", "null"]
+        deliveryLongitude:
+          type: ["number", "null"]
+        cargoType:
+          type: string
+          enum: [grain, cement, fuel, livestock, electronics, furniture, construction, perishables, machinery, other]
+        cargoDescription:
+          type: ["string", "null"]
+        weightTons:
+          type: number
+        volumeM3:
+          type: ["number", "null"]
+        deadline:
+          type: ["string", "null"]
+          format: date-time
+        budget:
+          type: ["number", "null"]
+        specialInstructions:
+          type: ["string", "null"]
+        distanceKm:
+          type: ["number", "null"]
+        status:
+          type: string
+          enum: [draft, posted, matched, accepted, in_transit, delivered, completed, cancelled]
+        createdAt:
+          type: string
+          format: date-time
+
+    FreightList:
+      type: object
+      required: [freight, total]
+      properties:
+        freight:
+          type: array
+          items:
+            $ref: "#/components/schemas/FreightRequest"
+        total:
+          type: integer
+
+    FreightInput:
+      type: object
+      required: [pickupLocation, deliveryLocation, cargoType, weightTons]
+      properties:
+        pickupLocation:
+          type: string
+        pickupLatitude:
+          type: number
+        pickupLongitude:
+          type: number
+        deliveryLocation:
+          type: string
+        deliveryLatitude:
+          type: number
+        deliveryLongitude:
+          type: number
+        cargoType:
+          type: string
+          enum: [grain, cement, fuel, livestock, electronics, furniture, construction, perishables, machinery, other]
+        cargoDescription:
+          type: string
+        weightTons:
+          type: number
+        volumeM3:
+          type: number
+        deadline:
+          type: string
+          format: date-time
+        budget:
+          type: number
+        specialInstructions:
+          type: string
+        distanceKm:
+          type: number
+        status:
+          type: string
+          enum: [draft, posted]
+          default: posted
+
+    FreightUpdate:
+      type: object
+      properties:
+        pickupLocation:
+          type: string
+        deliveryLocation:
+          type: string
+        cargoType:
+          type: string
+        cargoDescription:
+          type: string
+        weightTons:
+          type: number
+        deadline:
+          type: string
+          format: date-time
+        budget:
+          type: number
+        specialInstructions:
+          type: string
+
+    FreightStatusUpdate:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [draft, posted, matched, accepted, in_transit, delivered, completed, cancelled]
+
+    # --- APPLICATION SCHEMAS ---
+    FreightApplication:
+      type: object
+      required: [id, freightId, driverId, status, createdAt]
+      properties:
+        id:
+          type: integer
+        freightId:
+          type: integer
+        freight:
+          $ref: "#/components/schemas/FreightRequest"
+        driverId:
+          type: integer
+        driver:
+          $ref: "#/components/schemas/Driver"
+        proposedPrice:
+          type: ["number", "null"]
+        message:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, accepted, rejected, withdrawn]
+        createdAt:
+          type: string
+          format: date-time
+
+    ApplicationInput:
+      type: object
+      properties:
+        proposedPrice:
+          type: number
+        message:
+          type: string
+
+    ApplicationStatusUpdate:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [accepted, rejected]
+
+    # --- MATCHING SCHEMAS ---
+    MatchedDriver:
+      type: object
+      required: [driver, matchScore]
+      properties:
+        driver:
+          $ref: "#/components/schemas/Driver"
+        matchScore:
+          type: number
+        capacityScore:
+          type: number
+        distanceScore:
+          type: number
+        ratingScore:
+          type: number
+        priceScore:
+          type: number
+        distanceKm:
+          type: ["number", "null"]
+        estimatedPrice:
+          type: ["number", "null"]
+
+    PricePrediction:
+      type: object
+      required: [minPrice, maxPrice, recommendedPrice, currency]
+      properties:
+        minPrice:
+          type: number
+        maxPrice:
+          type: number
+        recommendedPrice:
+          type: number
+        currency:
+          type: string
+        pricePerKm:
+          type: number
+        pricePerTon:
+          type: number
+        factors:
+          type: array
+          items:
+            type: string
+
+    VehicleRecommendation:
+      type: object
+      required: [truckType, reason, capacityRange]
+      properties:
+        truckType:
+          type: string
+        capacityRange:
+          type: string
+        reason:
+          type: string
+        examples:
+          type: array
+          items:
+            type: string
+
+    # --- RATING SCHEMAS ---
+    Rating:
+      type: object
+      required: [id, freightId, raterId, rateeId, stars, type, createdAt]
+      properties:
+        id:
+          type: integer
+        freightId:
+          type: integer
+        raterId:
+          type: integer
+        rateeId:
+          type: integer
+        stars:
+          type: integer
+          minimum: 1
+          maximum: 5
+        review:
+          type: ["string", "null"]
+        type:
+          type: string
+          enum: [shipper_to_driver, driver_to_shipper]
+        createdAt:
+          type: string
+          format: date-time
+
+    RatingInput:
+      type: object
+      required: [freightId, rateeId, stars, type]
+      properties:
+        freightId:
+          type: integer
+        rateeId:
+          type: integer
+        stars:
+          type: integer
+          minimum: 1
+          maximum: 5
+        review:
+          type: string
+        type:
+          type: string
+          enum: [shipper_to_driver, driver_to_shipper]
+
+    # --- TRACKING SCHEMAS ---
+    TrackingLocation:
+      type: object
+      required: [id, freightId, driverId, latitude, longitude, timestamp]
+      properties:
+        id:
+          type: integer
+        freightId:
+          type: integer
+        driverId:
+          type: integer
+        latitude:
+          type: number
+        longitude:
+          type: number
+        speed:
+          type: ["number", "null"]
+        heading:
+          type: ["number", "null"]
+        timestamp:
+          type: string
+          format: date-time
+
+    TrackingInput:
+      type: object
+      required: [freightId, latitude, longitude]
+      properties:
+        freightId:
+          type: integer
+        latitude:
+          type: number
+        longitude:
+          type: number
+        speed:
+          type: number
+        heading:
+          type: number
+
+    # --- ADMIN SCHEMAS ---
+    AdminStats:
+      type: object
+      required: [totalUsers, totalDrivers, activeFreight, completedDeliveries, totalRevenue, pendingVerifications, averageDeliveryTime]
+      properties:
+        totalUsers:
+          type: integer
+        totalDrivers:
+          type: integer
+        activeFreight:
+          type: integer
+        completedDeliveries:
+          type: integer
+        totalRevenue:
+          type: number
+        pendingVerifications:
+          type: integer
+        averageDeliveryTime:
+          type: number
+        activeVehicles:
+          type: integer
+        successRate:
+          type: number
+
+    PopularRoute:
+      type: object
+      required: [pickup, delivery, count]
+      properties:
+        pickup:
+          type: string
+        delivery:
+          type: string
+        count:
+          type: integer
+        avgPrice:
+          type: ["number", "null"]
+        avgDistanceKm:
+          type: ["number", "null"]
+
+    RevenuePoint:
+      type: object
+      required: [month, revenue, deliveries]
+      properties:
+        month:
+          type: string
+        revenue:
+          type: number
+        deliveries:
+          type: integer
+
+    CargoStat:
+      type: object
+      required: [cargoType, count, percentage]
+      properties:
+        cargoType:
+          type: string
+        count:
+          type: integer
+        percentage:
+          type: number

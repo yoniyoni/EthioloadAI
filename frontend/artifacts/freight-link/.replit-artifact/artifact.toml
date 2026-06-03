@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "FreightLink Ethiopia"
+version = "1.0.0"
+id = "artifacts/freight-link"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24512
+
+[services.development]
+run = "pnpm --filter @workspace/freight-link run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/freight-link", "run", "build" ]
+publicDir = "artifacts/freight-link/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24512"
+BASE_PATH = "/"

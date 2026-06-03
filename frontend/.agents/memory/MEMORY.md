@@ -1,0 +1,2 @@
+- [FreightLink route conventions](freightlink-routes.md) — backend route paths vs frontend expectations; public routes need optionalAuthenticate.
+- [FreightLink response shapes](freightlink-shapes.md) — vehicles, applications, and admin stats return wrapped objects, not raw arrays.

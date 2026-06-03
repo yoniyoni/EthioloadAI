@@ -1,0 +1,577 @@
+# MASTER DEVELOPMENT PROMPT
+
+You are a Senior Software Architect, AI Engineer, Product Designer, Backend Engineer, Mobile Engineer, and DevOps Engineer.
+
+Your task is to design and build a production-ready AI-Based Smart Vehicle Recommendation and Freight Exchange Platform for Ethiopia.
+
+The goal is to create a digital logistics marketplace that intelligently connects cargo owners (shippers) with truck owners/drivers using AI-powered recommendations, smart pricing, route optimization, and freight matching.
+
+The system must be mobile-first.
+
+Mobile Application:
+
+* Flutter
+* Dart
+
+Web Application:
+
+* Next.js 15
+* TypeScript
+* Tailwind CSS
+* Shadcn UI
+
+Backend:
+
+* NestJS
+* TypeScript
+* Prisma ORM
+
+Database:
+
+* PostgreSQL
+
+Caching:
+
+* Redis
+
+AI Microservice:
+
+* Python
+* FastAPI
+* Scikit-Learn
+* TensorFlow
+* PyTorch (optional)
+
+Maps & Location:
+
+* Google Maps API
+* Mapbox API
+
+Realtime:
+
+* Socket.IO
+
+Authentication:
+
+* JWT
+* Refresh Tokens
+* OTP Verification
+
+Cloud Storage:
+
+* AWS S3 or Cloudinary
+
+Notifications:
+
+* Firebase Cloud Messaging (FCM)
+
+Payment Integration:
+
+* Chapa
+* Telebirr (future)
+* CBE Birr (future)
+
+---
+
+## PRODUCT OVERVIEW
+
+The platform serves two primary user groups:
+
+1. Shippers
+2. Drivers / Truck Owners
+
+A shipper can create freight requests.
+
+A driver can browse freight requests or receive AI-recommended jobs.
+
+The system automatically recommends the most suitable driver and vehicle for each freight request.
+
+The platform aims to reduce:
+
+* Empty truck trips
+* Logistics costs
+* Freight matching delays
+
+while increasing:
+
+* Driver earnings
+* Delivery efficiency
+* Pricing transparency
+
+---
+
+## USER ROLES
+
+1. Admin
+2. Shipper
+3. Driver
+4. Fleet Owner
+5. Support Agent
+
+---
+
+## DRIVER REGISTRATION
+
+Driver profile contains:
+
+* Full name
+* Phone number
+* Email
+* National ID
+* Driver License
+* Profile photo
+* Address
+* Current location
+* Years of experience
+
+Vehicle Information:
+
+* Truck type
+* Plate number
+* Capacity
+* Volume
+* Fuel type
+* Vehicle photos
+* Availability status
+
+Verification workflow:
+
+Pending
+→ Submitted
+→ Admin Review
+→ Approved
+→ Active
+
+---
+
+## SHIPPER REGISTRATION
+
+* Full name
+* Business name
+* Phone
+* Email
+* Address
+* Verification status
+
+---
+
+## FREIGHT POSTING
+
+A shipper can create a freight request.
+
+Required fields:
+
+* Pickup location
+* Delivery location
+* Cargo type
+* Cargo description
+* Weight
+* Volume
+* Delivery deadline
+* Budget
+* Special instructions
+
+Status:
+
+Draft
+Posted
+Matched
+Accepted
+In Transit
+Delivered
+Completed
+
+---
+
+## MATCHING ENGINE
+
+When a freight request is posted:
+
+System performs:
+
+1. Capacity Matching
+
+Find vehicles capable of transporting cargo.
+
+2. Distance Matching
+
+Find nearest available vehicles.
+
+3. Driver Quality Matching
+
+Consider:
+
+* Ratings
+* Success rate
+* Cancellation rate
+* Previous deliveries
+
+4. Cost Matching
+
+Compare historical freight prices.
+
+Generate ranking score:
+
+MatchingScore =
+CapacityScore +
+DistanceScore +
+RatingScore +
+PriceScore
+
+Return Top 10 recommended drivers.
+
+---
+
+## AI DRIVER RECOMMENDATION ENGINE
+
+Build recommendation engine using:
+
+Inputs:
+
+* Cargo type
+* Cargo weight
+* Route
+* Driver history
+* Delivery success rate
+* Vehicle capacity
+* Driver ratings
+
+Output:
+
+Recommended drivers list.
+
+Train recommendation model continuously.
+
+---
+
+## AI VEHICLE RECOMMENDATION
+
+Given:
+
+* Weight
+* Cargo type
+* Distance
+
+Recommend:
+
+* Vehicle type
+* Vehicle size
+* Capacity range
+
+Example:
+
+5 Tons Grain
+→ Medium Cargo Truck
+
+20 Tons Cement
+→ Heavy Duty Truck
+
+---
+
+## AI PRICE PREDICTION
+
+Build pricing prediction model.
+
+Inputs:
+
+* Distance
+* Weight
+* Cargo type
+* Fuel cost
+* Demand level
+* Season
+
+Output:
+
+Recommended market price.
+
+Purpose:
+
+Prevent overpricing and underpricing.
+
+---
+
+## AI DEMAND FORECASTING
+
+Predict:
+
+* High-demand routes
+* Seasonal logistics demand
+* Vehicle shortages
+
+Output dashboard for admin.
+
+---
+
+## AI EMPTY TRIP REDUCTION
+
+When a truck completes delivery:
+
+Search nearby freight requests.
+
+Recommend return cargo.
+
+Goal:
+
+Minimize empty return trips.
+
+---
+
+## NLP FREIGHT ASSISTANT
+
+Support:
+
+* Amharic
+* Afaan Oromo
+* English
+
+Example:
+
+"ከጎንደር ወደ አዲስ አበባ 10 ቶን ስንዴ ማጓጓዝ እፈልጋለሁ"
+
+Extract:
+
+* Pickup
+* Destination
+* Cargo
+* Weight
+
+Automatically populate freight form.
+
+Use LLM/NLP architecture.
+
+---
+
+## REAL-TIME TRACKING
+
+Driver mobile app continuously sends GPS updates.
+
+Store:
+
+* Latitude
+* Longitude
+* Timestamp
+
+Features:
+
+* Live map tracking
+* Route history
+* ETA prediction
+
+---
+
+## PAYMENT SYSTEM
+
+Escrow workflow:
+
+1. Shipper creates freight.
+2. Payment held.
+3. Driver completes delivery.
+4. Shipper confirms.
+5. Platform releases payment.
+6. Platform deducts commission.
+
+---
+
+## RATING SYSTEM
+
+After delivery:
+
+Shipper rates driver.
+
+Driver rates shipper.
+
+Store:
+
+* Stars
+* Review text
+* Delivery score
+
+---
+
+## DIGITAL CONTRACT SYSTEM
+
+Automatically generate freight agreement.
+
+Include:
+
+* Pickup
+* Destination
+* Price
+* Cargo details
+* Delivery deadline
+
+Generate downloadable PDF.
+
+---
+
+## ADMIN DASHBOARD
+
+Admin must manage:
+
+Users
+Drivers
+Fleet owners
+Freight requests
+Payments
+AI recommendations
+Reports
+
+Analytics:
+
+Revenue
+Completed deliveries
+Active vehicles
+Popular routes
+Average delivery time
+
+---
+
+## DATABASE DESIGN
+
+Design normalized PostgreSQL schema.
+
+Entities:
+
+Users
+Roles
+Drivers
+FleetOwners
+Vehicles
+FreightRequests
+FreightApplications
+Recommendations
+Payments
+Transactions
+Ratings
+Reviews
+TrackingLocations
+Notifications
+Contracts
+PricePredictions
+DemandForecasts
+AIModels
+
+Generate complete Prisma schema.
+
+---
+
+## API DESIGN
+
+Create production-ready REST APIs.
+
+Use:
+
+NestJS
+Prisma
+JWT
+
+Generate:
+
+Controllers
+Services
+DTOs
+Validation
+Swagger Documentation
+
+---
+
+## SECURITY
+
+Implement:
+
+RBAC
+Rate Limiting
+Input Validation
+Audit Logs
+Encryption
+Secure File Uploads
+
+---
+
+## DEVOPS
+
+Use:
+
+Docker(Requirements:
+
+1. Configure Docker volumes and bind mounts so files are not stored only inside the container.
+2. Create dedicated folders on my computer for:
+
+   * uploads
+   * documents
+   * images
+   * logs
+   * backups
+3. Update the Docker Compose configuration to map these folders from the container to my local machine.
+4. Ensure that when I upload a file through the application, I can immediately see it in Windows File Explorer.
+5. Create a file management page in the admin dashboard where I can:
+
+   * View uploaded files
+   * Download files
+   * Delete files
+   * Search files
+   * See file size and upload date
+6. Add proper permissions and security checks.
+7. Explain the folder structure and show me exactly where files are stored on my PC.
+8. Teach me how to inspect Docker volumes and mounted folders manually.
+9. Provide commands for Windows PowerShell to verify that files are being saved correctly.)
+   Docker Compose
+
+Provide:
+
+Development Environment
+Production Environment
+
+CI/CD:
+
+GitHub Actions
+
+---
+
+## DELIVERABLES
+
+Generate:
+
+1. Complete System Architecture
+2. ER Diagram
+3. Database Schema
+4. API Documentation
+5. Backend Implementation
+6. Flutter Mobile Application
+7. Next.js Web Application
+8. AI Service
+9. Docker Configuration
+10. Deployment Guide
+
+Build the project incrementally.
+
+Phase 1:
+Authentication
+Users
+Vehicles
+Freight Posting
+
+Phase 2:
+Matching Engine
+Tracking
+Payments
+
+Phase 3:
+AI Recommendations
+Price Prediction
+Demand Forecasting
+
+Phase 4:
+NLP Assistant
+Advanced Analytics
+
+For every feature:
+
+* Explain architecture
+* Generate production-ready code
+* Follow clean architecture
+* Follow SOLID principles
+* Follow scalable enterprise standards
+
+Do not use mock implementations unless explicitly required.

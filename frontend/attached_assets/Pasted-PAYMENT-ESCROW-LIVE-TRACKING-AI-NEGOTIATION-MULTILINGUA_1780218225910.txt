@@ -1,0 +1,454 @@
+PAYMENT ESCROW, LIVE TRACKING, AI NEGOTIATION, MULTILINGUAL SUPPORT, AND LOGISTICS ASSISTANT IMPLEMENTATION
+
+You are acting as a Senior Logistics Platform Architect, Fintech Architect, AI Engineer, and Security Engineer.
+
+Analyze the existing freight exchange platform and implement the following business logic.
+
+CRITICAL BUSINESS RULE
+
+Users must NOT be able to complete freight agreements outside the platform.
+
+The platform must own and control the agreement process.
+
+The platform must own and control the payment process.
+
+The platform must own and control delivery verification.
+
+This is required to:
+
+Prevent fraud
+Prevent bypassing platform commissions
+Build trust
+Maintain transaction records
+Ensure dispute resolution
+
+The platform must function similar to:
+
+Uber Freight
+Upwork Escrow
+Airbnb Payments
+NEW FREIGHT WORKFLOW
+
+STEP 1
+
+Shipper creates freight request.
+
+Includes:
+
+Pickup location
+Delivery location
+Cargo type
+Weight
+Volume
+Budget
+Delivery deadline
+
+STEP 2
+
+AI analyzes freight request.
+
+AI evaluates:
+
+Cargo type
+Weight
+Distance
+Historical freight prices
+Current demand
+Driver availability
+Vehicle capacity
+
+AI generates:
+
+Recommended price range
+Recommended vehicle type
+Recommended drivers
+
+STEP 3
+
+System shows top recommended drivers.
+
+Ranking based on:
+
+40% Distance
+
+25% Rating
+
+20% Delivery Success Rate
+
+15% Price Competitiveness
+
+Generate transparent score.
+
+Example:
+
+Driver A
+95 Match Score
+
+Driver B
+91 Match Score
+
+Driver C
+89 Match Score
+
+STEP 4
+
+Shipper selects preferred driver.
+
+Driver receives request.
+
+Driver may:
+
+Accept
+Reject
+Counter Offer
+
+STEP 5
+
+Agreement Phase
+
+Once both parties agree:
+
+Create digital freight contract.
+
+Store:
+
+Freight details
+Driver details
+Agreed amount
+Pickup location
+Destination
+Delivery deadline
+
+Generate PDF.
+
+Store permanently.
+
+STEP 6
+
+MANDATORY PAYMENT ESCROW
+
+Before shipment begins:
+
+Shipper must pay through platform.
+
+Supported providers:
+
+Chapa API
+CBE Birr API
+Telebirr API (future)
+
+NO shipment can start without payment.
+
+ESCROW LOGIC
+
+After payment:
+
+Funds are NOT sent immediately to driver.
+
+Funds remain in escrow.
+
+Status:
+
+PAYMENT_HELD
+
+STEP 7
+
+Shipment Starts
+
+Driver starts trip.
+
+Tracking activated.
+
+Live GPS begins.
+
+STEP 8
+
+Delivery Verification
+
+Driver marks delivery completed.
+
+Shipper confirms.
+
+System verifies.
+
+Status:
+
+DELIVERED
+
+STEP 9
+
+Release Funds
+
+After confirmation:
+
+Platform automatically:
+
+Releases driver payment.
+
+Deducts platform commission.
+
+Records transaction.
+
+Status:
+
+PAYMENT_RELEASED
+
+STEP 10
+
+Ratings
+
+Both parties rate each other.
+
+Store:
+
+Rating
+Review
+Delivery quality
+Communication quality
+LIVE VEHICLE TRACKING
+
+Implement real-time GPS tracking.
+
+Driver app sends:
+
+Latitude
+Longitude
+Speed
+Heading
+Timestamp
+
+Every 5 to 10 seconds.
+
+Store route history.
+
+Features:
+
+Live map
+
+Current location
+
+Estimated arrival time
+
+Trip progress
+
+Distance remaining
+
+Historical route replay
+
+Driver location updates using:
+
+Flutter GPS
+Socket.IO
+Google Maps API
+
+DISPUTE MANAGEMENT
+
+If delivery issue occurs:
+
+Funds remain locked.
+
+Admin investigates.
+
+Admin can:
+
+Release payment
+Issue refund
+Split payment
+
+Implement dispute dashboard.
+
+AI FREIGHT ASSISTANT
+
+Build AI logistics assistant.
+
+Purpose:
+
+Help users understand system.
+
+Help users create shipments.
+
+Help users estimate costs.
+
+Help users understand freight process.
+
+Help users choose vehicle type.
+
+Assistant capabilities:
+
+"What truck should I use for 10 tons of wheat?"
+
+"How much should transport cost from Gondar to Addis?"
+
+"Which driver is best?"
+
+"What does delivery status mean?"
+
+MULTI-LANGUAGE SUPPORT
+
+Entire platform must support:
+
+English
+Amharic
+Afaan Oromo
+Tigrinya
+
+Not only UI labels.
+
+Support:
+
+Menus
+
+Forms
+
+Notifications
+
+Emails
+
+SMS
+
+AI Assistant
+
+Validation Messages
+
+Error Messages
+
+Contracts
+
+Payment Instructions
+
+Implement professional i18n architecture.
+
+Use translation files.
+
+Allow instant language switching.
+
+Store user language preference.
+
+AI LANGUAGE UNDERSTANDING
+
+The assistant must understand user messages in:
+
+Amharic
+
+Afaan Oromo
+
+Tigrinya
+
+English
+
+Examples:
+
+"ከጎንደር ወደ አዲስ 10 ቶን ስንዴ ማጓጓዝ እፈልጋለሁ"
+
+"Ba’aa qamadii toonii 10 Gondar irraa Finfinneetti geessuu barbaada"
+
+Extract:
+
+Pickup
+
+Destination
+
+Cargo Type
+
+Weight
+
+Automatically create shipment draft.
+
+PAYMENT PROVIDER ARCHITECTURE
+
+Implement payment abstraction layer.
+
+PaymentProvider Interface
+
+Methods:
+
+initializePayment()
+
+verifyPayment()
+
+refundPayment()
+
+releaseEscrow()
+
+Current Providers:
+
+Chapa
+
+Future Providers:
+
+CBE Birr
+
+Telebirr
+
+System must allow adding providers without rewriting business logic.
+
+ADMIN MONITORING
+
+Admin dashboard must display:
+
+Total Transactions
+
+Escrow Balance
+
+Active Shipments
+
+Driver Activity
+
+Fraud Alerts
+
+Disputes
+
+Revenue
+
+Commission Reports
+
+SECURITY
+
+Prevent users from exchanging payments outside platform.
+
+Implement:
+
+In-app messaging monitoring
+
+Phone number masking during active transactions
+
+Payment reminders
+
+Agreement enforcement
+
+Shipment cannot move to active state unless payment is held in escrow.
+
+FINAL REQUIREMENT
+
+Before implementation:
+
+Explain:
+
+Current payment flow.
+Current freight agreement flow.
+Current tracking architecture.
+Current AI architecture.
+
+Then redesign and implement the improved architecture using enterprise-grade patterns.
+
+Generate:
+
+Database changes
+
+API changes
+
+Flutter screens
+
+NestJS services
+
+AI service architecture
+
+Payment architecture
+
+Tracking architecture
+
+Escrow architecture
+
+Multi-language architecture
+
+Deployment architecture
