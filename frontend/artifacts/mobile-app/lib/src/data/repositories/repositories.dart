@@ -147,8 +147,8 @@ class CargoRepository {
         final raw = response.data;
         final d = (raw is Map && raw.containsKey('data')) ? raw['data'] : raw;
         return (
-          min: (d['min_price'] ?? d['min']) as int?,
-          max: (d['max_price'] ?? d['max']) as int?,
+          min: (d['price_min'] ?? d['min_price'] ?? d['min']) as int?,
+          max: (d['price_max'] ?? d['max_price'] ?? d['max']) as int?,
           distanceKm: (d['distance_km'] ?? d['distanceKm']) as int?,
         );
       }
