@@ -261,25 +261,34 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
         }
       });
 
-  /// Shipper pays — booking moves to confirmed
-  Future<void> _pay() => _run(() async {
-        final payment =
-            await ref.read(paymentRepositoryProvider).create(
-                  bookingId: widget.booking.id,
-                  amount: widget.booking.estimatedPrice,
-                  paymentMethod: 'in_app',
-                );
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(
-              'Payment of ETB ${payment.amount.toStringAsFixed(0)} successful! '
-              'Booking confirmed.',
-            ),
-            backgroundColor: kSuccess,
-            duration: const Duration(seconds: 4),
-          ));
-        }
-      });
+  /// Shipper pays — shows payment method picker then confirms booking
+  Future<void> _pay() async {
+    final method = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => const _PaymentMethodSheet(),
+    );
+    if (method == null || !mounted) return;
+
+    await _run(() async {
+      final payment = await ref.read(paymentRepositoryProvider).create(
+            bookingId: widget.booking.id,
+            amount: widget.booking.estimatedPrice,
+            paymentMethod: method,
+          );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            'Payment of ETB ${payment.amount.toStringAsFixed(0)} confirmed via '
+            '${_methodLabel(method)}.',
+          ),
+          backgroundColor: kSuccess,
+          duration: const Duration(seconds: 4),
+        ));
+      }
+    });
+  }
 
   /// Driver starts the trip
   Future<void> _startTrip() async {
@@ -651,6 +660,10 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
             ),
             const SizedBox(height: 10),
           ],
+          if (b.paymentMethod != null) ...[
+            _PaymentMethodBadge(method: b.paymentMethod!),
+            const SizedBox(height: 10),
+          ],
           if (_tripStarted) ...[
             _InfoBanner(
               icon: Icons.local_shipping_rounded,
@@ -743,7 +756,7 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
             icon: Icons.payment_rounded,
             color: kSuccess,
             onTap: _pay,
-            subtitle: 'In-app payment · secures the booking',
+            subtitle: 'Choose payment method · Telebirr, Bank or Cash',
           ),
         ],
       );
@@ -764,6 +777,10 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
             ),
             const SizedBox(height: 8),
           ],
+          if (b.paymentMethod != null) ...[
+            _PaymentMethodBadge(method: b.paymentMethod!),
+            const SizedBox(height: 8),
+          ],
           _InfoBanner(
             icon: Icons.local_shipping_rounded,
             message: 'Payment received — driver will start the trip.',
@@ -778,6 +795,10 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (b.paymentMethod != null) ...[
+            _PaymentMethodBadge(method: b.paymentMethod!),
+            const SizedBox(height: 8),
+          ],
           _InfoBanner(
             icon: Icons.check_circle_rounded,
             message: 'Delivery completed successfully.',
@@ -1494,6 +1515,180 @@ class _BackhaulCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── Payment helpers ───────────────────────────────────────────────────────
+
+String _methodLabel(String method) {
+  switch (method) {
+    case 'telebirr':     return 'Telebirr';
+    case 'bank_transfer': return 'Bank Transfer';
+    case 'cash':         return 'Cash';
+    default:             return method;
+  }
+}
+
+class _PaymentMethodBadge extends StatelessWidget {
+  final String method;
+  const _PaymentMethodBadge({required this.method});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: kGreen.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: kGreen.withValues(alpha: 0.25)),
+      ),
+      child: Row(children: [
+        const Icon(Icons.check_circle_outline_rounded,
+            size: 16, color: kGreen),
+        const SizedBox(width: 8),
+        Text('Payment method: ${_methodLabel(method)}',
+            style: GoogleFonts.inter(
+                fontSize: 13,
+                color: kGreen,
+                fontWeight: FontWeight.w600)),
+      ]),
+    );
+  }
+}
+
+// ── Payment method selection bottom sheet ────────────────────────────────
+
+class _PaymentMethodSheet extends StatefulWidget {
+  const _PaymentMethodSheet();
+
+  @override
+  State<_PaymentMethodSheet> createState() => _PaymentMethodSheetState();
+}
+
+class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
+  String? _selected;
+
+  static const _methods = [
+    ('telebirr',      'Telebirr',       'Mobile money — instant transfer',   Icons.phone_android_rounded),
+    ('bank_transfer', 'Bank Transfer',  'CBE, Awash, Abyssinia or any bank',  Icons.account_balance_rounded),
+    ('cash',          'Cash',           'Pay on delivery or pickup',          Icons.payments_rounded),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: kSurface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: kBorder,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text('Select Payment Method',
+              style: GoogleFonts.inter(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: kTextPrimary)),
+          const SizedBox(height: 4),
+          Text('Choose how the payment will be made',
+              style: GoogleFonts.inter(fontSize: 13, color: kTextSecond)),
+          const SizedBox(height: 16),
+          ..._methods.map((m) {
+            final (value, label, desc, icon) = m;
+            final selected = _selected == value;
+            return GestureDetector(
+              onTap: () => setState(() => _selected = value),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? kGreen.withValues(alpha: 0.06)
+                      : kBackground,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: selected ? kGreen : kBorder,
+                    width: selected ? 1.5 : 0.5,
+                  ),
+                ),
+                child: Row(children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: (selected ? kGreen : kTextSecond)
+                          .withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(icon,
+                        size: 20,
+                        color: selected ? kGreen : kTextSecond),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(label,
+                            style: GoogleFonts.inter(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: kTextPrimary)),
+                        const SizedBox(height: 2),
+                        Text(desc,
+                            style: GoogleFonts.inter(
+                                fontSize: 12, color: kTextSecond)),
+                      ],
+                    ),
+                  ),
+                  if (selected)
+                    const Icon(Icons.check_circle_rounded,
+                        color: kGreen, size: 20),
+                ]),
+              ),
+            );
+          }),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _selected == null
+                  ? null
+                  : () => Navigator.pop(context, _selected),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kSuccess,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: kBorder,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                elevation: 0,
+              ),
+              child: Text(
+                _selected == null
+                    ? 'Select a method to continue'
+                    : 'Confirm Payment via ${_methodLabel(_selected!)}',
+                style: GoogleFonts.inter(
+                    fontSize: 14, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

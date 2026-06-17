@@ -217,6 +217,9 @@ class Booking {
   final String? driverName;
   final String? shipperPhone;
   final String? shipperName;
+  // Payment
+  /// 'telebirr' | 'bank_transfer' | 'cash' | null
+  final String? paymentMethod;
   // Rating
   final bool hasRating;
   final DateTime? createdAt;
@@ -248,6 +251,7 @@ class Booking {
     this.driverName,
     this.shipperPhone,
     this.shipperName,
+    this.paymentMethod,
     this.hasRating = false,
     this.createdAt,
     this.updatedAt,
@@ -297,6 +301,7 @@ class Booking {
         driverName: json['driver_name'] as String?,
         shipperPhone: json['shipper_phone'] as String?,
         shipperName: json['shipper_name'] as String?,
+        paymentMethod: json['payment_method'] as String?,
         hasRating: json['has_rating'] == true,
         createdAt: json['created_at'] != null
             ? DateTime.tryParse(json['created_at'] as String)
