@@ -121,14 +121,22 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
             destination: deliveryLocation!,
             weight: double.tryParse(weight ?? '') ?? 10,
             urgencyLevel: 'normal',
+            materialType: cargoType ?? 'general',
           );
       if (mounted) {
-        setState(() {
-          _priceMin = result.min;
-          _priceMax = result.max;
-          _priceDistKm = result.distanceKm;
-          _priceLoading = false;
-        });
+        if (result.min != null && result.max != null) {
+          setState(() {
+            _priceMin = result.min;
+            _priceMax = result.max;
+            _priceDistKm = result.distanceKm;
+            _priceLoading = false;
+          });
+        } else {
+          setState(() {
+            _priceLoading = false;
+            _priceError = 'AI price service unavailable. Enter your budget manually.';
+          });
+        }
       }
     } catch (_) {
       if (mounted) {

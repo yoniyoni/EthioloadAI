@@ -10,6 +10,9 @@ class PricingRequest(BaseModel):
     # Laravel also sends these aliases
     from_: Optional[str] = None
     to: Optional[str] = None
+    # Admin-set rates passed from Laravel (overrides built-in defaults)
+    rate_min: Optional[float] = None
+    rate_max: Optional[float] = None
 
     class Config:
         populate_by_name = True

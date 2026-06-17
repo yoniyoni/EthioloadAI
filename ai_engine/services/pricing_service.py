@@ -100,8 +100,11 @@ def predict_price(request: PricingRequest) -> PricingResponse:
     urg_mul  = _urgency_mul(request.urgency_level  or 'normal')
     weight   = max(request.weight, 0.1)
 
-    raw_min = dist_km * RATE_MIN * weight * mat_mul * urg_mul
-    raw_max = dist_km * RATE_MAX * weight * mat_mul * urg_mul
+    rate_min = request.rate_min if request.rate_min is not None else RATE_MIN
+    rate_max = request.rate_max if request.rate_max is not None else RATE_MAX
+
+    raw_min = dist_km * rate_min * weight * mat_mul * urg_mul
+    raw_max = dist_km * rate_max * weight * mat_mul * urg_mul
 
     price_min = int(round(raw_min / 500) * 500)
     price_max = int(round(raw_max / 500) * 500)

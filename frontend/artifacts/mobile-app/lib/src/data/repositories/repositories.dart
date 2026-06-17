@@ -134,13 +134,14 @@ class CargoRepository {
     required String destination,
     required double weight,
     String urgencyLevel = 'normal',
+    String materialType = 'general',
   }) async {
     try {
       final response = await _api.dio.post('/ai/predict-price', data: {
         'pickup_location': pickup,
         'destination': destination,
         'weight': weight,
-        'material_type': 'general',
+        'material_type': materialType,
       });
       if (response.statusCode == 200) {
         final raw = response.data;
@@ -714,6 +715,21 @@ class BidRepository {
     }
     throw ApiException(
         message: 'Failed to accept counter-offer', statusCode: response.statusCode);
+  }
+
+  // ✓ PATCH /bids/{bidId} — driver updates their own pending bid
+  Future<Bid> update(int bidId, {required double amount, String? note}) async {
+    final response = await _api.dio.patch('/bids/$bidId', data: {
+      'amount': amount,
+      if (note != null && note.isNotEmpty) 'note': note,
+    });
+    if (response.statusCode == 200) {
+      final raw = response.data;
+      final data = (raw is Map && raw.containsKey('data')) ? raw['data'] : raw;
+      return Bid.fromJson(data as Map<String, dynamic>);
+    }
+    throw ApiException(
+        message: 'Failed to update bid', statusCode: response.statusCode);
   }
 
   // ✓ GET /driver/bids — driver sees all their bids with counter-offer state

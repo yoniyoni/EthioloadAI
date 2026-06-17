@@ -264,12 +264,22 @@ class _DetailScaffold extends ConsumerWidget {
 
 // ── Driver: Place Bid ─────────────────────────────────────────────────────
 
-class _DriverBidAction extends StatelessWidget {
+class _DriverBidAction extends ConsumerWidget {
   final CargoRequest cargo;
   const _DriverBidAction({required this.cargo});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final myBids = ref.watch(myBidsProvider).valueOrNull;
+    Bid? existingBid;
+    if (myBids != null) {
+      final matches = myBids.where(
+        (b) => b.cargoRequestId == cargo.id &&
+               (b.status == 'pending' || b.status == 'countered'),
+      );
+      existingBid = matches.isEmpty ? null : matches.first;
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -279,37 +289,67 @@ class _DriverBidAction extends StatelessWidget {
                 fontWeight: FontWeight.bold,
                 color: kTextPrimary)),
         const SizedBox(height: 6),
-        Text(
-          cargo.budget != null
-              ? 'Shipper budget: ETB ${cargo.budget!.toStringAsFixed(0)}'
-              : 'Budget not specified — propose your own price.',
-          style: GoogleFonts.inter(fontSize: 12, color: kTextMuted),
-        ),
+        if (existingBid != null)
+          Text(
+            'Your bid: ETB ${existingBid.amount.toStringAsFixed(0)} — ${existingBid.status}',
+            style: GoogleFonts.inter(
+                fontSize: 12, color: kAmber, fontWeight: FontWeight.w600),
+          )
+        else
+          Text(
+            cargo.budget != null
+                ? 'Shipper budget: ETB ${cargo.budget!.toStringAsFixed(0)}'
+                : 'Budget not specified — propose your own price.',
+            style: GoogleFonts.inter(fontSize: 12, color: kTextMuted),
+          ),
         const SizedBox(height: 12),
         SizedBox(
           width: double.infinity,
-          child: ElevatedButton.icon(
-            icon: const Icon(Icons.gavel_rounded, size: 18),
-            label: Text('Place Bid',
-                style: GoogleFonts.inter(
-                    fontSize: 14, fontWeight: FontWeight.w600)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: kAmber,
-              foregroundColor: kTextPrimary,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-              elevation: 0,
-            ),
-            onPressed: () => showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              shape: const RoundedRectangleBorder(
-                  borderRadius:
-                      BorderRadius.vertical(top: Radius.circular(20))),
-              builder: (_) => _PlaceBidSheet(cargo: cargo),
-            ),
-          ),
+          child: existingBid != null
+              ? OutlinedButton.icon(
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: Text('Edit Bid',
+                      style: GoogleFonts.inter(
+                          fontSize: 14, fontWeight: FontWeight.w600)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: kAmber,
+                    side: const BorderSide(color: kAmber),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () => showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    shape: const RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(20))),
+                    builder: (_) =>
+                        _PlaceBidSheet(cargo: cargo, existingBid: existingBid),
+                  ),
+                )
+              : ElevatedButton.icon(
+                  icon: const Icon(Icons.gavel_rounded, size: 18),
+                  label: Text('Place Bid',
+                      style: GoogleFonts.inter(
+                          fontSize: 14, fontWeight: FontWeight.w600)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: kAmber,
+                    foregroundColor: kTextPrimary,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    elevation: 0,
+                  ),
+                  onPressed: () => showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    shape: const RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(20))),
+                    builder: (_) => _PlaceBidSheet(cargo: cargo),
+                  ),
+                ),
         ),
       ],
     );
@@ -365,16 +405,28 @@ class _ShipperBidLink extends StatelessWidget {
 
 class _PlaceBidSheet extends ConsumerStatefulWidget {
   final CargoRequest cargo;
-  const _PlaceBidSheet({required this.cargo});
+  final Bid? existingBid;
+  const _PlaceBidSheet({required this.cargo, this.existingBid});
 
   @override
   ConsumerState<_PlaceBidSheet> createState() => _PlaceBidSheetState();
 }
 
 class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
-  final _amountCtrl = TextEditingController();
-  final _noteCtrl = TextEditingController();
+  late final TextEditingController _amountCtrl;
+  late final TextEditingController _noteCtrl;
   bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _amountCtrl = TextEditingController(
+      text: widget.existingBid != null
+          ? widget.existingBid!.amount.toStringAsFixed(0)
+          : '',
+    );
+    _noteCtrl = TextEditingController(text: widget.existingBid?.note ?? '');
+  }
 
   @override
   void dispose() {
@@ -393,28 +445,39 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
       return;
     }
 
-    final vehicles = await ref.read(vehicleListProvider.future);
-    if (!mounted) return;
-    if (vehicles.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Register a vehicle before placing a bid.'),
-        backgroundColor: kDanger,
-      ));
-      return;
-    }
-
     setState(() => _submitting = true);
     try {
-      await ref.read(bidRepositoryProvider).place(
-            cargoId: widget.cargo.id,
-            vehicleId: vehicles.first.id,
-            amount: amount,
-            note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
-          );
+      if (widget.existingBid != null) {
+        await ref.read(bidRepositoryProvider).update(
+              widget.existingBid!.id,
+              amount: amount,
+              note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+            );
+      } else {
+        final vehicles = await ref.read(vehicleListProvider.future);
+        if (!mounted) return;
+        if (vehicles.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Register a vehicle before placing a bid.'),
+            backgroundColor: kDanger,
+          ));
+          setState(() => _submitting = false);
+          return;
+        }
+        await ref.read(bidRepositoryProvider).place(
+              cargoId: widget.cargo.id,
+              vehicleId: vehicles.first.id,
+              amount: amount,
+              note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+            );
+      }
       if (mounted) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Bid placed! Wait for the shipper to accept.'),
+        ref.invalidate(myBidsProvider);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(widget.existingBid != null
+              ? 'Bid updated!'
+              : 'Bid placed! Wait for the shipper to accept.'),
           backgroundColor: kGreen,
         ));
       }
@@ -475,7 +538,7 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
             ),
           ),
           const SizedBox(height: 16),
-          Text('Place Your Bid',
+          Text(widget.existingBid != null ? 'Edit Your Bid' : 'Place Your Bid',
               style: GoogleFonts.inter(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -530,7 +593,7 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
                       height: 20,
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white))
-                  : Text('Submit Bid',
+                  : Text(widget.existingBid != null ? 'Update Bid' : 'Submit Bid',
                       style: GoogleFonts.inter(
                           fontSize: 15, fontWeight: FontWeight.w600)),
             ),

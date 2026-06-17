@@ -23,6 +23,7 @@ class DriverDashboardScreen extends ConsumerWidget {
     final driver = ref.read(authNotifierProvider).user;
     final cargoAsync = ref.watch(cargoListProvider);
     final bookingsAsync = ref.watch(bookingListProvider);
+    final myBids = ref.watch(myBidsProvider).valueOrNull;
 
     return Scaffold(
       backgroundColor: _bg,
@@ -120,6 +121,7 @@ class DriverDashboardScreen extends ConsumerWidget {
                           .map((c) => _CargoCard(
                                 cargo: c,
                                 driverId: driver?.id ?? 0,
+                                myBids: myBids,
                               ))
                           .toList(),
                     );
@@ -606,11 +608,22 @@ class _PendingJobCardState extends ConsumerState<_PendingJobCard> {
 class _CargoCard extends StatelessWidget {
   final CargoRequest cargo;
   final int driverId;
-  const _CargoCard({required this.cargo, required this.driverId});
+  final List<Bid>? myBids;
+  const _CargoCard({required this.cargo, required this.driverId, this.myBids});
+
+  Bid? get _existingBid {
+    if (myBids == null) return null;
+    final matches = myBids!.where(
+      (b) => b.cargoRequestId == cargo.id &&
+             (b.status == 'pending' || b.status == 'countered'),
+    );
+    return matches.isEmpty ? null : matches.first;
+  }
 
   @override
   Widget build(BuildContext context) {
     final urgencyColor = _urgencyColor(cargo.urgencyLevel);
+    final existingBid = _existingBid;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -679,20 +692,9 @@ class _CargoCard extends StatelessWidget {
                       color: _amber,
                       fontWeight: FontWeight.w600),
                 ),
-                ElevatedButton(
-                  onPressed: () => _showBidSheet(context, cargo),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _amber,
-                    foregroundColor: const Color(0xFF111827),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
-                    elevation: 0,
-                  ),
-                  child: Text('bid.place'.tr(),
-                      style: const TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.bold)),
+                _BidActionButton(
+                  existingBid: existingBid,
+                  onTap: () => _showBidSheet(context, cargo, existingBid: existingBid),
                 ),
               ],
             ),
@@ -701,20 +703,9 @@ class _CargoCard extends StatelessWidget {
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               Text('bid.budget_label'.tr(),
                   style: const TextStyle(fontSize: 12, color: _textSecondary)),
-              ElevatedButton(
-                onPressed: () => _showBidSheet(context, cargo),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _amber,
-                  foregroundColor: const Color(0xFF111827),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 8),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                  elevation: 0,
-                ),
-                child: Text('bid.place'.tr(),
-                    style: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.bold)),
+              _BidActionButton(
+                existingBid: existingBid,
+                onTap: () => _showBidSheet(context, cargo, existingBid: existingBid),
               ),
             ]),
           ],
@@ -723,13 +714,13 @@ class _CargoCard extends StatelessWidget {
     );
   }
 
-  void _showBidSheet(BuildContext context, CargoRequest cargo) {
+  void _showBidSheet(BuildContext context, CargoRequest cargo, {Bid? existingBid}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => _PlaceBidSheet(cargo: cargo),
+      builder: (_) => _PlaceBidSheet(cargo: cargo, existingBid: existingBid),
     );
   }
 
@@ -767,20 +758,69 @@ class _CargoSkeleton extends StatelessWidget {
   }
 }
 
+// ── Bid action button (Place Bid / Edit Bid) ──────────────────────────────
+
+class _BidActionButton extends StatelessWidget {
+  final Bid? existingBid;
+  final VoidCallback onTap;
+  const _BidActionButton({required this.existingBid, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    if (existingBid != null) {
+      return OutlinedButton(
+        onPressed: onTap,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: _amber,
+          side: const BorderSide(color: _amber),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        child: Text('bid.edit'.tr(),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+      );
+    }
+    return ElevatedButton(
+      onPressed: onTap,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: _amber,
+        foregroundColor: const Color(0xFF111827),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        elevation: 0,
+      ),
+      child: Text('bid.place'.tr(),
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+    );
+  }
+}
+
 // ── Place bid bottom sheet ────────────────────────────────────────────────
 
 class _PlaceBidSheet extends ConsumerStatefulWidget {
   final CargoRequest cargo;
-  const _PlaceBidSheet({required this.cargo});
+  final Bid? existingBid;
+  const _PlaceBidSheet({required this.cargo, this.existingBid});
 
   @override
   ConsumerState<_PlaceBidSheet> createState() => _PlaceBidSheetState();
 }
 
 class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
-  final _amountCtrl = TextEditingController();
-  final _noteCtrl = TextEditingController();
+  late TextEditingController _amountCtrl;
+  late TextEditingController _noteCtrl;
   bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _amountCtrl = TextEditingController(
+      text: widget.existingBid != null
+          ? widget.existingBid!.amount.toStringAsFixed(0)
+          : '',
+    );
+    _noteCtrl = TextEditingController(text: widget.existingBid?.note ?? '');
+  }
 
   @override
   void dispose() {
@@ -800,26 +840,35 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
       return;
     }
 
-    final vehicles = await ref.read(vehicleListProvider.future);
-    if (!mounted) return;
-    if (vehicles.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('common.failed'.tr()),
-        backgroundColor: Colors.red,
-      ));
-      return;
-    }
-
     setState(() => _submitting = true);
     try {
-      await ref.read(bidRepositoryProvider).place(
-            cargoId: widget.cargo.id,
-            vehicleId: vehicles.first.id,
-            amount: amount,
-            note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
-          );
+      if (widget.existingBid != null) {
+        await ref.read(bidRepositoryProvider).update(
+              widget.existingBid!.id,
+              amount: amount,
+              note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+            );
+      } else {
+        final vehicles = await ref.read(vehicleListProvider.future);
+        if (!mounted) return;
+        if (vehicles.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('common.failed'.tr()),
+            backgroundColor: Colors.red,
+          ));
+          setState(() => _submitting = false);
+          return;
+        }
+        await ref.read(bidRepositoryProvider).place(
+              cargoId: widget.cargo.id,
+              vehicleId: vehicles.first.id,
+              amount: amount,
+              note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+            );
+      }
       if (mounted) {
         Navigator.of(context).pop();
+        ref.invalidate(myBidsProvider);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('common.success'.tr()),
           backgroundColor: _green,
@@ -861,7 +910,7 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
           ),
           const SizedBox(height: 16),
 
-          Text('bid.place_title'.tr(),
+          Text(widget.existingBid != null ? 'bid.edit_title'.tr() : 'bid.place_title'.tr(),
               style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -939,7 +988,7 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
                       height: 20,
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white))
-                  : Text('bid.place'.tr(),
+                  : Text(widget.existingBid != null ? 'bid.edit'.tr() : 'bid.place'.tr(),
                       style: const TextStyle(
                           fontSize: 15, fontWeight: FontWeight.w600)),
             ),
