@@ -37,6 +37,9 @@ dependencies:
   # Logging
   logger: ^2.0.0
 
+  # Image picking for document uploads
+  image_picker: ^1.0.7
+
   # Date/time formatting — pinned to match flutter_localizations SDK constraint
   intl: ^0.20.2
 

@@ -147,11 +147,49 @@ final tripProvider = FutureProvider.autoDispose.family<Trip, int>((ref, tripId) 
   return ref.read(tripRepositoryProvider).get(tripId);
 });
 
+final tripStopsProvider =
+    FutureProvider.autoDispose.family<List<TripStop>, int>((ref, tripId) async {
+  return ref.read(tripRepositoryProvider).getStops(tripId);
+});
+
 // ── Payment provider ──────────────────────────────────────────────────────
 
 final paymentByBookingProvider =
     FutureProvider.autoDispose.family<Payment, int>((ref, bookingId) async {
   return ref.read(paymentRepositoryProvider).getByBooking(bookingId);
+});
+
+// ── Document providers ────────────────────────────────────────────────────
+
+final driverDocumentsProvider =
+    FutureProvider.autoDispose<List<DriverDocument>>((ref) async {
+  return ref.read(documentRepositoryProvider).list();
+});
+
+// ── Bid providers ─────────────────────────────────────────────────────────
+
+final bidsForCargoProvider =
+    FutureProvider.autoDispose.family<List<Bid>, int>((ref, cargoId) async {
+  return ref.read(bidRepositoryProvider).listForCargo(cargoId);
+});
+
+// Driver's own bids — sorted: countered first, then pending, then history
+final myBidsProvider = FutureProvider.autoDispose<List<Bid>>((ref) async {
+  return ref.read(bidRepositoryProvider).listMyBids();
+});
+
+// Backhaul recommendations for an active trip (keyed by tripId)
+final backhaulRecommendationsProvider =
+    FutureProvider.autoDispose.family<List<BackhaulRecommendation>, int>(
+        (ref, tripId) async {
+  return ref.read(tripRepositoryProvider).getBackhaulRecommendations(tripId);
+});
+
+// Return cargo — available cargo from the driver's current destination
+final returnCargoProvider =
+    FutureProvider.autoDispose<({String? city, List<CargoRequest> cargo})>(
+        (ref) async {
+  return ref.read(cargoRepositoryProvider).returnCargo();
 });
 
 // ── AI providers ──────────────────────────────────────────────────────────

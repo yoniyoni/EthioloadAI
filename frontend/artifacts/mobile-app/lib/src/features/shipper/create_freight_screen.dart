@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../../data/providers/data_providers.dart';
 import '../../data/repositories/repositories.dart';
+import '../shared/widgets/shared_widgets.dart';
 
 class CreateFreightScreen extends ConsumerStatefulWidget {
   const CreateFreightScreen({super.key});
@@ -23,31 +27,63 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
   String? deadline;
   String? description;
 
+  // AI price prediction state
+  int? _priceMin;
+  int? _priceMax;
+  int? _priceDistKm;
+  bool _priceLoading = false;
+  String? _priceError;
+
   static const _cargoTypes = [
-    'perishable',
-    'fragile',
-    'electronics',
+    'agricultural',
     'construction',
+    'electronics',
+    'fragile',
+    'fuel',
     'general',
+    'livestock',
+    'machinery',
+    'medical',
+    'perishable',
+    'textiles',
+    'other',
   ];
 
   static const _cities = [
     'Addis Ababa',
-    'Adama',
-    'Hawassa',
-    'Dire Dawa',
+    'Adama / Nazret',
+    'Arba Minch',
+    'Asella',
+    'Assosa',
+    'Axum',
+    'Adigrat',
+    'Bale Robe',
     'Bahir Dar',
+    'Bishoftu',
+    'Debre Birhan',
+    'Debre Markos',
+    'Dessie',
+    'Dilla',
+    'Dire Dawa',
+    'Gambela',
+    'Goba',
     'Gondar',
-    'Mekele',
+    'Harar',
+    'Hawassa',
+    'Jijiga',
     'Jimma',
+    'Kebri Dahar',
+    'Mekele',
+    'Moyale',
+    'Nekemte',
+    'Shire / Endaselassie',
+    'Shashemene',
+    'Sodo / Wolaita',
+    'Woldia',
+    'Other',
   ];
 
-  static const _steps = [
-    'Locations',
-    'Cargo',
-    'Budget',
-    'Review',
-  ];
+  static const _steps = ['Locations', 'Cargo', 'Budget', 'Review'];
 
   @override
   void dispose() {
@@ -57,6 +93,8 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
 
   void _next() {
     if (_step < 3) {
+      // When leaving the cargo-details step, kick off the AI price estimate
+      if (_step == 1) _fetchPricePrediction();
       _pageController.nextPage(
           duration: const Duration(milliseconds: 250), curve: Curves.easeInOut);
     } else {
@@ -71,6 +109,37 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
     }
   }
 
+  Future<void> _fetchPricePrediction() async {
+    if (pickupLocation == null || deliveryLocation == null) return;
+    setState(() {
+      _priceLoading = true;
+      _priceError = null;
+    });
+    try {
+      final result = await ref.read(cargoRepositoryProvider).predictPrice(
+            pickup: pickupLocation!,
+            destination: deliveryLocation!,
+            weight: double.tryParse(weight ?? '') ?? 10,
+            urgencyLevel: 'normal',
+          );
+      if (mounted) {
+        setState(() {
+          _priceMin = result.min;
+          _priceMax = result.max;
+          _priceDistKm = result.distanceKm;
+          _priceLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _priceLoading = false;
+          _priceError = 'Could not fetch price estimate';
+        });
+      }
+    }
+  }
+
   Future<void> _submit() async {
     if (pickupLocation == null ||
         deliveryLocation == null ||
@@ -78,24 +147,24 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
         weight == null ||
         budget == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Please fill in all required fields'),
-            backgroundColor: Colors.red),
+        SnackBar(
+            content: Text('Please fill in all required fields',
+                style: GoogleFonts.inter()),
+            backgroundColor: kDanger),
       );
       return;
     }
 
     try {
-      // Show loading
       if (!mounted) return;
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (_) => const Center(
-            child: Card(
+        builder: (_) => Center(
+            child: EthioCard(
                 child: Padding(
-                    padding: EdgeInsets.all(24),
-                    child: CircularProgressIndicator()))),
+                    padding: const EdgeInsets.all(24),
+                    child: CircularProgressIndicator(color: kGreen)))),
       );
 
       await ref.read(cargoRepositoryProvider).create(
@@ -107,13 +176,14 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
             budget: double.tryParse(budget ?? ''),
           );
 
-      if (mounted) Navigator.pop(context); // close dialog
+      if (mounted) Navigator.pop(context);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Cargo request created!'),
-              backgroundColor: Colors.green),
+          SnackBar(
+              content: Text('Cargo request created!',
+                  style: GoogleFonts.inter()),
+              backgroundColor: kSuccess),
         );
         await Future.delayed(const Duration(milliseconds: 800));
         if (mounted) context.go('/freight');
@@ -123,7 +193,8 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Error: $e'), backgroundColor: Colors.red),
+              content: Text('Error: $e', style: GoogleFonts.inter()),
+              backgroundColor: kDanger),
         );
       }
     }
@@ -132,14 +203,13 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Post Cargo'), elevation: 0),
+      backgroundColor: kBackground,
+      appBar: EthioAppBar(title: 'shipper.post_cargo'.tr()),
       body: Column(
         children: [
-          // ── Step indicator (fixed height, no Expanded inside Column) ──
           _StepIndicator(current: _step, steps: _steps),
-          const Divider(height: 1),
+          Divider(height: 1, color: kBorder),
 
-          // ── Page content ──────────────────────────────────────────────
           Expanded(
             child: PageView(
               controller: _pageController,
@@ -165,6 +235,11 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
                 _Step3(
                   budget: budget,
                   deadline: deadline,
+                  priceMin: _priceMin,
+                  priceMax: _priceMax,
+                  priceDistKm: _priceDistKm,
+                  priceLoading: _priceLoading,
+                  priceError: _priceError,
                   onBudget: (v) => setState(() => budget = v),
                   onDeadline: (v) => setState(() => deadline = v),
                 ),
@@ -181,15 +256,29 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
             ),
           ),
 
-          // ── Navigation buttons ────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.all(16),
+          // Navigation buttons
+          Container(
+            decoration: BoxDecoration(
+              color: kSurface,
+              border: Border(top: BorderSide(color: kBorder)),
+            ),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             child: Row(
               children: [
                 if (_step > 0) ...[
                   Expanded(
                     child: OutlinedButton(
-                        onPressed: _back, child: const Text('Back')),
+                      onPressed: _back,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: kGreen,
+                        side: BorderSide(color: kGreen),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: Text('Back',
+                          style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                    ),
                   ),
                   const SizedBox(width: 12),
                 ],
@@ -197,9 +286,16 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
                   child: ElevatedButton(
                     onPressed: _next,
                     style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        padding: const EdgeInsets.symmetric(vertical: 14)),
-                    child: Text(_step == 3 ? 'Submit' : 'Continue'),
+                      backgroundColor: kGreen,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: Text(
+                      _step == 3 ? 'Submit' : 'Continue',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                    ),
                   ),
                 ),
               ],
@@ -211,7 +307,7 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
   }
 }
 
-// ── Step indicator — fixed height, no unbounded flex ─────────────────────
+// ── Step indicator ────────────────────────────────────────────────────────────
 
 class _StepIndicator extends StatelessWidget {
   final int current;
@@ -220,50 +316,52 @@ class _StepIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    return Container(
+      color: kSurface,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         children: List.generate(steps.length * 2 - 1, (i) {
           if (i.isOdd) {
-            // connector line
             final stepIndex = i ~/ 2;
             return Expanded(
               child: Container(
                 height: 2,
-                color: stepIndex < current ? Colors.blue : Colors.grey[300],
+                color: stepIndex < current ? kGreen : kBorder,
               ),
             );
           }
           final stepIndex = i ~/ 2;
-          final active = stepIndex <= current;
+          final done = stepIndex < current;
+          final active = stepIndex == current;
           return Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 32,
-                height: 32,
+                width: 30,
+                height: 30,
                 decoration: BoxDecoration(
-                  color: active ? Colors.blue : Colors.grey[300],
+                  color: done || active ? kGreen : kBorder,
                   shape: BoxShape.circle,
                 ),
                 child: Center(
-                  child: Text(
-                    '${stepIndex + 1}',
-                    style: TextStyle(
-                        color: active ? Colors.white : Colors.grey[700],
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13),
-                  ),
+                  child: done
+                      ? const Icon(Icons.check, color: Colors.white, size: 16)
+                      : Text(
+                          '${stepIndex + 1}',
+                          style: GoogleFonts.inter(
+                              color: active ? Colors.white : kTextMuted,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13),
+                        ),
                 ),
               ),
               const SizedBox(height: 4),
               Text(
                 steps[stepIndex],
-                style: TextStyle(
+                style: GoogleFonts.inter(
                     fontSize: 10,
-                    color: active ? Colors.blue : Colors.grey[500],
-                    fontWeight:
-                        active ? FontWeight.bold : FontWeight.normal),
+                    color: done || active ? kGreen : kTextMuted,
+                    fontWeight: active ? FontWeight.bold : FontWeight.normal),
               ),
             ],
           );
@@ -273,7 +371,128 @@ class _StepIndicator extends StatelessWidget {
   }
 }
 
-// ── Step 1: Locations ─────────────────────────────────────────────────────
+// ── Shared: dropdown with "Other" → text field ────────────────────────────────
+
+class _DropdownWithOther extends StatefulWidget {
+  final String? selected;
+  final List<String> options;
+  final String hint;
+  final String otherHint;
+  final IconData prefixIcon;
+  final String Function(String) labelOf;
+  final ValueChanged<String> onSelect;
+
+  const _DropdownWithOther({
+    required this.selected,
+    required this.options,
+    required this.hint,
+    required this.otherHint,
+    required this.prefixIcon,
+    required this.labelOf,
+    required this.onSelect,
+  });
+
+  @override
+  State<_DropdownWithOther> createState() => _DropdownWithOtherState();
+}
+
+class _DropdownWithOtherState extends State<_DropdownWithOther> {
+  late String? _dropdownValue;
+  final _ctrl = TextEditingController();
+
+  InputDecoration get _inputDeco => InputDecoration(
+        filled: true,
+        fillColor: kSurface,
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: kBorder),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: kGreen, width: 1.5),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      );
+
+  @override
+  void initState() {
+    super.initState();
+    final sel = widget.selected;
+    // "Other" sentinel is always lowercase 'other' in the cargo list,
+    // but a city like 'Other' may also appear in the city list.
+    // If the selected value exists verbatim in options → use it.
+    // Otherwise it's a custom typed value → show "Other" + pre-fill text field.
+    if (sel == null || widget.options.contains(sel)) {
+      _dropdownValue = sel;
+    } else {
+      _dropdownValue = widget.options.last; // "Other" / "other"
+      _ctrl.text = sel;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  bool get _isOther {
+    final v = _dropdownValue;
+    return v != null && v.toLowerCase() == 'other';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        DropdownButtonFormField<String>(
+          value: _dropdownValue,
+          hint: Text(widget.hint,
+              style: GoogleFonts.inter(color: kTextMuted)),
+          isExpanded: true,
+          decoration: _inputDeco.copyWith(
+            prefixIcon: Icon(widget.prefixIcon, color: kGreen, size: 20),
+          ),
+          items: widget.options
+              .map((o) => DropdownMenuItem(
+                    value: o,
+                    child: Text(widget.labelOf(o),
+                        style: GoogleFonts.inter(fontSize: 14)),
+                  ))
+              .toList(),
+          onChanged: (v) {
+            setState(() => _dropdownValue = v);
+            if (v != null && !_isOther) {
+              widget.onSelect(v);
+            } else if (_isOther && _ctrl.text.isNotEmpty) {
+              widget.onSelect(_ctrl.text);
+            }
+          },
+        ),
+        if (_isOther) ...[
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: _ctrl,
+            onChanged: (v) {
+              if (v.isNotEmpty) widget.onSelect(v);
+            },
+            decoration: _inputDeco.copyWith(
+              hintText: widget.otherHint,
+              hintStyle: GoogleFonts.inter(color: kTextMuted),
+              prefixIcon: Icon(Icons.edit_location_alt_outlined,
+                  color: kGreen, size: 20),
+            ),
+            style: GoogleFonts.inter(fontSize: 14),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+// ── Step 1: Locations ─────────────────────────────────────────────────────────
 
 class _Step1 extends StatelessWidget {
   final String? pickupLocation;
@@ -295,37 +514,53 @@ class _Step1 extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const Text('Pickup Location',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        Text('Pickup Location',
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
-        _CityPicker(
-            selected: pickupLocation,
-            cities: cities,
-            hint: 'Select pickup city',
-            onSelect: onPickup),
+        _DropdownWithOther(
+          selected: pickupLocation,
+          options: cities,
+          hint: 'Select pickup city',
+          otherHint: 'Enter city name (e.g. Mojo)',
+          prefixIcon: Icons.trip_origin,
+          labelOf: (c) => c,
+          onSelect: onPickup,
+        ),
         const SizedBox(height: 20),
-        const Text('Destination',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        Text('Destination',
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
-        _CityPicker(
-            selected: deliveryLocation,
-            cities: cities,
-            hint: 'Select destination city',
-            onSelect: onDelivery),
-        if (pickupLocation != null && deliveryLocation != null) ...[
+        _DropdownWithOther(
+          selected: deliveryLocation,
+          options: cities,
+          hint: 'Select destination city',
+          otherHint: 'Enter city name (e.g. Kombolcha)',
+          prefixIcon: Icons.location_on_outlined,
+          labelOf: (c) => c,
+          onSelect: onDelivery,
+        ),
+        if (pickupLocation != null &&
+            pickupLocation!.isNotEmpty &&
+            deliveryLocation != null &&
+            deliveryLocation!.isNotEmpty) ...[
           const SizedBox(height: 16),
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-                color: Colors.green[50],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.green[200]!)),
+                color: kGreenTint,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: kGreen.withValues(alpha: 0.3))),
             child: Row(children: [
-              const Icon(Icons.route, color: Colors.green),
+              Icon(Icons.route, color: kGreen, size: 18),
               const SizedBox(width: 8),
-              Text('$pickupLocation → $deliveryLocation',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w600, color: Colors.green)),
+              Expanded(
+                child: Text('$pickupLocation → $deliveryLocation',
+                    style: GoogleFonts.inter(
+                        fontWeight: FontWeight.w600, color: kGreen,
+                        fontSize: 13)),
+              ),
             ]),
           ),
         ],
@@ -334,37 +569,7 @@ class _Step1 extends StatelessWidget {
   }
 }
 
-class _CityPicker extends StatelessWidget {
-  final String? selected;
-  final List<String> cities;
-  final String hint;
-  final ValueChanged<String> onSelect;
-
-  const _CityPicker(
-      {required this.selected,
-      required this.cities,
-      required this.hint,
-      required this.onSelect});
-
-  @override
-  Widget build(BuildContext context) {
-    return DropdownButtonFormField<String>(
-      value: selected,
-      hint: Text(hint),
-      items: cities
-          .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-          .toList(),
-      onChanged: (v) { if (v != null) onSelect(v); },
-      decoration: InputDecoration(
-        prefixIcon: const Icon(Icons.location_on_outlined),
-        border:
-            OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
-  }
-}
-
-// ── Step 2: Cargo details ─────────────────────────────────────────────────
+// ── Step 2: Cargo details ─────────────────────────────────────────────────────
 
 class _Step2 extends StatelessWidget {
   final String? cargoType;
@@ -385,98 +590,143 @@ class _Step2 extends StatelessWidget {
     required this.onDesc,
   });
 
+  InputDecoration _inputDeco({String? hint, String? suffix, Widget? prefix}) =>
+      InputDecoration(
+        hintText: hint,
+        hintStyle: GoogleFonts.inter(color: kTextMuted),
+        suffixText: suffix,
+        prefixIcon: prefix,
+        filled: true,
+        fillColor: kSurface,
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: kBorder)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: kGreen, width: 1.5)),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      );
+
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const Text('Cargo Type',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        Text('Cargo Type',
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: cargoType,
-          hint: const Text('Select type'),
-          items: cargoTypes
-              .map((t) => DropdownMenuItem(
-                  value: t,
-                  child: Text(t[0].toUpperCase() + t.substring(1))))
-              .toList(),
-          onChanged: onType,
-          decoration: InputDecoration(
-              border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8))),
+        _DropdownWithOther(
+          selected: cargoType,
+          options: cargoTypes,
+          hint: 'Select cargo type',
+          otherHint: 'Describe cargo type (e.g. Chemicals)',
+          prefixIcon: Icons.inventory_2_outlined,
+          labelOf: (t) => t[0].toUpperCase() + t.substring(1),
+          onSelect: (v) => onType(v),
         ),
         const SizedBox(height: 16),
-        const Text('Weight (tons)',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        Text('Weight (tons)',
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         TextFormField(
           initialValue: weight,
-          keyboardType: TextInputType.number,
+          keyboardType:
+              const TextInputType.numberWithOptions(decimal: true),
           onChanged: onWeight,
-          decoration: InputDecoration(
-            hintText: 'e.g. 20',
-            suffixText: 'tons',
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8)),
-          ),
+          decoration: _inputDeco(hint: 'e.g. 20', suffix: 'tons'),
+          style: GoogleFonts.inter(fontSize: 14),
         ),
         const SizedBox(height: 16),
-        const Text('Notes (optional)',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        Text('Notes (optional)',
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         TextFormField(
           initialValue: description,
           maxLines: 3,
           onChanged: onDesc,
-          decoration: InputDecoration(
-            hintText: 'Special handling requirements...',
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8)),
-          ),
+          decoration: _inputDeco(hint: 'Special handling requirements...'),
+          style: GoogleFonts.inter(fontSize: 14),
         ),
       ],
     );
   }
 }
 
-// ── Step 3: Budget & timeline ─────────────────────────────────────────────
+// ── Step 3: Budget & timeline ─────────────────────────────────────────────────
 
 class _Step3 extends StatelessWidget {
   final String? budget;
   final String? deadline;
+  final int? priceMin;
+  final int? priceMax;
+  final int? priceDistKm;
+  final bool priceLoading;
+  final String? priceError;
   final ValueChanged<String> onBudget;
   final ValueChanged<String> onDeadline;
 
   const _Step3({
     required this.budget,
     required this.deadline,
+    required this.priceMin,
+    required this.priceMax,
+    required this.priceDistKm,
+    required this.priceLoading,
+    required this.priceError,
     required this.onBudget,
     required this.onDeadline,
   });
+
+  InputDecoration _inputDeco({String? hint, String? prefix, Widget? prefixIcon}) =>
+      InputDecoration(
+        hintText: hint,
+        hintStyle: GoogleFonts.inter(color: kTextMuted),
+        prefixText: prefix,
+        prefixIcon: prefixIcon,
+        filled: true,
+        fillColor: kSurface,
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: kBorder)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: kGreen, width: 1.5)),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      );
+
+  String _fmt(int v) {
+    if (v >= 1000) {
+      return v.toString().replaceAllMapped(
+          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
+    }
+    return v.toString();
+  }
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const Text('Budget (ETB)',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        Text('Budget (ETB)',
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         TextFormField(
           initialValue: budget,
           keyboardType: TextInputType.number,
           onChanged: onBudget,
-          decoration: InputDecoration(
-            hintText: 'e.g. 15000',
-            prefixText: 'ETB ',
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8)),
-          ),
+          decoration: _inputDeco(hint: 'e.g. 15000', prefix: 'ETB '),
+          style: GoogleFonts.inter(fontSize: 14),
         ),
         const SizedBox(height: 16),
-        const Text('Deadline',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        Text('Deadline',
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         TextFormField(
           readOnly: true,
@@ -487,42 +737,85 @@ class _Step3 extends StatelessWidget {
               initialDate: DateTime.now().add(const Duration(days: 1)),
               firstDate: DateTime.now(),
               lastDate: DateTime.now().add(const Duration(days: 90)),
+              builder: (ctx, child) => Theme(
+                data: Theme.of(ctx).copyWith(
+                  colorScheme: ColorScheme.light(primary: kGreen),
+                ),
+                child: child!,
+              ),
             );
             if (d != null) onDeadline(d.toString().split(' ')[0]);
           },
-          decoration: InputDecoration(
-            hintText: 'Tap to select date',
-            prefixIcon: const Icon(Icons.calendar_today_outlined),
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8)),
+          decoration: _inputDeco(
+            hint: 'Tap to select date',
+            prefixIcon: Icon(Icons.calendar_today_outlined,
+                color: kGreen, size: 20),
           ),
+          style: GoogleFonts.inter(fontSize: 14),
         ),
         const SizedBox(height: 20),
+
+        // ── AI Price Suggestion card ──────────────────────────────────────
         Container(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-              color: Colors.blue[50],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.blue[200]!)),
+              color: kGreenTint,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: kGreen.withValues(alpha: 0.25))),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(children: [
-                Icon(Icons.psychology, color: Colors.blue, size: 18),
-                SizedBox(width: 6),
+              Row(children: [
+                Icon(Icons.psychology_outlined, color: kGreen, size: 18),
+                const SizedBox(width: 6),
                 Text('AI Price Suggestion',
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold, color: Colors.blue)),
+                    style: GoogleFonts.inter(
+                        fontWeight: FontWeight.bold, color: kGreen)),
               ]),
-              const SizedBox(height: 6),
-              const Text('ETB 8,000 – 12,000',
-                  style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green)),
-              Text('Based on route and cargo type',
-                  style:
-                      TextStyle(fontSize: 12, color: Colors.grey[600])),
+              const SizedBox(height: 10),
+              if (priceLoading)
+                Row(children: [
+                  SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: kGreen)),
+                  const SizedBox(width: 10),
+                  Text('Calculating route price...',
+                      style: GoogleFonts.inter(
+                          fontSize: 13, color: kTextSecond)),
+                ])
+              else if (priceMin != null && priceMax != null)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'ETB ${_fmt(priceMin!)} – ${_fmt(priceMax!)}',
+                      style: GoogleFonts.inter(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: kGreen),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      priceDistKm != null
+                          ? 'Based on ~$priceDistKm km route and cargo weight'
+                          : 'Based on route and cargo type',
+                      style: GoogleFonts.inter(
+                          fontSize: 12, color: kTextSecond),
+                    ),
+                  ],
+                )
+              else if (priceError != null)
+                Text(priceError!,
+                    style:
+                        GoogleFonts.inter(fontSize: 12, color: kDanger))
+              else
+                Text(
+                  'Enter cargo details on the previous step to get a price estimate.',
+                  style: GoogleFonts.inter(
+                      fontSize: 12, color: kTextSecond),
+                ),
             ],
           ),
         ),
@@ -531,7 +824,7 @@ class _Step3 extends StatelessWidget {
   }
 }
 
-// ── Step 4: Review ────────────────────────────────────────────────────────
+// ── Step 4: Review ────────────────────────────────────────────────────────────
 
 class _Step4 extends StatelessWidget {
   final String? pickup;
@@ -557,8 +850,11 @@ class _Step4 extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        const Text('Review & Confirm',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        Text('Review & Confirm',
+            style: GoogleFonts.inter(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: kTextPrimary)),
         const SizedBox(height: 16),
         _ReviewRow('Pickup', pickup ?? '—'),
         _ReviewRow('Destination', delivery ?? '—'),
@@ -570,20 +866,20 @@ class _Step4 extends StatelessWidget {
           _ReviewRow('Notes', description!),
         const SizedBox(height: 20),
         Container(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-              color: Colors.amber[50],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.amber[200]!)),
+              color: kAmberLight,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: kAmber.withValues(alpha: 0.4))),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.info_outline, color: Colors.amber[700], size: 18),
+              Icon(Icons.info_outline, color: kAmber, size: 18),
               const SizedBox(width: 10),
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Once submitted, your request will be visible to available drivers. Platform commission: 10%.',
-                  style: TextStyle(fontSize: 12),
+                  style: GoogleFonts.inter(fontSize: 12, color: kTextPrimary),
                 ),
               ),
             ],
@@ -605,22 +901,24 @@ class _ReviewRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey[200]!),
-          borderRadius: BorderRadius.circular(8)),
+          color: kSurface,
+          border: Border.all(color: kBorder),
+          borderRadius: BorderRadius.circular(10)),
       child: Row(
         children: [
           SizedBox(
             width: 90,
             child: Text(label,
-                style: TextStyle(
+                style: GoogleFonts.inter(
                     fontSize: 12,
-                    color: Colors.grey[600],
+                    color: kTextSecond,
                     fontWeight: FontWeight.w500)),
           ),
           Expanded(
             child: Text(value,
-                style: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w600)),
+                style: GoogleFonts.inter(
+                    fontSize: 13, fontWeight: FontWeight.w600,
+                    color: kTextPrimary)),
           ),
         ],
       ),

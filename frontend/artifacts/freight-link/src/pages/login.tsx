@@ -16,7 +16,7 @@ export default function Login() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ email: "", password: "" });
+  const [form, setForm] = useState({ identifier: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [usePhone, setUsePhone] = useState(false);
 
@@ -27,7 +27,7 @@ export default function Login() {
       const data = await api.post<{ token: string; user: any }>("/auth/login", form);
       login(data.token, data.user);
       toast({ title: t("auth.loginTitle"), description: data.user.name });
-      setLocation("/dashboard");
+      setLocation(data.user.role === 'admin' ? '/admin' : '/dashboard');
     } catch (err: any) {
       toast({ title: t("auth.login") + " " + t("common.error"), description: err.message, variant: "destructive" });
     } finally {
@@ -44,53 +44,84 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex">
-      {/* Left side - Brand & Visual */}
-      <div className="hidden lg:flex lg:w-1/2 bg-[#0c1e4a] relative overflow-hidden items-center justify-center">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(20,184,166,0.12)_0%,_transparent_60%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(59,130,246,0.1)_0%,_transparent_50%)]" />
-        <div className="absolute inset-0 opacity-[0.03]"
+      {/* Left side — brand panel */}
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden items-center justify-center"
+        style={{ background: '#0F3D1A' }}
+      >
+        {/* Subtle dot grid overlay */}
+        <div
+          className="absolute inset-0 opacity-[0.06]"
           style={{
-            backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
-              linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
-            backgroundSize: '60px 60px'
+            backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.8) 1px, transparent 1px)`,
+            backgroundSize: '32px 32px',
           }}
         />
+        {/* Amber glow top-right */}
+        <div
+          className="absolute top-0 right-0 w-96 h-96 rounded-full opacity-10 pointer-events-none"
+          style={{ background: 'radial-gradient(circle, #F59E0B, transparent 70%)', transform: 'translate(30%, -30%)' }}
+        />
+
         <motion.div
           className="relative z-10 text-white px-12 max-w-lg"
           initial={{ opacity: 0, x: -30 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.6 }}
         >
+          {/* Logo */}
           <div className="flex items-center gap-3 mb-8">
-            <div className="h-12 w-12 rounded-xl bg-white flex items-center justify-center">
-              <Truck className="h-6 w-6 text-[#0c1e4a]" />
+            <div
+              className="h-12 w-12 rounded-xl flex items-center justify-center"
+              style={{ background: '#F59E0B' }}
+            >
+              <Truck className="h-6 w-6 text-white" />
             </div>
-            <span className="text-2xl font-bold">ETHIO-FREIGHT</span>
+            <div>
+              <span className="text-2xl font-bold block leading-none">EthioLoad AI</span>
+              <span className="text-xs font-medium" style={{ color: '#F59E0B' }}>
+                ምርጥ ጭነት — ምርጥ ዋጋ
+              </span>
+            </div>
           </div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 py-1.5 text-sm font-semibold text-emerald-400 mb-6">
-            <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-            Institutional Innovation
+
+          {/* Badge */}
+          <div
+            className="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-semibold mb-6"
+            style={{
+              border: '1px solid rgba(245,158,11,0.3)',
+              background: 'rgba(245,158,11,0.1)',
+              color: '#F59E0B',
+            }}
+          >
+            <span
+              className="flex h-2 w-2 rounded-full animate-pulse"
+              style={{ background: '#F59E0B' }}
+            />
+            AI-Powered Logistics
           </div>
-          <h2 className="text-3xl font-bold mb-4 leading-tight">
-            Welcome Back
-          </h2>
-          <p className="text-slate-400 text-lg leading-relaxed mb-8">
+
+          <h2 className="text-3xl font-bold mb-4 leading-tight">Welcome Back</h2>
+          <p className="text-lg leading-relaxed mb-8" style={{ color: 'rgba(255,255,255,0.6)' }}>
             Access your logistics dashboard to manage shipments and payments.
           </p>
+
           <div className="space-y-4">
             {leftItems.map((item, i) => (
               <div key={i} className="flex items-center gap-3">
-                <div className="h-6 w-6 rounded-full bg-emerald-400/20 flex items-center justify-center">
-                  <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+                <div
+                  className="h-6 w-6 rounded-full flex items-center justify-center shrink-0"
+                  style={{ background: 'rgba(245,158,11,0.2)' }}
+                >
+                  <CheckCircle2 className="h-3 w-3" style={{ color: '#F59E0B' }} />
                 </div>
-                <span className="text-slate-300 text-sm">{item}</span>
+                <span className="text-sm" style={{ color: 'rgba(255,255,255,0.75)' }}>{item}</span>
               </div>
             ))}
           </div>
         </motion.div>
       </div>
 
-      {/* Right side - Form */}
+      {/* Right side - Form (unchanged) */}
       <div className="flex-1 flex items-center justify-center px-4 py-12 bg-background">
         <motion.div
           className="w-full max-w-md"
@@ -142,8 +173,8 @@ export default function Login() {
                   id="email"
                   type="email"
                   placeholder="you@example.com"
-                  value={form.email}
-                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                  value={form.identifier}
+                  onChange={e => setForm(f => ({ ...f, identifier: e.target.value }))}
                   required
                   className="h-11 rounded-lg"
                 />
@@ -159,8 +190,8 @@ export default function Login() {
                     id="phone"
                     type="tel"
                     placeholder="911 234 567"
-                    value={form.email}
-                    onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                    value={form.identifier}
+                    onChange={e => setForm(f => ({ ...f, identifier: e.target.value }))}
                     className="h-11 rounded-l-none rounded-lg"
                   />
                 </div>
@@ -223,20 +254,23 @@ export default function Login() {
           {/* Trust badges */}
           <div className="mt-8 grid grid-cols-3 gap-2 text-center">
             <div className="flex flex-col items-center gap-1">
-              <div className="h-8 w-8 rounded-full bg-emerald-50 flex items-center justify-center">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+              <div className="h-8 w-8 rounded-full flex items-center justify-center"
+                style={{ background: 'rgba(15,61,26,0.1)' }}>
+                <CheckCircle2 className="h-4 w-4" style={{ color: '#0F3D1A' }} />
               </div>
               <p className="text-xs text-muted-foreground">Verified Drivers</p>
             </div>
             <div className="flex flex-col items-center gap-1">
-              <div className="h-8 w-8 rounded-full bg-blue-50 flex items-center justify-center">
-                <Truck className="h-4 w-4 text-blue-600" />
+              <div className="h-8 w-8 rounded-full flex items-center justify-center"
+                style={{ background: 'rgba(245,158,11,0.1)' }}>
+                <Truck className="h-4 w-4" style={{ color: '#F59E0B' }} />
               </div>
               <p className="text-xs text-muted-foreground">AI Matching</p>
             </div>
             <div className="flex flex-col items-center gap-1">
-              <div className="h-8 w-8 rounded-full bg-teal-50 flex items-center justify-center">
-                <CheckCircle2 className="h-4 w-4 text-teal-600" />
+              <div className="h-8 w-8 rounded-full flex items-center justify-center"
+                style={{ background: 'rgba(15,61,26,0.1)' }}>
+                <CheckCircle2 className="h-4 w-4" style={{ color: '#0F3D1A' }} />
               </div>
               <p className="text-xs text-muted-foreground">Secure Payments</p>
             </div>
@@ -247,17 +281,23 @@ export default function Login() {
             <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">{t("auth.demoAccounts")}</p>
             <div className="space-y-1.5 text-sm">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded">ADMIN</span>
+                <span className="text-xs font-bold px-2 py-0.5 rounded"
+                  style={{ color: '#0F3D1A', background: 'rgba(15,61,26,0.12)' }}>ADMIN</span>
                 <span className="text-muted-foreground font-mono text-xs">admin@freightlink.et / admin123</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded">SHIPPER</span>
+                <span className="text-xs font-bold px-2 py-0.5 rounded"
+                  style={{ color: '#F59E0B', background: 'rgba(245,158,11,0.12)' }}>SHIPPER</span>
                 <span className="text-muted-foreground font-mono text-xs">tigist@shipper.et / shipper123</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-teal-600 bg-teal-100 px-2 py-0.5 rounded">DRIVER</span>
+                <span className="text-xs font-bold px-2 py-0.5 rounded"
+                  style={{ color: '#0F3D1A', background: 'rgba(15,61,26,0.12)' }}>DRIVER</span>
                 <span className="text-muted-foreground font-mono text-xs">bekele@driver.et / driver123</span>
               </div>
+              <p className="text-xs text-muted-foreground/60 pt-1 font-mono">
+                Run: <code>cd backend &amp;&amp; php artisan db:seed</code>
+              </p>
             </div>
           </div>
 

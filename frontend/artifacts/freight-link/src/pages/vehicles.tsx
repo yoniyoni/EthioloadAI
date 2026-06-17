@@ -13,7 +13,6 @@ import { Truck, Plus, Loader2, Scale, Fuel, CheckCircle2, XCircle } from "lucide
 import { Skeleton } from "@/components/ui/skeleton";
 
 const TRUCK_TYPES = ["pickup", "light_truck", "medium_truck", "heavy_truck", "tanker", "refrigerated", "flatbed", "tipper"];
-const FUEL_TYPES = ["diesel", "petrol", "gas", "electric"];
 
 export default function Vehicles() {
   const { toast } = useToast();
@@ -21,27 +20,26 @@ export default function Vehicles() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     truckType: "medium_truck", plateNumber: "",
-    capacityTons: "", volumeM3: "", fuelType: "diesel",
+    capacityTons: "", volumeM3: "", fuelType: "diesel", currentCity: "Addis Ababa",
   });
 
   const { data, isLoading } = useQuery({
     queryKey: ["my-vehicles"],
-    queryFn: () => api.get<{ vehicles: any[] }>("/vehicles/my"),
+    queryFn: () => api.get<{ vehicles: any[] }>("/my-vehicles"),
   });
 
   const createMutation = useMutation({
     mutationFn: () => api.post("/vehicles", {
-      truckType: form.truckType,
-      plateNumber: form.plateNumber,
-      capacityTons: Number(form.capacityTons),
-      volumeM3: form.volumeM3 ? Number(form.volumeM3) : undefined,
-      fuelType: form.fuelType,
+      truck_type:   form.truckType,
+      plate_number: form.plateNumber,
+      capacity:     Number(form.capacityTons),
+      current_city: form.currentCity,
     }),
     onSuccess: () => {
       toast({ title: "Vehicle added!" });
       qc.invalidateQueries({ queryKey: ["my-vehicles"] });
       setOpen(false);
-      setForm({ truckType: "medium_truck", plateNumber: "", capacityTons: "", volumeM3: "", fuelType: "diesel" });
+      setForm({ truckType: "medium_truck", plateNumber: "", capacityTons: "", volumeM3: "", fuelType: "diesel", currentCity: "Addis Ababa" });
     },
     onError: (err: any) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
   });
@@ -94,18 +92,12 @@ export default function Vehicles() {
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-sm font-medium">Fuel Type</Label>
-                <Select value={form.fuelType} onValueChange={v => set("fuelType", v)}>
-                  <SelectTrigger className="rounded-lg"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {FUEL_TYPES.map(t => (
-                      <SelectItem key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label className="text-sm font-medium">Current City *</Label>
+                <Input placeholder="Addis Ababa" value={form.currentCity}
+                  onChange={e => set("currentCity", e.target.value)} className="rounded-lg" />
               </div>
               <Button className="w-full rounded-lg" onClick={() => createMutation.mutate()}
-                disabled={!form.plateNumber || !form.capacityTons || createMutation.isPending}>
+                disabled={!form.plateNumber || !form.capacityTons || !form.currentCity || createMutation.isPending}>
                 {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Add Vehicle
               </Button>
@@ -166,10 +158,12 @@ export default function Vehicles() {
                     <span className="text-muted-foreground">{v.volumeM3}m³</span>
                   )}
                 </div>
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                  <Fuel className="h-4 w-4" />
-                  <span className="capitalize">{v.fuelType}</span>
-                </div>
+                {v.currentCity && (
+                  <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <Fuel className="h-4 w-4" />
+                    <span>{v.currentCity}</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}

@@ -1,5 +1,19 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { User } from "@workspace/api-client-react";
+
+export interface User {
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+  isVerified?: boolean;
+  avatarUrl?: string | null;
+  address?: string | null;
+  businessName?: string | null;
+  preferredLanguage?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 interface AuthState {
   user: User | null;
@@ -41,7 +55,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, isLoading: false }));
   }, []);
 
-  const login = (token: string, user: User) => {
+  const login = (token: string, rawUser: User) => {
+    // Normalize: Laravel returns full_name/verification_status;
+    // admin panel expects name/isVerified.
+    const r = rawUser as User & { full_name?: string; verification_status?: boolean | number };
+    const user: User = {
+      ...r,
+      name: r.name ?? r.full_name ?? "Unknown",
+      isVerified: r.isVerified ?? Boolean(r.verification_status),
+    };
     localStorage.setItem(AUTH_KEY, JSON.stringify({ token, user }));
     setState({ user, token, isAuthenticated: true, isLoading: false });
   };

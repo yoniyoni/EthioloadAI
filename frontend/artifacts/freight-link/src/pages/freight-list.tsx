@@ -46,6 +46,7 @@ export default function FreightList() {
   const { data, isLoading } = useQuery({
     queryKey: ["freight", statusFilter, cargoFilter],
     queryFn: () => api.get<{ freight: any[]; total: number }>(`/freight?${params}`),
+    refetchInterval: 30_000,
   });
 
   const freight = (data?.freight ?? []).filter((f: any) => {

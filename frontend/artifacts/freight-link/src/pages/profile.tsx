@@ -23,7 +23,12 @@ export default function Profile() {
   });
 
   const mutation = useMutation({
-    mutationFn: () => api.patch<any>(`/users/${user?.id}`, form),
+    mutationFn: () => api.patch<any>("/me", {
+      name:          form.name,
+      phone:         form.phone,
+      address:       form.address || null,
+      business_name: form.businessName || null,
+    }),
     onSuccess: (updated) => {
       toast({ title: "Profile updated!" });
       if (token) login(token, { ...user!, ...updated });

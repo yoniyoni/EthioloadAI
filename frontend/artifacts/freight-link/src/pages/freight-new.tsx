@@ -40,24 +40,18 @@ export default function FreightNew() {
 
   const mutation = useMutation({
     mutationFn: () => api.post<any>("/freight", {
-      pickupLocation: form.pickupLocation,
-      deliveryLocation: form.deliveryLocation,
-      cargoType: form.cargoType,
-      cargoDescription: form.cargoDescription || undefined,
-      weightTons: Number(form.weightTons),
-      volumeM3: form.volumeM3 ? Number(form.volumeM3) : undefined,
-      budget: Number(form.budget),
-      deadline: form.deadline ? new Date(form.deadline).toISOString() : undefined,
-      distanceKm: form.distanceKm ? Number(form.distanceKm) : undefined,
-      pickupLatitude: form.pickupLatitude ? Number(form.pickupLatitude) : undefined,
-      pickupLongitude: form.pickupLongitude ? Number(form.pickupLongitude) : undefined,
-      deliveryLatitude: form.deliveryLatitude ? Number(form.deliveryLatitude) : undefined,
-      deliveryLongitude: form.deliveryLongitude ? Number(form.deliveryLongitude) : undefined,
+      pickup_location: form.pickupLocation,
+      destination:     form.deliveryLocation,
+      material_type:   form.cargoType,
+      weight:          Number(form.weightTons),
+      budget:          Number(form.budget),
+      urgency_level:   "normal",
     }),
     onSuccess: (data: any) => {
       toast({ title: t("freight.create.post"), description: t("common.success") });
       qc.invalidateQueries({ queryKey: ["freight"] });
-      setLocation(`/freight/${data.id}`);
+      const id = data?.data?.id ?? data?.id;
+      setLocation(id ? `/freight/${id}` : "/freight");
     },
     onError: (err: any) => toast({ title: t("common.error"), description: err.message, variant: "destructive" }),
   });
@@ -68,13 +62,13 @@ export default function FreightNew() {
 
   const { data: aiPrice, isLoading: priceLoading } = useQuery({
     queryKey: ["ai-price", form.weightTons, form.distanceKm, form.cargoType],
-    queryFn: () => api.get<any>(`/ai/price-prediction?weightTons=${Number(form.weightTons)}&distanceKm=${Number(form.distanceKm)}&cargoType=${form.cargoType}`),
+    queryFn: () => api.get<any>(`/ai/price-prediction?weight=${Number(form.weightTons)}&distance_km=${Number(form.distanceKm)}&cargo_type=${form.cargoType}`),
     enabled: !!canPredict,
   });
 
   const { data: aiVehicle, isLoading: vehicleLoading } = useQuery({
     queryKey: ["ai-vehicle", form.weightTons, form.cargoType, form.distanceKm],
-    queryFn: () => api.get<any>(`/ai/vehicle-recommendation?weightTons=${Number(form.weightTons)}&cargoType=${form.cargoType}&distanceKm=${Number(form.distanceKm) || 300}`),
+    queryFn: () => api.get<any>(`/ai/vehicle-recommendation?weight=${Number(form.weightTons)}&cargo_type=${form.cargoType}&distance_km=${Number(form.distanceKm) || 300}`),
     enabled: !!canPredict,
   });
 

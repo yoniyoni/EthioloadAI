@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../data/providers/data_providers.dart';
+import '../shared/widgets/shared_widgets.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -18,69 +21,71 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   }
 
   Future<void> _navigateToNext() async {
-    // Simulate splash screen duration
     await Future.delayed(const Duration(seconds: 3));
-
     if (!mounted) return;
-
-    // Check authentication status
     final authNotifier = ref.read(authNotifierProvider.notifier);
     await authNotifier.checkAuthStatus();
-
     if (!mounted) return;
-
     final authState = ref.read(authNotifierProvider);
     if (authState.isAuthenticated) {
-      context.go('/home');
+      final role = authState.user?.role ?? '';
+      context.go(role == 'driver' ? '/driver' : role == 'fleet_owner' ? '/fleet' : '/shipper');
     } else {
-      context.go('/login');
+      context.go('/landing');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1976D2),
+      backgroundColor: kGreen,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Truck icon — no external asset required
-            const SizedBox(
-              width: 200,
-              height: 200,
-              child: Icon(
-                Icons.local_shipping,
-                size: 120,
-                color: Colors.white70,
+            Container(
+              width: 96,
+              height: 96,
+              decoration: BoxDecoration(
+                color: kAmber,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: kAmber.withValues(alpha: 0.4),
+                    blurRadius: 24,
+                    spreadRadius: 4,
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.local_shipping_rounded,
+                size: 52,
+                color: Colors.white,
               ),
             ),
             const SizedBox(height: 32),
-            // Logo/Title
-            const Text(
-              'EthioLoad AI',
-              style: TextStyle(
+            Text(
+              'app_name'.tr(),
+              style: GoogleFonts.inter(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'AI-Powered Freight Logistics',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.white70,
-              ),
+            Text(
+              'tagline'.tr(),
+              style: GoogleFonts.inter(
+                  fontSize: 16,
+                  color: Colors.white.withValues(alpha: 0.7)),
             ),
             const SizedBox(height: 48),
-            // Loading Indicator
-            const SizedBox(
-              width: 40,
-              height: 40,
+            SizedBox(
+              width: 32,
+              height: 32,
               child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                strokeWidth: 3,
+                valueColor: const AlwaysStoppedAnimation<Color>(kAmber),
+                strokeWidth: 2.5,
               ),
             ),
           ],
@@ -116,142 +121,162 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
+  static InputDecoration _field({
+    required String label,
+    required String hint,
+    required IconData prefix,
+    Widget? suffix,
+  }) =>
+      InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: Icon(prefix, color: kTextMuted, size: 20),
+        suffixIcon: suffix,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: kBorder),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: kBorder),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: kGreen, width: 1.5),
+        ),
+        labelStyle: GoogleFonts.inter(fontSize: 14, color: kTextMuted),
+        hintStyle: GoogleFonts.inter(fontSize: 14, color: kTextMuted),
+      );
+
   @override
   Widget build(BuildContext context) {
-    // Listen to auth — navigate to home as soon as login succeeds
     ref.listen<AuthState>(authNotifierProvider, (previous, next) {
       if (!(previous?.isAuthenticated ?? false) && next.isAuthenticated) {
-        context.go('/home');
+        final role = next.user?.role ?? '';
+        context.go(role == 'driver' ? '/driver' : role == 'fleet_owner' ? '/fleet' : '/shipper');
       }
     });
 
     final authState = ref.watch(authNotifierProvider);
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text('Login'),
-        centerTitle: true,
-        elevation: 0,
-      ),
+      backgroundColor: kBackground,
+      appBar: EthioAppBar(title: 'auth.login'.tr()),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: 24),
-            // Header
-            const Text(
-              'Welcome Back',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-              ),
+            Text(
+              'auth.login_title'.tr(),
+              style: GoogleFonts.inter(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: kTextPrimary),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Enter your credentials to continue',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey,
-              ),
+            Text(
+              'auth.login_subtitle'.tr(),
+              style: GoogleFonts.inter(fontSize: 14, color: kTextMuted),
             ),
             const SizedBox(height: 32),
-            // Email Field
             TextField(
               controller: emailController,
-              decoration: InputDecoration(
-                labelText: 'Email',
-                hintText: 'your@email.com',
-                prefixIcon: const Icon(Icons.email_outlined),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+              decoration: _field(
+                label: 'auth.email'.tr(),
+                hint: 'auth.email_hint'.tr(),
+                prefix: Icons.email_outlined,
               ),
               keyboardType: TextInputType.emailAddress,
             ),
             const SizedBox(height: 16),
-            // Password Field
             TextField(
               controller: passwordController,
               obscureText: obscurePassword,
-              decoration: InputDecoration(
-                labelText: 'Password',
-                hintText: 'Enter your password',
-                prefixIcon: const Icon(Icons.lock_outlined),
-                suffixIcon: IconButton(
+              decoration: _field(
+                label: 'auth.password'.tr(),
+                hint: 'auth.password_hint'.tr(),
+                prefix: Icons.lock_outlined,
+                suffix: IconButton(
                   icon: Icon(
-                    obscurePassword ? Icons.visibility_off : Icons.visibility,
+                    obscurePassword
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    color: kTextMuted,
+                    size: 20,
                   ),
-                  onPressed: () {
-                    setState(() {
-                      obscurePassword = !obscurePassword;
-                    });
-                  },
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  onPressed: () =>
+                      setState(() => obscurePassword = !obscurePassword),
                 ),
               ),
             ),
             const SizedBox(height: 24),
-            // Error Message
-            if (authState.error != null)
+            if (authState.error != null) ...[
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.red.shade50,
-                  border: Border.all(color: Colors.red.shade200),
+                  color: kDanger.withValues(alpha: 0.06),
+                  border: Border.all(color: kDanger.withValues(alpha: 0.3)),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text(
-                  authState.error!,
-                  style: TextStyle(color: Colors.red.shade700),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline_rounded,
+                        color: kDanger, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(authState.error!,
+                          style: GoogleFonts.inter(
+                              color: kDanger, fontSize: 13)),
+                    ),
+                  ],
                 ),
               ),
-            const SizedBox(height: 24),
-            // Login Button
+              const SizedBox(height: 16),
+            ],
             ElevatedButton(
               onPressed: authState.isLoading
                   ? null
-                  : () {
-                      final authNotifier = ref.read(authNotifierProvider.notifier);
-                      authNotifier.login(
+                  : () => ref.read(authNotifierProvider.notifier).login(
                         email: emailController.text,
                         password: passwordController.text,
-                      );
-                    },
+                      ),
               style: ElevatedButton.styleFrom(
+                backgroundColor: kGreen,
+                foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
               ),
               child: authState.isLoading
                   ? const SizedBox(
                       height: 20,
                       width: 20,
                       child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : const Text(
-                      'Login',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
+                          strokeWidth: 2,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white)))
+                  : Text('auth.login'.tr(),
+                      style: GoogleFonts.inter(
+                          fontSize: 16, fontWeight: FontWeight.bold)),
             ),
-            const SizedBox(height: 16),
-            // Register Link
+            const SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text('Don\'t have an account? '),
+                Text('auth.dont_have_account'.tr(),
+                    style: GoogleFonts.inter(
+                        color: kTextMuted, fontSize: 14)),
                 GestureDetector(
                   onTap: () => context.go('/register'),
-                  child: const Text(
-                    'Sign up',
-                    style: TextStyle(
-                      color: Color(0xFF1976D2),
-                      fontWeight: FontWeight.bold,
-                    ),
+                  child: Text(
+                    'auth.sign_up'.tr(),
+                    style: GoogleFonts.inter(
+                        color: kGreen,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14),
                   ),
                 ),
               ],
@@ -296,197 +321,231 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     super.dispose();
   }
 
+  static InputDecoration _field({
+    required String label,
+    required String hint,
+    required IconData prefix,
+    Widget? suffix,
+  }) =>
+      InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: Icon(prefix, color: kTextMuted, size: 20),
+        suffixIcon: suffix,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: kBorder),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: kBorder),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: kGreen, width: 1.5),
+        ),
+        labelStyle: GoogleFonts.inter(fontSize: 14, color: kTextMuted),
+        hintStyle: GoogleFonts.inter(fontSize: 14, color: kTextMuted),
+      );
+
   @override
   Widget build(BuildContext context) {
-    // Listen to auth — navigate to home as soon as register succeeds
     ref.listen<AuthState>(authNotifierProvider, (previous, next) {
       if (!(previous?.isAuthenticated ?? false) && next.isAuthenticated) {
-        context.go('/home');
+        final role = next.user?.role ?? '';
+        context.go(role == 'driver' ? '/driver' : role == 'fleet_owner' ? '/fleet' : '/shipper');
       }
     });
 
     final authState = ref.watch(authNotifierProvider);
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text('Create Account'),
-        centerTitle: true,
-        elevation: 0,
-      ),
+      backgroundColor: kBackground,
+      appBar: EthioAppBar(title: 'auth.create_account'.tr()),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: 24),
-            // Header
-            const Text(
-              'Join Freight Platform',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-              ),
+            Text(
+              'auth.register_title'.tr(),
+              style: GoogleFonts.inter(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: kTextPrimary),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Create an account to get started',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey,
-              ),
+            Text(
+              'auth.register_subtitle'.tr(),
+              style: GoogleFonts.inter(fontSize: 14, color: kTextMuted),
             ),
             const SizedBox(height: 32),
-            // Name Field
             TextField(
               controller: nameController,
-              decoration: InputDecoration(
-                labelText: 'Full Name',
-                hintText: 'John Doe',
-                prefixIcon: const Icon(Icons.person_outlined),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+              decoration: _field(
+                label: 'auth.full_name'.tr(),
+                hint: 'auth.full_name_hint'.tr(),
+                prefix: Icons.person_outline_rounded,
               ),
             ),
             const SizedBox(height: 16),
-            // Email Field
             TextField(
               controller: emailController,
-              decoration: InputDecoration(
-                labelText: 'Email',
-                hintText: 'your@email.com',
-                prefixIcon: const Icon(Icons.email_outlined),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+              decoration: _field(
+                label: 'auth.email'.tr(),
+                hint: 'auth.email_hint'.tr(),
+                prefix: Icons.email_outlined,
               ),
               keyboardType: TextInputType.emailAddress,
             ),
             const SizedBox(height: 16),
-            // Phone Field
             TextField(
               controller: phoneController,
-              decoration: InputDecoration(
-                labelText: 'Phone',
-                hintText: '+251 9 XX XXX XXXX',
-                prefixIcon: const Icon(Icons.phone_outlined),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+              decoration: _field(
+                label: 'auth.phone'.tr(),
+                hint: 'auth.phone_hint'.tr(),
+                prefix: Icons.phone_outlined,
               ),
               keyboardType: TextInputType.phone,
             ),
             const SizedBox(height: 16),
-            // Role Selection
             DropdownButtonFormField<String>(
               value: selectedRole,
               decoration: InputDecoration(
-                labelText: 'Account Type',
-                prefixIcon: const Icon(Icons.business_outlined),
+                labelText: 'auth.account_type'.tr(),
+                prefixIcon: const Icon(Icons.business_outlined,
+                    color: kTextMuted, size: 20),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: kBorder),
                 ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: kBorder),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: kGreen, width: 1.5),
+                ),
+                labelStyle:
+                    GoogleFonts.inter(fontSize: 14, color: kTextMuted),
               ),
-              items: const [
-                DropdownMenuItem(value: 'shipper', child: Text('Shipper')),
-                DropdownMenuItem(value: 'driver', child: Text('Driver')),
+              dropdownColor: kSurface,
+              items: [
+                DropdownMenuItem(
+                    value: 'shipper',
+                    child: Text('auth.shipper_role'.tr(),
+                        style: GoogleFonts.inter(fontSize: 14))),
+                DropdownMenuItem(
+                    value: 'driver',
+                    child: Text('auth.driver_role'.tr(),
+                        style: GoogleFonts.inter(fontSize: 14))),
+                DropdownMenuItem(
+                    value: 'fleet_owner',
+                    child: Text('Fleet Owner',
+                        style: GoogleFonts.inter(fontSize: 14))),
               ],
-              onChanged: (value) {
-                setState(() {
-                  selectedRole = value ?? 'shipper';
-                });
-              },
+              onChanged: (value) =>
+                  setState(() => selectedRole = value ?? 'shipper'),
             ),
             const SizedBox(height: 16),
-            // Password Field
             TextField(
               controller: passwordController,
               obscureText: obscurePassword,
-              decoration: InputDecoration(
-                labelText: 'Password',
-                hintText: 'Min. 8 characters',
-                prefixIcon: const Icon(Icons.lock_outlined),
-                suffixIcon: IconButton(
+              decoration: _field(
+                label: 'auth.password'.tr(),
+                hint: 'auth.password_min'.tr(),
+                prefix: Icons.lock_outlined,
+                suffix: IconButton(
                   icon: Icon(
-                    obscurePassword ? Icons.visibility_off : Icons.visibility,
+                    obscurePassword
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    color: kTextMuted,
+                    size: 20,
                   ),
-                  onPressed: () {
-                    setState(() {
-                      obscurePassword = !obscurePassword;
-                    });
-                  },
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  onPressed: () =>
+                      setState(() => obscurePassword = !obscurePassword),
                 ),
               ),
             ),
             const SizedBox(height: 24),
-            // Error Message
-            if (authState.error != null)
+            if (authState.error != null) ...[
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.red.shade50,
-                  border: Border.all(color: Colors.red.shade200),
+                  color: kDanger.withValues(alpha: 0.06),
+                  border: Border.all(color: kDanger.withValues(alpha: 0.3)),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text(
-                  authState.error!,
-                  style: TextStyle(color: Colors.red.shade700),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline_rounded,
+                        color: kDanger, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(authState.error!,
+                          style: GoogleFonts.inter(
+                              color: kDanger, fontSize: 13)),
+                    ),
+                  ],
                 ),
               ),
-            const SizedBox(height: 24),
-            // Register Button
+              const SizedBox(height: 16),
+            ],
             ElevatedButton(
               onPressed: authState.isLoading
                   ? null
-                  : () {
-                      final authNotifier = ref.read(authNotifierProvider.notifier);
-                      authNotifier.register(
+                  : () => ref
+                      .read(authNotifierProvider.notifier)
+                      .register(
                         fullName: nameController.text,
                         email: emailController.text,
                         phone: phoneController.text,
                         password: passwordController.text,
                         role: selectedRole,
-                      );
-                    },
+                      ),
               style: ElevatedButton.styleFrom(
+                backgroundColor: kGreen,
+                foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
               ),
               child: authState.isLoading
                   ? const SizedBox(
                       height: 20,
                       width: 20,
                       child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    )
-                  : const Text(
-                      'Create Account',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
+                          strokeWidth: 2,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white)))
+                  : Text('auth.create_account'.tr(),
+                      style: GoogleFonts.inter(
+                          fontSize: 16, fontWeight: FontWeight.bold)),
             ),
-            const SizedBox(height: 16),
-            // Login Link
+            const SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text('Already have an account? '),
+                Text('auth.already_have_account'.tr(),
+                    style: GoogleFonts.inter(
+                        color: kTextMuted, fontSize: 14)),
                 GestureDetector(
                   onTap: () => context.go('/login'),
-                  child: const Text(
-                    'Login',
-                    style: TextStyle(
-                      color: Color(0xFF1976D2),
-                      fontWeight: FontWeight.bold,
-                    ),
+                  child: Text(
+                    'auth.login'.tr(),
+                    style: GoogleFonts.inter(
+                        color: kGreen,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14),
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 32),
           ],
         ),
       ),

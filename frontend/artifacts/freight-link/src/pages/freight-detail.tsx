@@ -34,24 +34,29 @@ export default function FreightDetail() {
   const qc = useQueryClient();
   const [, setLocation] = useLocation();
 
-  const [applyForm, setApplyForm] = useState({ proposedPrice: "", message: "" });
+  const [applyForm, setApplyForm] = useState({ proposedPrice: "", message: "", vehicleId: "" });
   const [showApply, setShowApply] = useState(false);
 
   const { data: freight, isLoading } = useQuery({
     queryKey: ["freight", id],
     queryFn: () => api.get<any>(`/freight/${id}`),
+    refetchInterval: 30_000,
   });
+
+  // Driver's own vehicles (for bid vehicle selection)
+  const { data: myVehiclesData } = useQuery({
+    queryKey: ["my-vehicles"],
+    queryFn: () => api.get<{ vehicles: any[] }>("/my-vehicles"),
+    enabled: user?.role === "driver",
+  });
+  const myVehicles = myVehiclesData?.vehicles ?? [];
 
   const { data: aiMatches } = useQuery({
     queryKey: ["ai-matches", id],
-    queryFn: () => api.post<{ matches: any[] }>("/ai/driver-recommendations", {
-      freightId: Number(id),
-      weightTons: freight?.weightTons || 0,
-      cargoType: freight?.cargoType || "general",
-      pickupLat: freight?.pickupLatitude || undefined,
-      pickupLng: freight?.pickupLongitude || undefined,
-      deliveryLat: freight?.deliveryLatitude || undefined,
-      deliveryLng: freight?.deliveryLongitude || undefined,
+    queryFn: () => api.post<{ matches: any[] }>("/ai/recommend-truck", {
+      freight_id: Number(id),
+      weight: freight?.weightTons || 0,
+      cargo_type: freight?.cargoType || "general",
       budget: freight?.budget || undefined,
     }),
     enabled: !!freight && (user?.role === "admin" || user?.role === "shipper"),
@@ -59,33 +64,55 @@ export default function FreightDetail() {
 
   const { data: aiPrice } = useQuery({
     queryKey: ["ai-price", id],
-    queryFn: () => api.get<any>(`/ai/price-prediction?weightTons=${Number(freight?.weightTons || 0)}&distanceKm=${Number(freight?.distanceKm || 300)}&cargoType=${freight?.cargoType || "general"}`),
+    queryFn: () => api.get<any>(`/ai/price-prediction?weight=${Number(freight?.weightTons || 0)}&distance_km=${Number(freight?.distanceKm || 300)}&cargo_type=${freight?.cargoType || "general"}`),
     enabled: !!freight,
   });
 
   const { data: applications } = useQuery({
     queryKey: ["applications", id],
-    queryFn: () => api.get<{ applications: any[] }>(`/applications/freight/${id}`),
+    queryFn: async () => {
+      const resp = await api.get<{ data: any[] }>(`/cargo-requests/${id}/bids`);
+      const bids = Array.isArray(resp?.data) ? resp.data : [];
+      return {
+        applications: bids.map((b: any) => ({
+          id: b.id,
+          driverId: b.driver_id,
+          driverName: b.driver_name,
+          driverPhone: b.driver_phone,
+          proposedPrice: b.amount,
+          message: b.note,
+          status: b.status,
+          truckType: b.truck_type,
+          plateNumber: b.plate_number,
+          driverRating: b.driver_rating,
+          driverTripCount: b.driver_trip_count,
+          distanceKm: b.distance_km,
+          bidderType: b.bidder_type,
+          isRecommended: b.is_recommended,
+        })),
+      };
+    },
     enabled: !!freight && (user?.role === "admin" || user?.role === "shipper"),
+    refetchInterval: 20_000,
   });
 
   const applyMutation = useMutation({
-    mutationFn: () => api.post(`/applications`, {
-      freightId: Number(id),
-      proposedPrice: Number(applyForm.proposedPrice),
-      message: applyForm.message,
+    mutationFn: () => api.post(`/cargo-requests/${id}/bids`, {
+      vehicle_id: Number(applyForm.vehicleId),
+      amount: Number(applyForm.proposedPrice),
+      note: applyForm.message,
     }),
     onSuccess: () => {
-      toast({ title: "Application submitted!", description: "The shipper will review your bid." });
+      toast({ title: "Bid submitted!", description: "The shipper will review your bid." });
       setShowApply(false);
-      setApplyForm({ proposedPrice: "", message: "" });
+      setApplyForm({ proposedPrice: "", message: "", vehicleId: "" });
       qc.invalidateQueries({ queryKey: ["freight", id] });
     },
     onError: (err: any) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
   });
 
   const acceptMutation = useMutation({
-    mutationFn: (appId: number) => api.patch(`/applications/${appId}/accept`, {}),
+    mutationFn: (bidId: number) => api.patch(`/bids/${bidId}/accept`, {}),
     onSuccess: () => {
       toast({ title: "Driver accepted!" });
       qc.invalidateQueries({ queryKey: ["freight", id] });
@@ -230,7 +257,26 @@ export default function FreightDetail() {
                 ) : (
                   <div className="space-y-3">
                     <div>
-                      <Label>Your Price (ETB)</Label>
+                      <Label>Select Vehicle *</Label>
+                      {myVehicles.length === 0 ? (
+                        <p className="text-xs text-destructive mt-1">No vehicles registered. <a href="/vehicles" className="underline">Add one first.</a></p>
+                      ) : (
+                        <select
+                          className="mt-1 w-full rounded-lg border border-input px-3 py-2 text-sm bg-background"
+                          value={applyForm.vehicleId}
+                          onChange={e => setApplyForm(f => ({ ...f, vehicleId: e.target.value }))}
+                        >
+                          <option value="">-- Select vehicle --</option>
+                          {myVehicles.map((v: any) => (
+                            <option key={v.id} value={v.id}>
+                              {v.plateNumber} · {v.truckType?.replace(/_/g, " ")} · {v.capacityTons}t
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                    <div>
+                      <Label>Your Price (ETB) *</Label>
                       <Input
                         type="number"
                         placeholder={`Budget: ETB ${Number(freight.budget).toLocaleString()}`}
@@ -252,7 +298,7 @@ export default function FreightDetail() {
                     <div className="flex gap-2">
                       <Button
                         onClick={() => applyMutation.mutate()}
-                        disabled={!applyForm.proposedPrice || applyMutation.isPending}
+                        disabled={!applyForm.proposedPrice || !applyForm.vehicleId || applyMutation.isPending}
                         className="flex-1 rounded-lg"
                       >
                         {applyMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
@@ -276,25 +322,58 @@ export default function FreightDetail() {
               </CardHeader>
               <CardContent className="space-y-3">
                 {applications.applications.map((app: any) => (
-                  <div key={app.id} className="flex items-center justify-between p-3 rounded-xl border border-border/60">
-                    <div>
-                      <p className="font-medium text-sm">Driver #{app.driverId}</p>
-                      <p className="text-xs text-muted-foreground">
-                        ETB {Number(app.proposedPrice).toLocaleString()}
-                      </p>
-                      {app.message && <p className="text-xs text-muted-foreground mt-1 italic">"{app.message}"</p>}
+                  <div key={app.id} className={`p-3 rounded-xl border ${app.status === "accepted" ? "border-emerald-200 bg-emerald-50/40" : app.isRecommended ? "border-emerald-300 bg-emerald-50/20" : "border-border/60"}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                          <p className="font-medium text-sm">{app.driverName ?? `Driver #${app.driverId}`}</p>
+                          {app.isRecommended && (
+                            <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full font-semibold" style={{ background: "#EAF3DE", color: "#27500A" }}>
+                              <CheckCircle2 className="h-3 w-3" /> Best Price
+                            </span>
+                          )}
+                          {app.bidderType === "fleet_owner" && (
+                            <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-medium">Fleet</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          ETB {Number(app.proposedPrice).toLocaleString()}
+                          {app.truckType && ` · ${app.truckType.replace(/_/g, " ")}`}
+                          {app.plateNumber && ` · ${app.plateNumber}`}
+                          {app.distanceKm != null && ` · ${app.distanceKm} km away`}
+                        </p>
+                        {app.driverRating != null && (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <Star className="h-3 w-3 text-amber-500 fill-amber-500" />
+                            {Number(app.driverRating).toFixed(1)}
+                            {app.driverTripCount != null && ` · ${app.driverTripCount} trips`}
+                          </p>
+                        )}
+                        {app.message && <p className="text-xs text-muted-foreground mt-1 italic">"{app.message}"</p>}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_COLORS[app.status] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
+                          {app.status}
+                        </span>
+                        {app.status === "pending" && freight.status === "posted" && (
+                          <Button size="sm" onClick={() => acceptMutation.mutate(app.id)}
+                            disabled={acceptMutation.isPending} className="rounded-lg">
+                            Accept
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs px-2 py-0.5 rounded-full border ${STATUS_COLORS[app.status] ?? "bg-gray-50 text-gray-600 border-gray-200"}`}>
-                        {app.status}
-                      </span>
-                      {app.status === "pending" && freight.status === "posted" && (
-                        <Button size="sm" onClick={() => acceptMutation.mutate(app.id)}
-                          disabled={acceptMutation.isPending} className="rounded-lg">
-                          Accept
-                        </Button>
-                      )}
-                    </div>
+                    {app.status === "accepted" && app.driverPhone && (
+                      <div className="mt-2 pt-2 border-t border-emerald-200 flex items-center gap-2">
+                        <div className="h-5 w-5 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                          <svg className="h-3 w-3 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                          </svg>
+                        </div>
+                        <span className="text-xs text-emerald-700 font-medium">Price agreed — Driver: </span>
+                        <span className="text-sm font-bold text-emerald-700">{app.driverPhone}</span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </CardContent>

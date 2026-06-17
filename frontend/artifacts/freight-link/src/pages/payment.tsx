@@ -102,6 +102,7 @@ export default function Payment() {
     { id: "chapa", name: "Chapa", subtitle: "Cards, Apple Pay, Google Pay", icon: CreditCard, color: "bg-blue-500" },
     { id: "cbe_birr", name: "CBE Birr", subtitle: "Direct wallet-to-wallet", icon: Wallet, color: "bg-emerald-500" },
     { id: "telebirr", name: "Telebirr", subtitle: "Mobile banking interface", icon: Smartphone, color: "bg-teal-500" },
+    { id: "cash", name: "Cash on Delivery", subtitle: "Pay driver directly upon delivery", icon: Banknote, color: "bg-amber-500" },
   ];
 
   return (
@@ -160,8 +161,8 @@ export default function Payment() {
             </div>
           </div>
 
-          {/* Payment Options */}
-          <div className="space-y-3">
+          {/* Payment Options — only shown to shipper/admin who can pay */}
+          {canPay && <div className="space-y-3">
             <p className="text-sm font-medium text-foreground">Enter Payment Details</p>
             <div className="space-y-2">
               {providers.map((p) => (
@@ -189,7 +190,7 @@ export default function Payment() {
                 </button>
               ))}
             </div>
-          </div>
+          </div>}
 
           {/* Actions */}
           {canPay && !payment && (

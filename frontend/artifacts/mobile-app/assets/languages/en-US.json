@@ -92,7 +92,35 @@
     "available": "Available",
     "offline": "Offline",
     "total_deliveries": "Total Deliveries",
-    "average_rating": "Average Rating"
+    "average_rating": "Average Rating",
+    "dashboard": "Driver Dashboard",
+    "active": "Active",
+    "available_cargo": "Available Cargo",
+    "backhaul_sub": "Find return cargo to avoid empty trips",
+    "backhaul_title": "AI Backhaul Optimizer",
+    "completed": "Completed",
+    "job_accepted": "Job Accepted",
+    "my_bids_title": "My Bids",
+    "no_cargo": "No available cargo at the moment",
+    "tap_to_review": "Tap to review",
+    "total_jobs": "Total Jobs",
+    "track_bids": "Track Bids",
+    "view_all": "View All"
+  },
+
+  "bid": {
+    "accept": "Accept",
+    "amount_label": "Your Bid Amount (ETB)",
+    "budget_label": "Budget",
+    "note_hint_driver": "Add a note for the shipper...",
+    "note_label": "Note (optional)",
+    "place": "Place Bid",
+    "place_title": "Place a Bid",
+    "counter": "Counter Offer",
+    "reject": "Reject",
+    "status_pending": "Pending",
+    "status_accepted": "Accepted",
+    "status_rejected": "Rejected"
   },
 
   "payment": {
@@ -186,6 +214,20 @@
     "confirm_logout": "Are you sure you want to logout?"
   },
 
+  "nav": {
+    "home": "Home",
+    "cargo": "Cargo",
+    "bookings": "Bookings",
+    "ai": "AI",
+    "profile": "Profile",
+    "jobs": "Jobs",
+    "docs": "Docs",
+    "fleet": "Fleet",
+    "drivers": "Drivers",
+    "vehicles": "Vehicles",
+    "dispatch": "Dispatch"
+  },
+
   "common": {
     "loading": "Loading...",
     "error": "Error",
@@ -197,6 +239,18 @@
     "back": "Back",
     "next": "Next",
     "prev": "Previous",
-    "save": "Save"
+    "save": "Save",
+    "driver": "Driver",
+    "shipper": "Shipper",
+    "open": "Open",
+    "edit": "Edit",
+    "delete": "Delete",
+    "confirm": "Confirm",
+    "yes": "Yes",
+    "no": "No",
+    "search": "Search",
+    "filter": "Filter",
+    "sort": "Sort",
+    "refresh": "Refresh"
   }
 }
