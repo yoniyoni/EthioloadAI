@@ -111,9 +111,10 @@ class _Body extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final uploaded = {for (final d in docs) d.documentType: d};
-    final approvedCount = docs.where((d) => d.isApproved).length;
-    final allApproved   = approvedCount >= _requiredDocs.length;
-    final anyPending    = docs.any((d) => d.isPending);
+    final approvedCount  = docs.where((d) => d.isApproved).length;
+    final allApproved    = approvedCount >= _requiredDocs.length;
+    final allUploaded    = uploaded.length >= _requiredDocs.length;
+    final anyPending     = docs.any((d) => d.isPending);
 
     return RefreshIndicator(
       color: _amber,
@@ -124,6 +125,7 @@ class _Body extends ConsumerWidget {
           // ── Progress + status banner ──────────────────────────────
           _ProgressBanner(
             allApproved:   allApproved,
+            allUploaded:   allUploaded,
             anyPending:    anyPending,
             approvedCount: approvedCount,
             total:         _requiredDocs.length,
@@ -165,14 +167,21 @@ class _Body extends ConsumerWidget {
 
 // ── Progress banner ───────────────────────────────────────────────────────
 
+// Amber used for the "waiting for approval" gate banner
+const _amberBg   = Color(0xFFFAEEDA);
+const _amberText = Color(0xFF633806);
+const _amberBorder = Color(0xFFF59E0B);
+
 class _ProgressBanner extends StatelessWidget {
   final bool allApproved;
+  final bool allUploaded;
   final bool anyPending;
   final int  approvedCount;
   final int  total;
 
   const _ProgressBanner({
     required this.allApproved,
+    required this.allUploaded,
     required this.anyPending,
     required this.approvedCount,
     required this.total,
@@ -180,73 +189,178 @@ class _ProgressBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color color;
-    final IconData icon;
-    final String title;
-    final String subtitle;
-
+    // ── State 1: all 5 approved → verified ──────────────────────────
     if (allApproved) {
-      color    = _success;
-      icon     = Icons.verified_rounded;
-      title    = '✓  Verified Driver / ተረጋጋጠ ሾፌር';
-      subtitle = 'All documents approved. You can accept cargo and receive payments.';
-    } else if (anyPending) {
-      color    = _amber;
-      icon     = Icons.hourglass_top_rounded;
-      title    = 'Under Review / በሂደት ላይ';
-      subtitle = '$approvedCount of $total approved. Admin is reviewing the rest.';
-    } else {
-      color    = _green;
-      icon     = Icons.upload_file_outlined;
-      title    = 'Upload Your Documents / ሰነዶችን ይስቀሉ';
-      subtitle = '$approvedCount of $total approved. Upload the remaining to get verified.';
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _success.withAlpha(18),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _success.withAlpha(60), width: 0.5),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              const Icon(Icons.verified_rounded, color: _success, size: 28),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('✓  Verified Driver / ተረጋጋጠ ሾፌር',
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: _success)),
+                    SizedBox(height: 3),
+                    Text(
+                      'All documents approved. You can accept cargo and receive payments. / '
+                      'ሁሉም ሰነዶች ተቀባይነት አግኝተዋል። ጭነት ለመቀበልና ክፍያ ለማግኘት ዝግጁ ነዎት።',
+                      style: TextStyle(fontSize: 12, color: _textSec),
+                    ),
+                  ],
+                ),
+              ),
+            ]),
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: const LinearProgressIndicator(
+                value: 1.0,
+                minHeight: 6,
+                backgroundColor: Color(0x20059669),
+                valueColor: AlwaysStoppedAnimation<Color>(_success),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '$approvedCount / $total documents approved',
+              style: const TextStyle(
+                  fontSize: 11, color: _success, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+      );
     }
 
+    // ── State 2: all 5 uploaded, waiting for admin approval ──────────
+    if (allUploaded) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _amberBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border(
+            left: const BorderSide(color: _amberBorder, width: 4),
+            top:    BorderSide(color: _amberBorder.withAlpha(80), width: 0.5),
+            right:  BorderSide(color: _amberBorder.withAlpha(80), width: 0.5),
+            bottom: BorderSide(color: _amberBorder.withAlpha(80), width: 0.5),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              const Icon(Icons.hourglass_top_rounded,
+                  color: _amberText, size: 28),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Waiting for approval / ለማረጋገጥ በመጠባበቅ ላይ',
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: _amberText),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Your account will activate automatically once an admin '
+                      'approves all your documents. / ሁሉም ሰነዶችዎ በአስተዳዳሪ '
+                      'ከተረጋገጡ በኋላ መለያዎ በራስ-ሰር ይነቃል።',
+                      style: TextStyle(fontSize: 12, color: _amberText),
+                    ),
+                  ],
+                ),
+              ),
+            ]),
+            const SizedBox(height: 14),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: approvedCount / total,
+                minHeight: 6,
+                backgroundColor: _amberBorder.withAlpha(40),
+                valueColor:
+                    const AlwaysStoppedAnimation<Color>(_amberBorder),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '$approvedCount / $total documents approved',
+              style: const TextStyle(
+                  fontSize: 11,
+                  color: _amberText,
+                  fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // ── State 3: documents still missing ────────────────────────────
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withAlpha(18),
+        color: _green.withAlpha(18),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withAlpha(60), width: 0.5),
+        border: Border.all(color: _green.withAlpha(60), width: 0.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Icon(icon, color: color, size: 28),
+            const Icon(Icons.upload_file_outlined, color: _green, size: 28),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
+                  const Text('Upload Your Documents / ሰነዶችን ይስቀሉ',
                       style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: color)),
+                          color: _green)),
                   const SizedBox(height: 3),
-                  Text(subtitle,
-                      style: const TextStyle(fontSize: 12, color: _textSec)),
+                  Text(
+                    '$approvedCount of $total approved. '
+                    'Upload the remaining to get verified. / '
+                    'የቀሩትን ሰነዶች ሰቅለው ማረጋገጫ ያግኙ።',
+                    style:
+                        const TextStyle(fontSize: 12, color: _textSec),
+                  ),
                 ],
               ),
             ),
           ]),
           const SizedBox(height: 12),
-          // Progress bar
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
               value: approvedCount / total,
               minHeight: 6,
-              backgroundColor: color.withAlpha(30),
-              valueColor: AlwaysStoppedAnimation<Color>(color),
+              backgroundColor: _green.withAlpha(30),
+              valueColor: const AlwaysStoppedAnimation<Color>(_green),
             ),
           ),
           const SizedBox(height: 6),
           Text(
             '$approvedCount / $total documents approved',
-            style: TextStyle(
-                fontSize: 11, color: color, fontWeight: FontWeight.w500),
+            style: const TextStyle(
+                fontSize: 11, color: _green, fontWeight: FontWeight.w500),
           ),
         ],
       ),

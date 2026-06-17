@@ -15,6 +15,7 @@ class User {
   final String role;
   final String? location;
   final bool verificationStatus;
+  final bool isActive;
 
   User({
     required this.id,
@@ -24,6 +25,7 @@ class User {
     required this.role,
     this.location,
     this.verificationStatus = false,
+    this.isActive = true,
   });
 
   bool get isAdmin      => role.toLowerCase() == 'admin';
@@ -42,6 +44,7 @@ class User {
         location: json['location'] as String?,
         verificationStatus: json['verification_status'] == true ||
             json['verification_status'] == 1,
+        isActive: json['is_active'] == true || json['is_active'] == 1,
       );
 
   Map<String, dynamic> toJson() => {
@@ -52,6 +55,7 @@ class User {
         'role': role,
         'location': location,
         'verification_status': verificationStatus,
+        'is_active': isActive,
       };
 }
 

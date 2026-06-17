@@ -30,24 +30,30 @@ class _RouterNotifier extends ChangeNotifier {
   final Ref _ref;
   bool _isAuthenticated = false;
   String _role = '';
+  bool _isVerified = false;
 
   _RouterNotifier(this._ref) {
     _ref.listen<AuthState>(authNotifierProvider, (previous, next) {
       final authChanged =
           previous?.isAuthenticated != next.isAuthenticated ||
-          previous?.user?.role != next.user?.role;
+          previous?.user?.role != next.user?.role ||
+          previous?.user?.verificationStatus != next.user?.verificationStatus;
       if (authChanged) {
         _isAuthenticated = next.isAuthenticated;
         _role = next.user?.role ?? '';
+        _isVerified = next.user?.verificationStatus ?? false;
         notifyListeners();
       }
     });
     _isAuthenticated = _ref.read(authNotifierProvider).isAuthenticated;
     _role = _ref.read(authNotifierProvider).user?.role ?? '';
+    _isVerified =
+        _ref.read(authNotifierProvider).user?.verificationStatus ?? false;
   }
 
   bool get isAuthenticated => _isAuthenticated;
   String get role => _role;
+  bool get isVerified => _isVerified;
 }
 
 final _routerNotifierProvider = Provider<_RouterNotifier>((ref) {
@@ -70,15 +76,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       const publicRoutes = ['/splash', '/landing', '/login', '/register'];
       final isPublic = publicRoutes.contains(path);
 
-      // Already authenticated on a public page → go to role dashboard
+      // Unauthenticated on a protected page → landing
+      if (!isLoggedIn && !isPublic) return '/landing';
+
+      // Already authenticated on a public page → role dashboard (with gate)
       if (isLoggedIn && isPublic) {
-        if (role == 'driver') return '/driver';
+        if (role == 'driver') {
+          return notifier.isVerified ? '/driver' : '/driver-documents';
+        }
         if (role == 'fleet_owner') return '/fleet';
         return '/shipper';
       }
 
-      // Unauthenticated on a protected page → landing
-      if (!isLoggedIn && !isPublic) return '/landing';
+      // Driver verification gate — fires on every navigation attempt.
+      // Keeps unverified drivers on the documents screen regardless of
+      // where they navigate (deep links, back button, programmatic pushes).
+      if (isLoggedIn &&
+          role == 'driver' &&
+          !notifier.isVerified &&
+          path != '/driver-documents') {
+        return '/driver-documents';
+      }
 
       return null;
     },
