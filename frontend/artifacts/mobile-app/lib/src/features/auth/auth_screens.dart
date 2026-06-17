@@ -184,11 +184,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             TextField(
               controller: emailController,
               decoration: _field(
-                label: 'auth.email'.tr(),
-                hint: 'auth.email_hint'.tr(),
-                prefix: Icons.email_outlined,
+                label: 'auth.identifier'.tr(),
+                hint: 'auth.identifier_hint'.tr(),
+                prefix: Icons.person_outlined,
               ),
-              keyboardType: TextInputType.emailAddress,
+              keyboardType: TextInputType.text,
             ),
             const SizedBox(height: 16),
             TextField(
@@ -239,7 +239,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               onPressed: authState.isLoading
                   ? null
                   : () => ref.read(authNotifierProvider.notifier).login(
-                        email: emailController.text,
+                        identifier: emailController.text,
                         password: passwordController.text,
                       ),
               style: ElevatedButton.styleFrom(

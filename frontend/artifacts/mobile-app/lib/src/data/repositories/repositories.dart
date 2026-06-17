@@ -32,12 +32,12 @@ class AuthRepository {
   }
 
   Future<AuthResponse> login({
-    required String email,
+    required String identifier,
     required String password,
   }) async {
     final response = await _api.post<AuthResponse>(
       '/login',                             // ✓ POST /login
-      data: {'email': email, 'password': password},
+      data: {'identifier': identifier, 'password': password},
       fromJson: (json) => AuthResponse.fromJson(json as Map<String, dynamic>),
     );
     await _api.saveToken(response.token);

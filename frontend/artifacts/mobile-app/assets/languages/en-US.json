@@ -29,6 +29,8 @@
     "login": "Login",
     "login_title": "Welcome Back",
     "login_subtitle": "Sign in to continue",
+    "identifier": "Email or Phone",
+    "identifier_hint": "Enter your email or phone number",
     "email": "Email",
     "email_hint": "Enter your email address",
     "password": "Password",
