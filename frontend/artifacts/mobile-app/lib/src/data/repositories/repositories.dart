@@ -101,6 +101,7 @@ class CargoRepository {
     required double weight,
     required String urgencyLevel,
     double? budget,
+    String priceType = 'negotiable',
   }) async =>
       _api.post<CargoRequest>(
         '/cargo/create',
@@ -111,6 +112,7 @@ class CargoRepository {
           'weight': weight,
           'urgency_level': urgencyLevel,
           if (budget != null) 'budget': budget,
+          'price_type': priceType,
         },
         fromJson: (json) =>
             CargoRequest.fromJson(json as Map<String, dynamic>),
@@ -124,6 +126,22 @@ class CargoRepository {
         fromJson: (json) =>
             CargoRequest.fromJson(json as Map<String, dynamic>),
       );
+
+  // ✓ POST /cargo-requests/{cargoId}/book-direct — driver accepts fixed-price cargo
+  Future<Booking> bookDirectFixed(int cargoId) async {
+    final response =
+        await _api.dio.post('/cargo-requests/$cargoId/book-direct');
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final raw = response.data;
+      final data =
+          (raw is Map && raw.containsKey('data')) ? raw['data'] : raw;
+      return Booking.fromJson(data as Map<String, dynamic>);
+    }
+    throw ApiException(
+      message: 'Failed to accept fixed price cargo',
+      statusCode: response.statusCode,
+    );
+  }
 
   // ✓ DELETE /cargo-requests/{id}  (apiResource destroy)
   Future<void> delete(int id) => _api.delete('/cargo-requests/$id');

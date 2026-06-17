@@ -26,6 +26,7 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
   String? budget;
   String? deadline;
   String? description;
+  String priceType = 'negotiable';
 
   // AI price prediction state
   int? _priceMin;
@@ -182,6 +183,7 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
             weight: double.tryParse(weight!) ?? 0,
             urgencyLevel: 'normal',
             budget: double.tryParse(budget ?? ''),
+            priceType: priceType,
           );
 
       if (mounted) Navigator.pop(context);
@@ -243,6 +245,7 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
                 _Step3(
                   budget: budget,
                   deadline: deadline,
+                  priceType: priceType,
                   priceMin: _priceMin,
                   priceMax: _priceMax,
                   priceDistKm: _priceDistKm,
@@ -250,6 +253,7 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
                   priceError: _priceError,
                   onBudget: (v) => setState(() => budget = v),
                   onDeadline: (v) => setState(() => deadline = v),
+                  onPriceType: (v) => setState(() => priceType = v),
                 ),
                 _Step4(
                   pickup: pickupLocation,
@@ -259,6 +263,7 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
                   budget: budget,
                   deadline: deadline,
                   description: description,
+                  priceType: priceType,
                 ),
               ],
             ),
@@ -669,6 +674,7 @@ class _Step2 extends StatelessWidget {
 class _Step3 extends StatelessWidget {
   final String? budget;
   final String? deadline;
+  final String priceType;
   final int? priceMin;
   final int? priceMax;
   final int? priceDistKm;
@@ -676,10 +682,12 @@ class _Step3 extends StatelessWidget {
   final String? priceError;
   final ValueChanged<String> onBudget;
   final ValueChanged<String> onDeadline;
+  final ValueChanged<String> onPriceType;
 
   const _Step3({
     required this.budget,
     required this.deadline,
+    required this.priceType,
     required this.priceMin,
     required this.priceMax,
     required this.priceDistKm,
@@ -687,6 +695,7 @@ class _Step3 extends StatelessWidget {
     required this.priceError,
     required this.onBudget,
     required this.onDeadline,
+    required this.onPriceType,
   });
 
   InputDecoration _inputDeco({String? hint, String? prefix, Widget? prefixIcon}) =>
@@ -720,9 +729,38 @@ class _Step3 extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text('Budget (ETB)',
+        Text('Pricing Type',
             style: GoogleFonts.inter(
                 fontWeight: FontWeight.w600, color: kTextPrimary)),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(
+            child: _PriceTypeOption(
+              title: 'Negotiable',
+              subtitle: 'Drivers bid on your cargo',
+              icon: Icons.gavel_rounded,
+              selected: priceType == 'negotiable',
+              onTap: () => onPriceType('negotiable'),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _PriceTypeOption(
+              title: 'Fixed Price',
+              subtitle: 'Drivers accept or reject',
+              icon: Icons.price_check_rounded,
+              selected: priceType == 'fixed',
+              onTap: () => onPriceType('fixed'),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 16),
+        Text(
+          priceType == 'fixed'
+              ? 'Budget (ETB) — required for fixed price'
+              : 'Budget (ETB)',
+          style: GoogleFonts.inter(
+              fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         TextFormField(
           initialValue: budget,
@@ -832,6 +870,57 @@ class _Step3 extends StatelessWidget {
   }
 }
 
+// ── Price type option card ────────────────────────────────────────────────────
+
+class _PriceTypeOption extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _PriceTypeOption({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: selected ? kGreen.withValues(alpha: 0.06) : kSurface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? kGreen : kBorder,
+            width: selected ? 1.5 : 0.5,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: selected ? kGreen : kTextMuted, size: 20),
+            const SizedBox(height: 6),
+            Text(title,
+                style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: selected ? kGreen : kTextPrimary)),
+            const SizedBox(height: 2),
+            Text(subtitle,
+                style: GoogleFonts.inter(fontSize: 11, color: kTextMuted)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ── Step 4: Review ────────────────────────────────────────────────────────────
 
 class _Step4 extends StatelessWidget {
@@ -842,6 +931,7 @@ class _Step4 extends StatelessWidget {
   final String? budget;
   final String? deadline;
   final String? description;
+  final String priceType;
 
   const _Step4({
     required this.pickup,
@@ -851,6 +941,7 @@ class _Step4 extends StatelessWidget {
     required this.budget,
     required this.deadline,
     required this.description,
+    required this.priceType,
   });
 
   @override
@@ -868,6 +959,7 @@ class _Step4 extends StatelessWidget {
         _ReviewRow('Destination', delivery ?? '—'),
         _ReviewRow('Cargo Type', cargo ?? '—'),
         _ReviewRow('Weight', weight != null ? '$weight tons' : '—'),
+        _ReviewRow('Pricing', priceType == 'fixed' ? 'Fixed Price' : 'Negotiable'),
         _ReviewRow('Budget', budget != null ? 'ETB $budget' : '—'),
         _ReviewRow('Deadline', deadline ?? 'Not set'),
         if (description != null && description!.isNotEmpty)

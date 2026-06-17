@@ -262,7 +262,7 @@ class _DetailScaffold extends ConsumerWidget {
   }
 }
 
-// ── Driver: Place Bid ─────────────────────────────────────────────────────
+// ── Driver: Place Bid (negotiable) or Accept/Reject (fixed) ──────────────
 
 class _DriverBidAction extends ConsumerWidget {
   final CargoRequest cargo;
@@ -270,6 +270,11 @@ class _DriverBidAction extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (cargo.priceType == 'fixed') {
+      return _FixedPriceDriverAction(cargo: cargo);
+    }
+
+    // Negotiable: show existing bid or Place Bid button
     final myBids = ref.watch(myBidsProvider).valueOrNull;
     Bid? existingBid;
     if (myBids != null) {
@@ -350,6 +355,119 @@ class _DriverBidAction extends ConsumerWidget {
                     builder: (_) => _PlaceBidSheet(cargo: cargo),
                   ),
                 ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Driver: Accept / Reject fixed-price cargo ─────────────────────────────
+
+class _FixedPriceDriverAction extends ConsumerStatefulWidget {
+  final CargoRequest cargo;
+  const _FixedPriceDriverAction({required this.cargo});
+
+  @override
+  ConsumerState<_FixedPriceDriverAction> createState() =>
+      _FixedPriceDriverActionState();
+}
+
+class _FixedPriceDriverActionState
+    extends ConsumerState<_FixedPriceDriverAction> {
+  bool _accepting = false;
+
+  Future<void> _accept() async {
+    setState(() => _accepting = true);
+    try {
+      await ref.read(cargoRepositoryProvider).bookDirectFixed(widget.cargo.id);
+      if (mounted) {
+        ref.invalidate(bookingListProvider);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            'Booking confirmed at ETB '
+            '${widget.cargo.budget?.toStringAsFixed(0) ?? '—'}',
+          ),
+          backgroundColor: kGreen,
+        ));
+        context.pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed: $e'),
+          backgroundColor: kDanger,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _accepting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.cargo;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Fixed Price Cargo',
+            style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: kTextPrimary)),
+        const SizedBox(height: 6),
+        Text(
+          c.budget != null
+              ? 'Accept this job at the fixed price of ETB '
+                '${c.budget!.toStringAsFixed(0)}'
+              : 'Accept this job at the shipper\'s fixed price.',
+          style: GoogleFonts.inter(fontSize: 12, color: kTextMuted),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            icon: _accepting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.check_circle_outline_rounded, size: 18),
+            label: Text(
+              c.budget != null
+                  ? 'Accept — ETB ${c.budget!.toStringAsFixed(0)}'
+                  : 'Accept Fixed Price',
+              style: GoogleFonts.inter(
+                  fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kGreen,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              elevation: 0,
+            ),
+            onPressed: _accepting ? null : _accept,
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.close_rounded, size: 18),
+            label: Text('Not Interested',
+                style: GoogleFonts.inter(
+                    fontSize: 14, fontWeight: FontWeight.w600)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: kDanger,
+              side: const BorderSide(color: kDanger, width: 0.5),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () => context.pop(),
+          ),
         ),
       ],
     );

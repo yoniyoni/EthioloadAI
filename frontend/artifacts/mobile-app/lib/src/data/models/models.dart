@@ -133,6 +133,8 @@ class CargoRequest {
   /// 'low' | 'normal' | 'high' | 'express'
   final String urgencyLevel;
   final double? budget;
+  /// 'fixed' | 'negotiable'
+  final String priceType;
   /// 'pending' | 'matched' | 'completed'
   final String status;
   final DateTime? createdAt;
@@ -147,6 +149,7 @@ class CargoRequest {
     required this.weight,
     required this.urgencyLevel,
     this.budget,
+    this.priceType = 'negotiable',
     required this.status,
     this.createdAt,
     this.updatedAt,
@@ -163,6 +166,7 @@ class CargoRequest {
         budget: json['budget'] != null
             ? double.tryParse(json['budget'].toString())
             : null,
+        priceType: (json['price_type'] ?? 'negotiable') as String,
         status: (json['status'] ?? 'pending') as String,
         createdAt: json['created_at'] != null
             ? DateTime.tryParse(json['created_at'] as String)
