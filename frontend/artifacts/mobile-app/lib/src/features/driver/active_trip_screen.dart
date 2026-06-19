@@ -123,46 +123,121 @@ class ActiveTripScreen extends ConsumerWidget {
   }
 }
 
-class _TripBody extends ConsumerWidget {
+class _TripBody extends ConsumerStatefulWidget {
   final Trip trip;
   final int tripId;
   const _TripBody({required this.trip, required this.tripId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final stops = trip.stops;
-    final progress = trip.totalStops > 0
-        ? trip.completedStops / trip.totalStops
+  ConsumerState<_TripBody> createState() => _TripBodyState();
+}
+
+class _TripBodyState extends ConsumerState<_TripBody> {
+  bool _completing = false;
+  bool _showSuccess = false;
+  String? _paymentMethod;
+  double _amountEarned = 0;
+
+  Future<void> _completeTrip() async {
+    setState(() => _completing = true);
+    try {
+      final completedTrip =
+          await ref.read(tripRepositoryProvider).complete(widget.tripId);
+      if (!mounted) return;
+
+      final method = await showModalBottomSheet<String>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => const _TripPaymentSheet(),
+      );
+      if (!mounted) return;
+
+      if (method == null) {
+        setState(() => _completing = false);
+        return;
+      }
+
+      final price = completedTrip.bookingEstimatedPrice ?? 0.0;
+      final commission =
+          completedTrip.bookingCommissionFee ?? (price * 0.10);
+
+      await ref.read(paymentRepositoryProvider).create(
+            bookingId: completedTrip.bookingId,
+            amount: price,
+            paymentMethod: method,
+          );
+      if (!mounted) return;
+
+      setState(() {
+        _completing = false;
+        _showSuccess = true;
+        _paymentMethod = method;
+        _amountEarned = price - commission;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _completing = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: Colors.red.shade700,
+        ));
+      }
+    }
+  }
+
+  void _showAddStopSheet(BuildContext context, int nextOrder) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _AddStopSheet(
+        tripId: widget.tripId,
+        nextOrder: nextOrder,
+        notifier: ref.read(activeTripProvider(widget.tripId).notifier),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_showSuccess) {
+      return _buildSuccess();
+    }
+
+    final stops = widget.trip.stops;
+    final progress = widget.trip.totalStops > 0
+        ? widget.trip.completedStops / widget.trip.totalStops
         : 0.0;
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // ── Route summary card ─────────────────────────────────────────
-        _RouteSummaryCard(trip: trip, progress: progress),
+        _RouteSummaryCard(trip: widget.trip, progress: progress),
         const SizedBox(height: 16),
 
-        // ── Stop timeline ──────────────────────────────────────────────
         if (stops.isNotEmpty) ...[
           const _SectionLabel('Stop Timeline'),
           const SizedBox(height: 8),
           ...stops.asMap().entries.map((entry) {
-            final idx   = entry.key;
-            final stop  = entry.value;
+            final idx    = entry.key;
+            final stop   = entry.value;
             final isLast = idx == stops.length - 1;
             return _StopTimelineTile(
               stop: stop,
               isLast: isLast,
-              tripId: tripId,
+              tripId: widget.tripId,
             );
           }),
           const SizedBox(height: 16),
         ],
 
-        // ── Add another stop button ────────────────────────────────────
-        if (trip.tripStatus == 'ongoing')
+        if (widget.trip.tripStatus == 'ongoing') ...[
           OutlinedButton.icon(
-            onPressed: () => _showAddStopSheet(context, ref, stops.length + 1),
+            onPressed: () => _showAddStopSheet(context, stops.length + 1),
             icon: const Icon(Icons.add_location_alt_outlined),
             label: const Text('Add Another Stop'),
             style: OutlinedButton.styleFrom(
@@ -172,23 +247,172 @@ class _TripBody extends ConsumerWidget {
               minimumSize: const Size(double.infinity, 48),
             ),
           ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _completing ? null : _completeTrip,
+              icon: _completing
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.flag_rounded, size: 20),
+              label: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Complete Trip',
+                      style: TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w700)),
+                  Text('ጉዞ ጨርስ', style: TextStyle(fontSize: 11)),
+                ],
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF16A34A),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
       ],
     );
   }
 
-  void _showAddStopSheet(BuildContext context, WidgetRef ref, int nextOrder) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => _AddStopSheet(
-        tripId: tripId,
-        nextOrder: nextOrder,
-        notifier: ref.read(activeTripProvider(tripId).notifier),
+  Widget _buildSuccess() {
+    final formatted =
+        'ETB ${_amountEarned.toStringAsFixed(0).replaceAllMapped(
+      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+      (m) => '${m[1]},',
+    )}';
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const SizedBox(height: 48),
+          Container(
+            width: 96,
+            height: 96,
+            decoration: const BoxDecoration(
+              color: Color(0xFF16A34A),
+              shape: BoxShape.circle,
+            ),
+            child:
+                const Icon(Icons.check_rounded, color: Colors.white, size: 56),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Trip Complete!',
+            style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF111827)),
+            textAlign: TextAlign.center,
+          ),
+          const Text(
+            'ጉዞ ተጠናቋል!',
+            style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF6B7280)),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '${widget.trip.startLocation ?? ''} → ${widget.trip.destination ?? ''}',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 14, color: Color(0xFF9CA3AF)),
+          ),
+          const SizedBox(height: 28),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.07),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                const Text(
+                  'Amount Earned / ያገኘህ ገቢ',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  formatted,
+                  style: const TextStyle(
+                    fontSize: 40,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFFF59E0B),
+                    letterSpacing: -1,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.payments_outlined,
+                        size: 16, color: Color(0xFF6B7280)),
+                    const SizedBox(width: 6),
+                    Text(
+                      'via ${_methodLabel(_paymentMethod ?? '')}',
+                      style: const TextStyle(
+                          fontSize: 14, color: Color(0xFF6B7280)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 32),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.star_rounded, size: 20),
+              label: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Rate Your Shipper →',
+                      style: TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w700)),
+                  Text('ላኪውን ምደብ', style: TextStyle(fontSize: 11)),
+                ],
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFF59E0B),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              'Go to My Jobs / ወደ ስራዎቼ',
+              style: TextStyle(color: Color(0xFF6B7280), fontSize: 14),
+            ),
+          ),
+          const SizedBox(height: 24),
+        ],
       ),
     );
   }
@@ -691,6 +915,147 @@ class _AddStopSheetState extends State<_AddStopSheet> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── Payment method bottom sheet ────────────────────────────────────────────
+
+String _methodLabel(String method) => switch (method) {
+      'cash'          => 'Cash / ጥሬ ገንዘብ',
+      'telebirr'      => 'Telebirr',
+      'cbe_birr'      => 'CBE',
+      'awash_bank'    => 'Awash Bank',
+      'dashen_bank'   => 'Dashen Bank',
+      'bank_transfer' => 'Bank Transfer / ሌላ ባንክ',
+      _               => method,
+    };
+
+class _TripPaymentSheet extends StatefulWidget {
+  const _TripPaymentSheet();
+
+  @override
+  State<_TripPaymentSheet> createState() => _TripPaymentSheetState();
+}
+
+class _TripPaymentSheetState extends State<_TripPaymentSheet> {
+  String? _selected;
+
+  static const _options = [
+    ('cash',          '💵', 'Cash / ጥሬ ገንዘብ'),
+    ('telebirr',      '📱', 'Telebirr'),
+    ('cbe_birr',      '🏦', 'CBE'),
+    ('awash_bank',    '🏦', 'Awash Bank'),
+    ('dashen_bank',   '🏦', 'Dashen Bank'),
+    ('bank_transfer', '🏦', 'Other Bank / ሌላ ባንክ'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE5E7EB),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'How will payment be made?',
+            style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF111827)),
+          ),
+          const Text(
+            'ክፍያ እንዴት ይፈጸማል?',
+            style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+          ),
+          const SizedBox(height: 16),
+          ..._options.map((opt) {
+            final (value, emoji, label) = opt;
+            final selected = _selected == value;
+            return GestureDetector(
+              onTap: () => setState(() => _selected = value),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? const Color(0xFFEFF6FF)
+                      : const Color(0xFFF9FAFB),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: selected
+                        ? const Color(0xFF2563EB)
+                        : const Color(0xFFE5E7EB),
+                    width: selected ? 2 : 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Text(emoji, style: const TextStyle(fontSize: 20)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: selected
+                              ? const Color(0xFF2563EB)
+                              : const Color(0xFF374151),
+                        ),
+                      ),
+                    ),
+                    if (selected)
+                      const Icon(Icons.check_circle_rounded,
+                          color: Color(0xFF2563EB), size: 20),
+                  ],
+                ),
+              ),
+            );
+          }),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _selected == null
+                  ? null
+                  : () => Navigator.of(context).pop(_selected),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFF59E0B),
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: const Color(0xFFE5E7EB),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+              child: const Text(
+                'Confirm Payment / ክፍያ አረጋግጥ',
+                style:
+                    TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

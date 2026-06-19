@@ -691,6 +691,8 @@ class Trip {
   final DateTime? startTime;
   final DateTime? endTime;
   final DateTime? createdAt;
+  final double? bookingEstimatedPrice;
+  final double? bookingCommissionFee;
 
   Trip({
     required this.id,
@@ -707,6 +709,8 @@ class Trip {
     this.startTime,
     this.endTime,
     this.createdAt,
+    this.bookingEstimatedPrice,
+    this.bookingCommissionFee,
   });
 
   bool get isMultiStop => tripType == 'multi_stop';
@@ -740,6 +744,12 @@ class Trip {
             : null,
         createdAt: json['created_at'] != null
             ? DateTime.tryParse(json['created_at'] as String)
+            : null,
+        bookingEstimatedPrice: json['booking_estimated_price'] != null
+            ? double.tryParse(json['booking_estimated_price'].toString())
+            : null,
+        bookingCommissionFee: json['booking_commission_fee'] != null
+            ? double.tryParse(json['booking_commission_fee'].toString())
             : null,
       );
 }
