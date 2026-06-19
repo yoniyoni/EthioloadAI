@@ -624,92 +624,126 @@ class _CargoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final urgencyColor = _urgencyColor(cargo.urgencyLevel);
     final existingBid = _existingBid;
+    final deadline = cargo.bidDeadline;
+    final isClosed = deadline != null && DateTime.now().isAfter(deadline);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _border, width: 0.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: _green.withAlpha(15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child:
-                  const Icon(Icons.inventory_2_outlined, color: _green, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('${cargo.pickupLocation} → ${cargo.destination}',
-                      style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF111827))),
-                  const SizedBox(height: 2),
-                  Text('${cargo.materialType}  ·  ${cargo.weight.toStringAsFixed(0)} t',
-                      style: const TextStyle(
-                          fontSize: 12, color: _textSecondary)),
-                ],
-              ),
-            ),
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: urgencyColor.withAlpha(25),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(cargo.urgencyLevel,
-                  style: TextStyle(
-                      fontSize: 10,
-                      color: urgencyColor,
-                      fontWeight: FontWeight.w600)),
-            ),
-          ]),
-          if (cargo.budget != null) ...[
-            const SizedBox(height: 8),
-            const Divider(height: 1, color: _border),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '${('bid.budget_label'.tr())} ETB ${_fmt(cargo.budget!)}',
-                  style: const TextStyle(
-                      fontSize: 12,
-                      color: _amber,
-                      fontWeight: FontWeight.w600),
+    return Opacity(
+      opacity: isClosed ? 0.65 : 1.0,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isClosed ? const Color(0xFFF5F5F5) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isClosed ? const Color(0xFFD1D5DB) : _border,
+            width: 0.5,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: (isClosed ? Colors.grey : _green).withAlpha(15),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                _BidActionButton(
-                  existingBid: existingBid,
-                  onTap: () => _showBidSheet(context, cargo, existingBid: existingBid),
+                child: Icon(
+                  Icons.inventory_2_outlined,
+                  color: isClosed ? Colors.grey : _green,
+                  size: 20,
                 ),
-              ],
-            ),
-          ] else ...[
-            const SizedBox(height: 8),
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-              Text('bid.budget_label'.tr(),
-                  style: const TextStyle(fontSize: 12, color: _textSecondary)),
-              _BidActionButton(
-                existingBid: existingBid,
-                onTap: () => _showBidSheet(context, cargo, existingBid: existingBid),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${cargo.pickupLocation} → ${cargo.destination}',
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: isClosed
+                                ? Colors.grey
+                                : const Color(0xFF111827))),
+                    const SizedBox(height: 2),
+                    Text(
+                        '${cargo.materialType}  ·  ${cargo.weight.toStringAsFixed(0)} t',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: isClosed
+                                ? Colors.grey[400]
+                                : _textSecondary)),
+                  ],
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: (isClosed ? Colors.grey : urgencyColor).withAlpha(25),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                    isClosed ? 'Closed' : cargo.urgencyLevel,
+                    style: TextStyle(
+                        fontSize: 10,
+                        color: isClosed ? Colors.grey : urgencyColor,
+                        fontWeight: FontWeight.w600)),
               ),
             ]),
+            // Bid deadline banner
+            if (deadline != null) ...[
+              const SizedBox(height: 6),
+              _DeadlineBanner(deadline: deadline, isClosed: isClosed),
+            ],
+            if (cargo.budget != null) ...[
+              const SizedBox(height: 8),
+              const Divider(height: 1, color: _border),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '${('bid.budget_label'.tr())} ETB ${_fmt(cargo.budget!)}',
+                    style: const TextStyle(
+                        fontSize: 12,
+                        color: _amber,
+                        fontWeight: FontWeight.w600),
+                  ),
+                  _BidActionButton(
+                    existingBid: existingBid,
+                    enabled: !isClosed,
+                    onTap: isClosed
+                        ? () {}
+                        : () => _showBidSheet(context, cargo,
+                            existingBid: existingBid),
+                  ),
+                ],
+              ),
+            ] else ...[
+              const SizedBox(height: 8),
+              Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('bid.budget_label'.tr(),
+                        style: const TextStyle(
+                            fontSize: 12, color: _textSecondary)),
+                    _BidActionButton(
+                      existingBid: existingBid,
+                      enabled: !isClosed,
+                      onTap: isClosed
+                          ? () {}
+                          : () => _showBidSheet(context, cargo,
+                              existingBid: existingBid),
+                    ),
+                  ]),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -763,10 +797,29 @@ class _CargoSkeleton extends StatelessWidget {
 class _BidActionButton extends StatelessWidget {
   final Bid? existingBid;
   final VoidCallback onTap;
-  const _BidActionButton({required this.existingBid, required this.onTap});
+  final bool enabled;
+  const _BidActionButton({
+    required this.existingBid,
+    required this.onTap,
+    this.enabled = true,
+  });
 
   @override
   Widget build(BuildContext context) {
+    if (!enabled) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE5E7EB),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Text('Closed',
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey)),
+      );
+    }
     if (existingBid != null) {
       return OutlinedButton(
         onPressed: onTap,
@@ -791,6 +844,57 @@ class _BidActionButton extends StatelessWidget {
       ),
       child: Text('bid.place'.tr(),
           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+    );
+  }
+}
+
+// ── Bid deadline countdown banner ─────────────────────────────────────────
+
+class _DeadlineBanner extends StatelessWidget {
+  final DateTime deadline;
+  final bool isClosed;
+  const _DeadlineBanner({required this.deadline, required this.isClosed});
+
+  String get _text {
+    if (isClosed) return 'Bidding Closed / ጨረታ ተዘጋ';
+    final diff = deadline.difference(DateTime.now());
+    if (diff.inDays >= 1) {
+      return 'Bids close in ${diff.inDays}d ${diff.inHours % 24}h  /  ጨረታ ይዘጋል';
+    }
+    if (diff.inHours >= 1) {
+      return 'Bids close in ${diff.inHours}h ${diff.inMinutes % 60}m';
+    }
+    return 'Bids close in ${diff.inMinutes}m — hurry!';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: (isClosed ? Colors.grey : _amber).withAlpha(20),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: (isClosed ? Colors.grey : _amber).withAlpha(70),
+          width: 0.5,
+        ),
+      ),
+      child: Row(children: [
+        Icon(
+          isClosed ? Icons.lock_rounded : Icons.timer_outlined,
+          size: 12,
+          color: isClosed ? Colors.grey : _amber,
+        ),
+        const SizedBox(width: 5),
+        Text(
+          _text,
+          style: TextStyle(
+            fontSize: 11,
+            color: isClosed ? Colors.grey : _amber,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ]),
     );
   }
 }

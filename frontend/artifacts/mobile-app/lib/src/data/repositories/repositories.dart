@@ -58,6 +58,17 @@ class AuthRepository {
           fromJson: (json) => User.fromJson(json as Map<String, dynamic>));
 
   Future<String?> getStoredToken() => _api.getToken();
+
+  // ✓ PATCH /me/password
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    await _api.dio.patch('/me/password', data: {
+      'current_password': currentPassword,
+      'new_password': newPassword,
+    });
+  }
 }
 
 final authRepositoryProvider = Provider<AuthRepository>(
@@ -102,6 +113,7 @@ class CargoRepository {
     required String urgencyLevel,
     double? budget,
     String priceType = 'negotiable',
+    DateTime? bidDeadline,
   }) async =>
       _api.post<CargoRequest>(
         '/cargo/create',
@@ -113,6 +125,7 @@ class CargoRepository {
           'urgency_level': urgencyLevel,
           if (budget != null) 'budget': budget,
           'price_type': priceType,
+          if (bidDeadline != null) 'bid_deadline': bidDeadline.toIso8601String(),
         },
         fromJson: (json) =>
             CargoRequest.fromJson(json as Map<String, dynamic>),
@@ -174,14 +187,14 @@ class CargoRepository {
     return (min: null, max: null, distanceKm: null);
   }
 
-  // GET /cargo-requests/return-cargo — cargo at driver's current destination
+  // GET /driver/return-cargo — cargo at driver's current destination
   Future<({String? city, List<CargoRequest> cargo})> returnCargo() async {
     try {
-      final response = await _api.dio.get('/cargo-requests/return-cargo');
+      final response = await _api.dio.get('/driver/return-cargo');
       if (response.statusCode == 200) {
         final raw = response.data as Map<String, dynamic>;
-        final city = raw['city'] as String?;
-        final list = (raw['cargo'] as List? ?? [])
+        final city = raw['destination_city'] as String?;
+        final list = (raw['data'] as List? ?? [])
             .map((e) => CargoRequest.fromJson(e as Map<String, dynamic>))
             .toList();
         return (city: city, cargo: list);
@@ -461,10 +474,10 @@ class TripRepository {
     return [];
   }
 
-  // DELETE /trips/backhaul-recommendations/{id}
+  // PATCH /recommendations/{id}/dismiss
   Future<void> dismissRecommendation(int recId) async {
     try {
-      await _api.dio.delete('/trips/backhaul-recommendations/$recId');
+      await _api.dio.patch('/recommendations/$recId/dismiss');
     } catch (_) {}
   }
 }

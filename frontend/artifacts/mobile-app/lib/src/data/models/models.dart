@@ -139,6 +139,7 @@ class CargoRequest {
   final double? budget;
   /// 'fixed' | 'negotiable'
   final String priceType;
+  final DateTime? bidDeadline;
   /// 'pending' | 'matched' | 'completed'
   final String status;
   final DateTime? createdAt;
@@ -154,6 +155,7 @@ class CargoRequest {
     required this.urgencyLevel,
     this.budget,
     this.priceType = 'negotiable',
+    this.bidDeadline,
     required this.status,
     this.createdAt,
     this.updatedAt,
@@ -171,6 +173,9 @@ class CargoRequest {
             ? double.tryParse(json['budget'].toString())
             : null,
         priceType: (json['price_type'] ?? 'negotiable') as String,
+        bidDeadline: json['bid_deadline'] != null
+            ? DateTime.tryParse(json['bid_deadline'] as String)
+            : null,
         status: (json['status'] ?? 'pending') as String,
         createdAt: json['created_at'] != null
             ? DateTime.tryParse(json['created_at'] as String)

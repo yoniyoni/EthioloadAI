@@ -184,6 +184,7 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
             urgencyLevel: 'normal',
             budget: double.tryParse(budget ?? ''),
             priceType: priceType,
+            bidDeadline: deadline != null ? DateTime.tryParse(deadline!) : null,
           );
 
       if (mounted) Navigator.pop(context);
@@ -770,7 +771,7 @@ class _Step3 extends StatelessWidget {
           style: GoogleFonts.inter(fontSize: 14),
         ),
         const SizedBox(height: 16),
-        Text('Deadline',
+        Text('Bid Deadline / የጨረታ የመጨረሻ ቀን',
             style: GoogleFonts.inter(
                 fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
@@ -961,7 +962,7 @@ class _Step4 extends StatelessWidget {
         _ReviewRow('Weight', weight != null ? '$weight tons' : '—'),
         _ReviewRow('Pricing', priceType == 'fixed' ? 'Fixed Price' : 'Negotiable'),
         _ReviewRow('Budget', budget != null ? 'ETB $budget' : '—'),
-        _ReviewRow('Deadline', deadline ?? 'Not set'),
+        _ReviewRow('Bid Deadline', deadline ?? 'Not set'),
         if (description != null && description!.isNotEmpty)
           _ReviewRow('Notes', description!),
         const SizedBox(height: 20),
