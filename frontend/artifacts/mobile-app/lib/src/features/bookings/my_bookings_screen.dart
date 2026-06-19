@@ -82,15 +82,60 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen> {
                 ],
               );
             }
-            return ListView.separated(
+            int sortPriority(Booking b) {
+              if (b.isTripOngoing) return 0;
+              if (b.bookingStatus == 'pending' ||
+                  b.bookingStatus == 'accepted' ||
+                  b.bookingStatus == 'delivered') return 1;
+              return 2;
+            }
+
+            final sorted = [...bookings]
+              ..sort((x, y) => sortPriority(x).compareTo(sortPriority(y)));
+
+            final items = <Object>[];
+            bool addedActiveHeader = false;
+            bool addedPastHeader = false;
+            for (final b in sorted) {
+              final p = sortPriority(b);
+              if (p <= 1 && !addedActiveHeader) {
+                if (isDriver) items.add('Active Trip / የአሁን ጉዞ');
+                addedActiveHeader = true;
+              } else if (p == 2 && !addedPastHeader) {
+                if (isDriver) items.add('Past Bookings / ያለፉ ጉዞዎች');
+                addedPastHeader = true;
+              }
+              items.add(b);
+            }
+
+            return ListView.builder(
               padding: const EdgeInsets.all(16),
-              itemCount: bookings.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (_, i) => _BookingCard(
-                booking: bookings[i],
-                isDriver: isDriver,
-                onRefresh: () => ref.invalidate(bookingListProvider),
-              ),
+              itemCount: items.length,
+              itemBuilder: (_, i) {
+                final item = items[i];
+                if (item is String) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 4, bottom: 8),
+                    child: Text(
+                      item,
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: kTextMuted,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  );
+                }
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _BookingCard(
+                    booking: item as Booking,
+                    isDriver: isDriver,
+                    onRefresh: () => ref.invalidate(bookingListProvider),
+                  ),
+                );
+              },
             );
           },
           loading: () => ListView(
@@ -690,9 +735,9 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
               ],
             ),
           ),
-          // ── Backhaul recommendations (driver with active trip) ─────
+          // ── Backhaul recommendations (only on the currently ongoing trip) ──
           if (widget.isDriver &&
-              (_tripStarted || widget.booking.hasTripStarted) &&
+              widget.booking.isTripOngoing &&
               (_tripId ?? widget.booking.tripId) != null)
             _BackhaulSection(
               tripId: _tripId ?? widget.booking.tripId!,
