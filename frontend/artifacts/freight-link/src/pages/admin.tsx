@@ -12,12 +12,41 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Package, Truck, CheckCircle, Clock, UserPlus, Loader2, Shield, Banknote, AlertTriangle, Lock, DollarSign, TrendingUp, BarChart3, MapPin, Activity, FileText, ThumbsUp, ThumbsDown, Eye, Search, ChevronLeft, ChevronRight, Building2, ChevronDown, Settings } from "lucide-react";
+import { Users, Package, Truck, CheckCircle, Clock, UserPlus, Loader2, Shield, Banknote, AlertTriangle, Lock, DollarSign, TrendingUp, BarChart3, MapPin, Activity, FileText, ThumbsUp, ThumbsDown, Eye, Search, ChevronLeft, ChevronRight, Building2, ChevronDown, Settings, Gavel, Star, CreditCard } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from "recharts";
 import { EthioSidebar } from "@/components/ui/ethio-sidebar";
 import { EthioTopbar } from "@/components/ui/ethio-topbar";
 import { MetricCard } from "@/components/ui/metric-card";
 import { PageHeader } from "@/components/ui/page-header";
+
+const ADMIN_PAGE_SIZE = 10;
+
+function TablePager({
+  page, total, pageSize, onPageChange,
+}: {
+  page: number; total: number; pageSize: number; onPageChange: (p: number) => void;
+}) {
+  if (total === 0) return null;
+  const totalPages = Math.max(Math.ceil(total / pageSize), 1);
+  return (
+    <div className="flex items-center justify-between pt-4 border-t mt-4">
+      <p className="text-xs text-muted-foreground">
+        Showing {Math.min(page * pageSize + 1, total)}–{Math.min((page + 1) * pageSize, total)} of {total}
+      </p>
+      <div className="flex items-center gap-1">
+        <Button variant="outline" size="sm" className="h-7 w-7 p-0 rounded-lg"
+          disabled={page === 0} onClick={() => onPageChange(page - 1)}>
+          <ChevronLeft className="h-3.5 w-3.5" />
+        </Button>
+        <span className="text-xs px-2 text-muted-foreground">{page + 1} / {totalPages}</span>
+        <Button variant="outline" size="sm" className="h-7 w-7 p-0 rounded-lg"
+          disabled={page >= totalPages - 1} onClick={() => onPageChange(page + 1)}>
+          <ChevronRight className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export default function Admin() {
   const { toast } = useToast();
@@ -58,12 +87,12 @@ export default function Admin() {
 
   const { data: usersData } = useQuery({
     queryKey: ["admin-users"],
-    queryFn: () => api.get<any>("/users?limit=30"),
+    queryFn: () => api.get<any>("/users"),
   });
 
   const { data: driversData } = useQuery({
     queryKey: ["admin-drivers"],
-    queryFn: () => api.get<any>("/drivers?limit=30"),
+    queryFn: () => api.get<any>("/drivers"),
   });
 
   const { data: paymentsData } = useQuery({
@@ -123,6 +152,19 @@ export default function Admin() {
     queryKey: ["admin-trips"],
     queryFn: () => api.get<any>("/trips"),
     refetchInterval: 30_000,
+  });
+
+  const [selectedCargo, setSelectedCargo] = useState<any>(null);
+
+  const { data: cargoData, isLoading: cargoLoading } = useQuery({
+    queryKey: ["admin-cargo"],
+    queryFn: () => api.get<any>("/cargo-requests"),
+  });
+
+  const { data: bidsData, isLoading: bidsLoading } = useQuery({
+    queryKey: ["admin-cargo-bids", selectedCargo?.id],
+    queryFn: () => api.get<any>(`/cargo-requests/${selectedCargo!.id}/bids`),
+    enabled: !!selectedCargo,
   });
 
   const { data: revenueAnalytics } = useQuery({
@@ -206,6 +248,17 @@ export default function Admin() {
   const [fleetSearch, setFleetSearch] = useState("");
   const [expandedFleet, setExpandedFleet] = useState<number | null>(null);
   const [expandedTrip, setExpandedTrip] = useState<number | null>(null);
+
+  // Pagination state for each table
+  const [tripsPage, setTripsPage] = useState(0);
+  const [driversPage, setDriversPage] = useState(0);
+  const [usersPage, setUsersPage] = useState(0);
+  const [paymentsPage, setPaymentsPage] = useState(0);
+  const [unpaidBookingsPage, setUnpaidBookingsPage] = useState(0);
+  const [disputesPage, setDisputesPage] = useState(0);
+  const [cargoPage, setCargoPage] = useState(0);
+  const [cargoSearch, setCargoSearch] = useState("");
+  const [bidsDialogOpen, setBidsDialogOpen] = useState(false);
 
   // User management state
   const [userCreateOpen, setUserCreateOpen] = useState(false);
@@ -338,6 +391,7 @@ export default function Admin() {
       <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList className="mb-4 flex-wrap rounded-lg">
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="cargo">Cargo &amp; Bids</TabsTrigger>
           <TabsTrigger value="drivers">Drivers</TabsTrigger>
           <TabsTrigger value="fleet">Fleet Owners</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
@@ -388,6 +442,7 @@ export default function Admin() {
                     ))}
                   </div>
                 ) : (
+                  <>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
@@ -400,12 +455,13 @@ export default function Admin() {
                           <th className="pb-3 font-medium text-muted-foreground">Truck</th>
                           <th className="pb-3 font-medium text-muted-foreground">Stops</th>
                           <th className="pb-3 font-medium text-muted-foreground">Total Value</th>
+                          <th className="pb-3 font-medium text-muted-foreground">Payment</th>
                           <th className="pb-3 font-medium text-muted-foreground">Status</th>
                           <th className="pb-3 font-medium text-muted-foreground">Started</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y">
-                        {((tripsData as any)?.data ?? []).map((trip: any) => {
+                        {((tripsData as any)?.data ?? []).slice(tripsPage * ADMIN_PAGE_SIZE, (tripsPage + 1) * ADMIN_PAGE_SIZE).map((trip: any) => {
                           const cargo      = trip.booking?.cargo_request;
                           const driver     = trip.booking?.driver;
                           const vehicle    = trip.booking?.vehicle;
@@ -483,6 +539,16 @@ export default function Admin() {
                                     : "—"}
                                 </td>
                                 <td className="py-3">
+                                  {trip.booking?.payment_method ? (
+                                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                      <CreditCard className="h-3 w-3 shrink-0" />
+                                      {trip.booking.payment_method.replace(/_/g, " ")}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">—</span>
+                                  )}
+                                </td>
+                                <td className="py-3">
                                   <Badge className={`text-xs border ${
                                     isOngoing
                                       ? "bg-sky-50 text-sky-700 border-sky-200"
@@ -557,11 +623,235 @@ export default function Admin() {
                       </tbody>
                     </table>
                   </div>
+                  <TablePager
+                    page={tripsPage}
+                    total={((tripsData as any)?.data ?? []).length}
+                    pageSize={ADMIN_PAGE_SIZE}
+                    onPageChange={setTripsPage}
+                  />
+                  </>
                 )}
               </CardContent>
             </Card>
 
           </div>
+        </TabsContent>
+
+        {/* ── Cargo & Bids tab ─────────────────────────────────────────── */}
+        <TabsContent value="cargo">
+          <PageHeader title="Cargo & Bids" breadcrumbs={[{ label: 'Admin' }, { label: 'Cargo & Bids' }]} />
+
+          {/* Bids dialog */}
+          <Dialog open={bidsDialogOpen} onOpenChange={(o) => { setBidsDialogOpen(o); if (!o) setSelectedCargo(null); }}>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-base">
+                  <Gavel className="h-4 w-4 text-amber-500" />
+                  Bids for Cargo #{selectedCargo?.id}
+                  {selectedCargo?.price_type === "fixed" && (
+                    <Badge className="text-[10px] border bg-amber-50 text-amber-700 border-amber-200 ml-1">Fixed Price</Badge>
+                  )}
+                </DialogTitle>
+              </DialogHeader>
+              {bidsLoading ? (
+                <div className="space-y-2 py-4">
+                  {[1, 2, 3].map((i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
+                </div>
+              ) : (
+                (() => {
+                  const rawBids: any[] = (bidsData as any)?.data ?? (Array.isArray(bidsData) ? bidsData : []);
+                  const isFixed = selectedCargo?.price_type === "fixed";
+                  return rawBids.length === 0 ? (
+                    <div className="flex flex-col items-center py-10 gap-2 text-muted-foreground">
+                      <Gavel className="h-8 w-8 opacity-30" />
+                      <p className="text-sm">No bids yet for this cargo</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                      {rawBids.map((bid: any, idx: number) => {
+                        const isTop = idx === 0 && isFixed;
+                        const rating = bid.driver?.rating ?? bid.driver_rating ?? null;
+                        return (
+                          <div
+                            key={bid.id}
+                            className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${isTop ? "border-amber-300 bg-amber-50" : "border-border/60 bg-white"}`}
+                          >
+                            {/* Rank */}
+                            <span className="text-xs font-bold text-muted-foreground w-5 text-center">#{idx + 1}</span>
+                            {/* Avatar */}
+                            <div className="h-8 w-8 rounded-md bg-emerald-50 flex items-center justify-center text-[10px] font-bold text-emerald-700 shrink-0">
+                              {(bid.driver?.full_name ?? bid.driver_name ?? "D").split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
+                            </div>
+                            {/* Info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-semibold text-foreground truncate">
+                                  {bid.driver?.full_name ?? bid.driver_name ?? "Unknown Driver"}
+                                </span>
+                                {isTop && (
+                                  <span className="flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-100 rounded-full px-2 py-0.5 border border-amber-300 shrink-0">
+                                    <Star className="h-2.5 w-2.5 fill-amber-500 stroke-amber-500" /> Top Rated
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3 mt-0.5">
+                                {rating !== null && (
+                                  <span className="flex items-center gap-0.5 text-xs text-amber-600">
+                                    <Star className="h-3 w-3 fill-amber-400 stroke-amber-400" />
+                                    {Number(rating).toFixed(1)}
+                                    {bid.driver?.rating_count ? <span className="text-muted-foreground ml-0.5">({bid.driver.rating_count})</span> : null}
+                                  </span>
+                                )}
+                                {bid.vehicle && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {bid.vehicle.truck_type} · {bid.vehicle.plate_number}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            {/* Amount & status */}
+                            <div className="text-right shrink-0">
+                              <p className="text-sm font-bold text-amber-600">
+                                {Number(bid.amount).toLocaleString()} ETB
+                              </p>
+                              <Badge className={`text-[10px] border mt-1 ${
+                                bid.status === "accepted"
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                  : bid.status === "rejected"
+                                  ? "bg-red-50 text-red-700 border-red-200"
+                                  : bid.status === "countered"
+                                  ? "bg-sky-50 text-sky-700 border-sky-200"
+                                  : "bg-gray-50 text-gray-600 border-gray-200"
+                              }`}>
+                                {bid.status}
+                              </Badge>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()
+              )}
+            </DialogContent>
+          </Dialog>
+
+          {/* Cargo table */}
+          <Card className="border-border/60 rounded-xl">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Search route or cargo type…"
+                    className="pl-9 h-9 text-sm rounded-lg"
+                    value={cargoSearch}
+                    onChange={(e) => { setCargoSearch(e.target.value); setCargoPage(0); }}
+                  />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {cargoLoading ? (
+                <div className="space-y-2">{[1,2,3,4,5].map((i) => <Skeleton key={i} className="h-10 rounded-lg" />)}</div>
+              ) : (() => {
+                const allCargo: any[] = Array.isArray(cargoData) ? cargoData : ((cargoData as any)?.data ?? []);
+                const filtered = allCargo.filter((c: any) => {
+                  if (!cargoSearch) return true;
+                  const q = cargoSearch.toLowerCase();
+                  return (
+                    (c.pickup_location ?? "").toLowerCase().includes(q) ||
+                    (c.destination ?? "").toLowerCase().includes(q) ||
+                    (c.material_type ?? "").toLowerCase().includes(q)
+                  );
+                });
+                const paged = filtered.slice(cargoPage * ADMIN_PAGE_SIZE, (cargoPage + 1) * ADMIN_PAGE_SIZE);
+                return (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b text-left">
+                            <th className="pb-3 font-medium text-muted-foreground">#</th>
+                            <th className="pb-3 font-medium text-muted-foreground">Route</th>
+                            <th className="pb-3 font-medium text-muted-foreground">Cargo Type</th>
+                            <th className="pb-3 font-medium text-muted-foreground">Weight</th>
+                            <th className="pb-3 font-medium text-muted-foreground">Pricing</th>
+                            <th className="pb-3 font-medium text-muted-foreground">Budget</th>
+                            <th className="pb-3 font-medium text-muted-foreground">Status</th>
+                            <th className="pb-3 font-medium text-muted-foreground">Shipper</th>
+                            <th className="pb-3 font-medium text-muted-foreground">Bids</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {paged.map((c: any) => {
+                            const isFixed = c.price_type === "fixed";
+                            return (
+                              <tr key={c.id} className="hover:bg-muted/30 transition-colors">
+                                <td className="py-3 font-medium text-muted-foreground text-xs">#{c.id}</td>
+                                <td className="py-3">
+                                  <span className="flex items-center gap-1 text-xs font-medium">
+                                    <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
+                                    {c.pickup_location} → {c.destination}
+                                  </span>
+                                </td>
+                                <td className="py-3 text-xs text-muted-foreground">{c.material_type ?? "—"}</td>
+                                <td className="py-3 text-xs text-muted-foreground">{c.weight ? `${c.weight} t` : "—"}</td>
+                                <td className="py-3">
+                                  <Badge className={`text-[10px] border ${
+                                    isFixed
+                                      ? "bg-amber-50 text-amber-700 border-amber-200"
+                                      : "bg-sky-50 text-sky-700 border-sky-200"
+                                  }`}>
+                                    {isFixed ? "Fixed" : "Negotiable"}
+                                  </Badge>
+                                </td>
+                                <td className="py-3 text-xs font-semibold text-amber-600">
+                                  {c.budget ? `${Number(c.budget).toLocaleString()} ETB` : "—"}
+                                </td>
+                                <td className="py-3">
+                                  <Badge className={`text-[10px] border ${
+                                    c.status === "pending"
+                                      ? "bg-amber-50 text-amber-700 border-amber-200"
+                                      : c.status === "matched" || c.status === "completed"
+                                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                      : c.status === "cancelled"
+                                      ? "bg-red-50 text-red-700 border-red-200"
+                                      : "bg-gray-50 text-gray-600 border-gray-200"
+                                  }`}>
+                                    {c.status}
+                                  </Badge>
+                                </td>
+                                <td className="py-3 text-xs text-muted-foreground">{c.user?.full_name ?? c.user?.name ?? "—"}</td>
+                                <td className="py-3">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-xs rounded-lg gap-1"
+                                    onClick={() => { setSelectedCargo(c); setBidsDialogOpen(true); }}
+                                  >
+                                    <Gavel className="h-3 w-3" /> View Bids
+                                  </Button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {paged.length === 0 && (
+                            <tr>
+                              <td colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
+                                No cargo requests found
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                    <TablePager page={cargoPage} total={filtered.length} pageSize={ADMIN_PAGE_SIZE} onPageChange={setCargoPage} />
+                  </>
+                );
+              })()}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="drivers">
@@ -643,7 +933,7 @@ export default function Admin() {
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {(driversData?.drivers ?? []).map((d: any) => (
+                    {(driversData?.drivers ?? []).slice(driversPage * ADMIN_PAGE_SIZE, (driversPage + 1) * ADMIN_PAGE_SIZE).map((d: any) => (
                       <tr key={d.id} className="py-3">
                         <td className="py-3">
                           <div className="flex items-center gap-3">
@@ -694,6 +984,12 @@ export default function Admin() {
                   </tbody>
                 </table>
               </div>
+              <TablePager
+                page={driversPage}
+                total={(driversData?.drivers ?? []).length}
+                pageSize={ADMIN_PAGE_SIZE}
+                onPageChange={setDriversPage}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -765,7 +1061,7 @@ export default function Admin() {
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {(usersData?.users ?? []).map((u: any) => (
+                    {(usersData?.users ?? []).slice(usersPage * ADMIN_PAGE_SIZE, (usersPage + 1) * ADMIN_PAGE_SIZE).map((u: any) => (
                       <tr key={u.id} className="hover:bg-muted/30 transition-colors">
                         <td className="py-3">
                           <div className="flex items-center gap-2">
@@ -811,6 +1107,12 @@ export default function Admin() {
                   </tbody>
                 </table>
               </div>
+              <TablePager
+                page={usersPage}
+                total={(usersData?.users ?? []).length}
+                pageSize={ADMIN_PAGE_SIZE}
+                onPageChange={setUsersPage}
+              />
             </CardContent>
           </Card>
 
@@ -901,6 +1203,7 @@ export default function Admin() {
                     {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 rounded-lg" />)}
                   </div>
                 ) : (
+                  <>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
@@ -915,7 +1218,7 @@ export default function Admin() {
                         </tr>
                       </thead>
                       <tbody className="divide-y">
-                        {(unpaidBookings?.bookings ?? []).map((b: any) => (
+                        {(unpaidBookings?.bookings ?? []).slice(unpaidBookingsPage * ADMIN_PAGE_SIZE, (unpaidBookingsPage + 1) * ADMIN_PAGE_SIZE).map((b: any) => (
                           <tr key={b.id} className="hover:bg-muted/30 transition-colors">
                             <td className="py-3 font-medium text-muted-foreground">#{b.id}</td>
                             <td className="py-3 text-xs font-medium max-w-[180px] truncate">{b.route}</td>
@@ -967,6 +1270,13 @@ export default function Admin() {
                       </tbody>
                     </table>
                   </div>
+                  <TablePager
+                    page={unpaidBookingsPage}
+                    total={(unpaidBookings?.bookings ?? []).length}
+                    pageSize={ADMIN_PAGE_SIZE}
+                    onPageChange={setUnpaidBookingsPage}
+                  />
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -988,7 +1298,7 @@ export default function Admin() {
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {(paymentsData?.payments ?? []).map((p: any) => (
+                      {(paymentsData?.payments ?? []).slice(paymentsPage * ADMIN_PAGE_SIZE, (paymentsPage + 1) * ADMIN_PAGE_SIZE).map((p: any) => (
                         <tr key={p.id} className="hover:bg-muted/30 transition-colors">
                           <td className="py-3 font-medium">#{p.id}</td>
                           <td className="py-3 font-medium">{p.amount?.toLocaleString?.()} ETB</td>
@@ -1016,6 +1326,12 @@ export default function Admin() {
                     </tbody>
                   </table>
                 </div>
+                <TablePager
+                  page={paymentsPage}
+                  total={(paymentsData?.payments ?? []).length}
+                  pageSize={ADMIN_PAGE_SIZE}
+                  onPageChange={setPaymentsPage}
+                />
               </CardContent>
             </Card>
 
@@ -1580,7 +1896,7 @@ export default function Admin() {
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {(disputesData?.disputes ?? []).map((d: any) => (
+                    {(disputesData?.disputes ?? []).slice(disputesPage * ADMIN_PAGE_SIZE, (disputesPage + 1) * ADMIN_PAGE_SIZE).map((d: any) => (
                       <tr key={d.id}>
                         <td className="py-3 font-medium">#{d.id}</td>
                         <td className="py-3">#{d.freightId}</td>
@@ -1609,6 +1925,12 @@ export default function Admin() {
                   </tbody>
                 </table>
               </div>
+              <TablePager
+                page={disputesPage}
+                total={(disputesData?.disputes ?? []).length}
+                pageSize={ADMIN_PAGE_SIZE}
+                onPageChange={setDisputesPage}
+              />
             </CardContent>
           </Card>
         </TabsContent>

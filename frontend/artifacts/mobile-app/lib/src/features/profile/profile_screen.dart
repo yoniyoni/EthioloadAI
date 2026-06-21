@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../data/providers/data_providers.dart';
 import '../../data/models/models.dart';
+import '../../data/repositories/repositories.dart';
 
 /// ProfileScreen — user profile and settings.
 class ProfileScreen extends ConsumerWidget {
@@ -146,7 +147,7 @@ class ProfileScreen extends ConsumerWidget {
                     child: OutlinedButton.icon(
                       icon: const Icon(Icons.security),
                       label: const Text('Change Password'),
-                      onPressed: () {},
+                      onPressed: () => _showChangePasswordDialog(context, ref),
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -236,6 +237,17 @@ class ProfileScreen extends ConsumerWidget {
             child: const Text('Save'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showChangePasswordDialog(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _ChangePasswordDialog(
+        authRepo: ref.read(authRepositoryProvider),
+        parentContext: context,
       ),
     );
   }
@@ -351,6 +363,146 @@ class _SettingTile extends StatelessWidget {
         ],
       ),
       onTap: onTap,
+    );
+  }
+}
+
+// ── Change Password Dialog ────────────────────────────────────────────────
+
+class _ChangePasswordDialog extends StatefulWidget {
+  final AuthRepository authRepo;
+  final BuildContext parentContext;
+
+  const _ChangePasswordDialog({
+    required this.authRepo,
+    required this.parentContext,
+  });
+
+  @override
+  State<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
+}
+
+class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
+  final _currentCtrl = TextEditingController();
+  final _newCtrl     = TextEditingController();
+  final _confirmCtrl = TextEditingController();
+  bool _obscureCurrent = true;
+  bool _obscureNew     = true;
+  bool _obscureConfirm = true;
+  bool _loading        = false;
+
+  @override
+  void dispose() {
+    _currentCtrl.dispose();
+    _newCtrl.dispose();
+    _confirmCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final current = _currentCtrl.text.trim();
+    final newPass = _newCtrl.text.trim();
+    final confirm = _confirmCtrl.text.trim();
+
+    if (current.isEmpty || newPass.isEmpty || confirm.isEmpty) {
+      _snack('Please fill in all fields.', isError: true);
+      return;
+    }
+    if (newPass.length < 6) {
+      _snack('New password must be at least 6 characters.', isError: true);
+      return;
+    }
+    if (newPass != confirm) {
+      _snack('Passwords do not match.', isError: true);
+      return;
+    }
+
+    setState(() => _loading = true);
+    try {
+      await widget.authRepo.changePassword(
+        currentPassword: current,
+        newPassword: newPass,
+      );
+      if (mounted) Navigator.pop(context);
+      _snack('Password changed successfully.', isError: false);
+    } catch (e) {
+      if (mounted) setState(() => _loading = false);
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      _snack(msg, isError: true);
+    }
+  }
+
+  void _snack(String msg, {required bool isError}) {
+    ScaffoldMessenger.of(widget.parentContext).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: isError ? Colors.red : Colors.green,
+    ));
+  }
+
+  InputDecoration _deco(String label, {required bool obscure, required VoidCallback toggle}) =>
+      InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        suffixIcon: IconButton(
+          icon: Icon(obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined, size: 20),
+          onPressed: toggle,
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Change Password', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _currentCtrl,
+            obscureText: _obscureCurrent,
+            decoration: _deco(
+              'Current Password',
+              obscure: _obscureCurrent,
+              toggle: () => setState(() => _obscureCurrent = !_obscureCurrent),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _newCtrl,
+            obscureText: _obscureNew,
+            decoration: _deco(
+              'New Password',
+              obscure: _obscureNew,
+              toggle: () => setState(() => _obscureNew = !_obscureNew),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _confirmCtrl,
+            obscureText: _obscureConfirm,
+            decoration: _deco(
+              'Confirm New Password',
+              obscure: _obscureConfirm,
+              toggle: () => setState(() => _obscureConfirm = !_obscureConfirm),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _loading ? null : () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _loading ? null : _submit,
+          child: _loading
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : const Text('Save'),
+        ),
+      ],
     );
   }
 }

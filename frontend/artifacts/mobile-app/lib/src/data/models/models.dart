@@ -847,3 +847,46 @@ class BackhaulOpportunity {
         score: (json['score'] as num).toDouble(),
       );
 }
+
+// ── AppNotification ───────────────────────────────────────────────────────
+
+class AppNotification {
+  final String id;
+  final String type;
+  final Map<String, dynamic> data;
+  final DateTime? readAt;
+  final DateTime createdAt;
+
+  const AppNotification({
+    required this.id,
+    required this.type,
+    required this.data,
+    this.readAt,
+    required this.createdAt,
+  });
+
+  bool get isRead => readAt != null;
+  String get message => data['message'] as String? ?? 'New notification';
+  String? get route => data['route'] as String?;
+  int? get cargoId => data['cargo_id'] as int?;
+  String? get driverName => data['driver_name'] as String?;
+  double? get amount =>
+      data['amount'] != null ? double.tryParse(data['amount'].toString()) : null;
+
+  factory AppNotification.fromJson(Map<String, dynamic> json) {
+    final rawData = json['data'];
+    final Map<String, dynamic> d =
+        rawData is Map ? Map<String, dynamic>.from(rawData) : {};
+    return AppNotification(
+      id: json['id'] as String,
+      type: d['type'] as String? ?? json['type'] as String? ?? '',
+      data: d,
+      readAt: json['read_at'] != null
+          ? DateTime.tryParse(json['read_at'] as String)
+          : null,
+      createdAt:
+          DateTime.tryParse(json['created_at'] as String? ?? '') ??
+              DateTime.now(),
+    );
+  }
+}

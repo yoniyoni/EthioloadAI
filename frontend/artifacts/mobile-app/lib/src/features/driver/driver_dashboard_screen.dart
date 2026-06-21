@@ -6,6 +6,7 @@ import '../../data/api/api_client.dart';
 import '../../data/providers/data_providers.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/repositories.dart';
+import '../shared/widgets/shared_widgets.dart';
 
 // ── Palette ───────────────────────────────────────────────────────────────
 const _green = Color(0xFF0F3D1A);
@@ -34,6 +35,7 @@ class DriverDashboardScreen extends ConsumerWidget {
             style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
+          const NotificationBell(),
           IconButton(
             icon: const Icon(Icons.account_circle_outlined, color: Colors.white),
             onPressed: () => context.go('/profile'),
@@ -626,6 +628,7 @@ class _CargoCard extends StatelessWidget {
     final existingBid = _existingBid;
     final deadline = cargo.bidDeadline;
     final isClosed = deadline != null && DateTime.now().isAfter(deadline);
+    final isFixed = cargo.priceType == 'fixed';
 
     return Opacity(
       opacity: isClosed ? 0.65 : 1.0,
@@ -708,20 +711,39 @@ class _CargoCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    '${('bid.budget_label'.tr())} ETB ${_fmt(cargo.budget!)}',
+                    '${isFixed ? 'Fixed Price' : 'bid.budget_label'.tr()} ETB ${_fmt(cargo.budget!)}',
                     style: const TextStyle(
                         fontSize: 12,
                         color: _amber,
                         fontWeight: FontWeight.w600),
                   ),
-                  _BidActionButton(
-                    existingBid: existingBid,
-                    enabled: !isClosed,
-                    onTap: isClosed
-                        ? () {}
-                        : () => _showBidSheet(context, cargo,
-                            existingBid: existingBid),
-                  ),
+                  if (isFixed)
+                    ElevatedButton(
+                      onPressed: isClosed
+                          ? null
+                          : () => context.go('/freight/${cargo.id}'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _green,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                        elevation: 0,
+                      ),
+                      child: const Text('Accept Offer',
+                          style: TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w600)),
+                    )
+                  else
+                    _BidActionButton(
+                      existingBid: existingBid,
+                      enabled: !isClosed,
+                      onTap: isClosed
+                          ? () {}
+                          : () => _showBidSheet(context, cargo,
+                              existingBid: existingBid),
+                    ),
                 ],
               ),
             ] else ...[
@@ -732,14 +754,33 @@ class _CargoCard extends StatelessWidget {
                     Text('bid.budget_label'.tr(),
                         style: const TextStyle(
                             fontSize: 12, color: _textSecondary)),
-                    _BidActionButton(
-                      existingBid: existingBid,
-                      enabled: !isClosed,
-                      onTap: isClosed
-                          ? () {}
-                          : () => _showBidSheet(context, cargo,
-                              existingBid: existingBid),
-                    ),
+                    if (isFixed)
+                      ElevatedButton(
+                        onPressed: isClosed
+                            ? null
+                            : () => context.go('/freight/${cargo.id}'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _green,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 8),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                          elevation: 0,
+                        ),
+                        child: const Text('Accept Offer',
+                            style: TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.w600)),
+                      )
+                    else
+                      _BidActionButton(
+                        existingBid: existingBid,
+                        enabled: !isClosed,
+                        onTap: isClosed
+                            ? () {}
+                            : () => _showBidSheet(context, cargo,
+                                existingBid: existingBid),
+                      ),
                   ]),
             ],
           ],

@@ -825,3 +825,34 @@ class RatingRepository {
 final ratingRepositoryProvider = Provider<RatingRepository>(
   (ref) => RatingRepository(ref.read(apiClientProvider)),
 );
+
+// ── NotificationRepository ────────────────────────────────────────────────
+
+class NotificationRepository {
+  final ApiClient _api;
+  NotificationRepository(this._api);
+
+  Future<({List<AppNotification> items, int unreadCount})> list() async {
+    final response = await _api.dio.get('/notifications');
+    final raw = response.data as Map<String, dynamic>;
+    final List items = raw['data'] as List? ?? [];
+    return (
+      items: items
+          .map((e) => AppNotification.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      unreadCount: (raw['unread_count'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  Future<void> markRead(String id) async {
+    await _api.dio.patch('/notifications/$id/read');
+  }
+
+  Future<void> markAllRead() async {
+    await _api.dio.patch('/notifications/read-all');
+  }
+}
+
+final notificationRepositoryProvider = Provider<NotificationRepository>(
+  (ref) => NotificationRepository(ref.read(apiClientProvider)),
+);

@@ -21,6 +21,7 @@ class ShipperHomeScreen extends ConsumerWidget {
       appBar: EthioAppBar(
         title: 'EthioLoad AI',
         actions: [
+          const NotificationBell(),
           IconButton(
             icon: const Icon(Icons.account_circle_outlined, color: Colors.white),
             onPressed: () => context.go('/profile'),

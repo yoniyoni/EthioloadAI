@@ -227,3 +227,10 @@ final emptyReturnRiskProvider =
         (ref, destination) async {
   return ref.read(aiRepositoryProvider).predictEmptyReturn(destination);
 });
+
+// ── Notification providers ────────────────────────────────────────────────
+
+final notificationsProvider = FutureProvider.autoDispose<
+    ({List<AppNotification> items, int unreadCount})>((ref) async {
+  return ref.read(notificationRepositoryProvider).list();
+});

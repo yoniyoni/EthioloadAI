@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../data/providers/data_providers.dart';
+import '../../../data/repositories/repositories.dart';
 
 // ── Design tokens ─────────────────────────────────────────────────────────
 const kGreen       = Color(0xFF0F3D1A);
@@ -623,6 +627,269 @@ class TruckTypeChip extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── NotificationBell ──────────────────────────────────────────────────────
+
+class NotificationBell extends ConsumerWidget {
+  const NotificationBell({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(notificationsProvider);
+    final unread = async.valueOrNull?.unreadCount ?? 0;
+
+    return IconButton(
+      icon: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          const Icon(Icons.notifications_outlined, color: Colors.white),
+          if (unread > 0)
+            Positioned(
+              top: -2,
+              right: -2,
+              child: Container(
+                padding: const EdgeInsets.all(3),
+                decoration: const BoxDecoration(
+                  color: kAmber,
+                  shape: BoxShape.circle,
+                ),
+                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                child: Text(
+                  unread > 99 ? '99+' : '$unread',
+                  style: GoogleFonts.inter(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+        ],
+      ),
+      onPressed: () => _showPanel(context, ref),
+    );
+  }
+
+  void _showPanel(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _NotificationPanel(ref: ref),
+    );
+  }
+}
+
+class _NotificationPanel extends ConsumerStatefulWidget {
+  final WidgetRef ref;
+  const _NotificationPanel({required this.ref});
+
+  @override
+  ConsumerState<_NotificationPanel> createState() => _NotificationPanelState();
+}
+
+class _NotificationPanelState extends ConsumerState<_NotificationPanel> {
+  bool _markingAll = false;
+
+  Future<void> _markAll() async {
+    setState(() => _markingAll = true);
+    try {
+      await ref.read(notificationRepositoryProvider).markAllRead();
+      ref.invalidate(notificationsProvider);
+    } finally {
+      if (mounted) setState(() => _markingAll = false);
+    }
+  }
+
+  Future<void> _markOne(String id) async {
+    await ref.read(notificationRepositoryProvider).markRead(id);
+    ref.invalidate(notificationsProvider);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final async = ref.watch(notificationsProvider);
+    final notifications = async.valueOrNull?.items ?? [];
+    final unread = async.valueOrNull?.unreadCount ?? 0;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      minChildSize: 0.4,
+      maxChildSize: 0.9,
+      builder: (_, controller) => Container(
+        decoration: const BoxDecoration(
+          color: kBackground,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            // Handle
+            const SizedBox(height: 8),
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: kBorder,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Notifications',
+                    style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: kTextPrimary),
+                  ),
+                  if (unread > 0)
+                    TextButton(
+                      onPressed: _markingAll ? null : _markAll,
+                      child: Text(
+                        _markingAll ? 'Marking…' : 'Mark all read',
+                        style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: kGreen,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            // List
+            Expanded(
+              child: async.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => Center(
+                  child: Text('Failed to load notifications',
+                      style: GoogleFonts.inter(color: kTextSecond)),
+                ),
+                data: (_) => notifications.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.notifications_off_outlined,
+                                size: 48, color: kTextMuted),
+                            const SizedBox(height: 8),
+                            Text('No notifications yet',
+                                style: GoogleFonts.inter(
+                                    color: kTextSecond, fontSize: 14)),
+                          ],
+                        ),
+                      )
+                    : ListView.separated(
+                        controller: controller,
+                        itemCount: notifications.length,
+                        separatorBuilder: (_, __) =>
+                            const Divider(height: 1, indent: 56),
+                        itemBuilder: (ctx, i) {
+                          final n = notifications[i];
+                          return _NotifTile(
+                            notification: n,
+                            onTap: () async {
+                              if (!n.isRead) await _markOne(n.id);
+                              if (!ctx.mounted) return;
+                              Navigator.of(ctx).pop();
+                              if (n.cargoId != null) {
+                                ctx.go('/cargo-bids/${n.cargoId}');
+                              }
+                            },
+                          );
+                        },
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NotifTile extends StatelessWidget {
+  final dynamic notification;
+  final VoidCallback onTap;
+  const _NotifTile({required this.notification, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final n = notification;
+    final isRead = n.isRead as bool;
+    final type = n.type as String;
+
+    IconData icon;
+    Color iconColor;
+    switch (type) {
+      case 'bid_placed':
+        icon = Icons.gavel_rounded;
+        iconColor = kAmber;
+      case 'bid_accepted':
+        icon = Icons.check_circle_rounded;
+        iconColor = kSuccess;
+      case 'bid_rejected':
+        icon = Icons.cancel_rounded;
+        iconColor = kDanger;
+      case 'bid_countered':
+        icon = Icons.swap_horiz_rounded;
+        iconColor = Colors.blue;
+      default:
+        icon = Icons.notifications_rounded;
+        iconColor = kGreen;
+    }
+
+    return ListTile(
+      onTap: onTap,
+      tileColor: isRead ? null : kAmber.withAlpha(12),
+      leading: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: iconColor.withAlpha(25),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, size: 20, color: iconColor),
+      ),
+      title: Text(
+        n.message as String,
+        style: GoogleFonts.inter(
+          fontSize: 13,
+          fontWeight: isRead ? FontWeight.w400 : FontWeight.w600,
+          color: kTextPrimary,
+        ),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: n.route != null
+          ? Text(
+              n.route as String,
+              style: GoogleFonts.inter(fontSize: 11, color: kTextMuted),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            )
+          : null,
+      trailing: isRead
+          ? null
+          : Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                color: kAmber,
+                shape: BoxShape.circle,
+              ),
+            ),
     );
   }
 }

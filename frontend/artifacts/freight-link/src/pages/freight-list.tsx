@@ -10,7 +10,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Package, Scale, Calendar, Banknote, Plus, Search, ArrowRight, Filter, Navigation } from "lucide-react";
+import { MapPin, Package, Scale, Calendar, Plus, Search, ArrowRight, Navigation, ChevronLeft, ChevronRight } from "lucide-react";
+
+const FREIGHT_PAGE_SIZE = 10;
 
 const STATUS_COLORS: Record<string, string> = {
   posted: "bg-blue-50 text-blue-700 border-blue-200",
@@ -38,6 +40,7 @@ export default function FreightList() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [cargoFilter, setCargoFilter] = useState("all");
+  const [page, setPage] = useState(0);
 
   const params = new URLSearchParams({ limit: "20" });
   if (statusFilter !== "all") params.set("status", statusFilter);
@@ -84,12 +87,12 @@ export default function FreightList() {
           <Input
             placeholder={t("freight.search")}
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); setPage(0); }}
             className="pl-9 rounded-lg"
           />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[160px] rounded-lg">
+        <Select value={statusFilter} onValueChange={v => { setStatusFilter(v); setPage(0); }}>
+          <SelectTrigger className="w-40 rounded-lg">
             <SelectValue placeholder={t("common.status")} />
           </SelectTrigger>
           <SelectContent>
@@ -100,8 +103,8 @@ export default function FreightList() {
             <SelectItem value="completed">{t("freight.completed")}</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={cargoFilter} onValueChange={setCargoFilter}>
-          <SelectTrigger className="w-[160px] rounded-lg">
+        <Select value={cargoFilter} onValueChange={v => { setCargoFilter(v); setPage(0); }}>
+          <SelectTrigger className="w-40 rounded-lg">
             <SelectValue placeholder={t("common.type")} />
           </SelectTrigger>
           <SelectContent>
@@ -129,7 +132,7 @@ export default function FreightList() {
             <p className="text-sm">{t("freight.search")}</p>
           </div>
         ) : (
-          freight.map((f: any) => (
+          freight.slice(page * FREIGHT_PAGE_SIZE, (page + 1) * FREIGHT_PAGE_SIZE).map((f: any) => (
             <Link key={f.id} href={`/freight/${f.id}`}>
               <Card className="hover:shadow-md transition-all hover:border-primary/30 cursor-pointer border-border/60 rounded-xl">
                 <CardContent className="pt-5 pb-5">
@@ -179,6 +182,38 @@ export default function FreightList() {
           ))
         )}
       </div>
+
+      {/* Pagination */}
+      {!isLoading && freight.length > 0 && (
+        <div className="flex items-center justify-between mt-6 pt-4 border-t">
+          <p className="text-sm text-muted-foreground">
+            Showing {Math.min(page * FREIGHT_PAGE_SIZE + 1, freight.length)}–{Math.min((page + 1) * FREIGHT_PAGE_SIZE, freight.length)} of {freight.length}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 p-0 rounded-lg"
+              disabled={page === 0}
+              onClick={() => setPage(p => p - 1)}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm text-muted-foreground px-1">
+              {page + 1} / {Math.max(Math.ceil(freight.length / FREIGHT_PAGE_SIZE), 1)}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 p-0 rounded-lg"
+              disabled={(page + 1) * FREIGHT_PAGE_SIZE >= freight.length}
+              onClick={() => setPage(p => p + 1)}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
