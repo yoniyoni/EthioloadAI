@@ -379,13 +379,11 @@ class _FixedPriceDriverActionState
   Future<void> _accept() async {
     setState(() => _accepting = true);
     try {
-      await ref.read(cargoRepositoryProvider).bookDirectFixed(widget.cargo.id);
+      await ref.read(cargoRepositoryProvider).acceptFixedPrice(widget.cargo.id);
       if (mounted) {
-        ref.invalidate(bookingListProvider);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text(
-            'Booking confirmed at ETB '
-            '${widget.cargo.budget?.toStringAsFixed(0) ?? '—'}',
+            'Offer accepted! The shipper will review and confirm a driver.',
           ),
           backgroundColor: kGreen,
         ));
@@ -417,9 +415,9 @@ class _FixedPriceDriverActionState
         const SizedBox(height: 6),
         Text(
           c.budget != null
-              ? 'Accept this job at the fixed price of ETB '
-                '${c.budget!.toStringAsFixed(0)}'
-              : 'Accept this job at the shipper\'s fixed price.',
+              ? 'Accept this job at ETB ${c.budget!.toStringAsFixed(0)}. '
+                'The shipper will select a driver from all who accept.'
+              : 'Accept this job. The shipper will select a driver from all who accept.',
           style: GoogleFonts.inter(fontSize: 12, color: kTextMuted),
         ),
         const SizedBox(height: 12),

@@ -156,6 +156,24 @@ class CargoRepository {
     );
   }
 
+  // ✓ POST /cargo-requests/{cargoId}/accept-price
+  // Driver registers interest in fixed-price cargo; returns Bid (not Booking).
+  // Cargo stays 'pending' so multiple drivers can apply. Shipper picks one.
+  Future<Bid> acceptFixedPrice(int cargoId) async {
+    final response =
+        await _api.dio.post('/cargo-requests/$cargoId/accept-price');
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final raw = response.data;
+      final data =
+          (raw is Map && raw.containsKey('data')) ? raw['data'] : raw;
+      return Bid.fromJson(data as Map<String, dynamic>);
+    }
+    final msg = (response.data is Map)
+        ? (response.data['message'] as String? ?? 'Failed to register interest.')
+        : 'Failed to register interest.';
+    throw ApiException(message: msg, statusCode: response.statusCode);
+  }
+
   // ✓ DELETE /cargo-requests/{id}  (apiResource destroy)
   Future<void> delete(int id) => _api.delete('/cargo-requests/$id');
 

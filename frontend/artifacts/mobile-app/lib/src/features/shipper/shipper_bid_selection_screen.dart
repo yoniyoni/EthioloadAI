@@ -52,7 +52,7 @@ class ShipperBidSelectionScreen extends ConsumerWidget {
             // ── Bid count label ───────────────────────────────────────
             bidsAsync.when(
               data: (bids) {
-                final pending = bids.where((b) => b.status == 'pending').toList();
+                final pending = bids.where((b) => b.status == 'pending' || b.status == 'countered').toList();
                 return Text(
                   'bid.pending_count'.tr(namedArgs: {'count': '${pending.length}'}),
                   style: GoogleFonts.inter(
@@ -70,7 +70,12 @@ class ShipperBidSelectionScreen extends ConsumerWidget {
             // ── Bid list ──────────────────────────────────────────────
             bidsAsync.when(
               data: (bids) {
-                final pending = bids.where((b) => b.status == 'pending').toList();
+                final priceType =
+                    cargoAsync.valueOrNull?.priceType ?? 'negotiable';
+                final pending = bids
+                    .where((b) =>
+                        b.status == 'pending' || b.status == 'countered')
+                    .toList();
                 if (pending.isEmpty) {
                   return EmptyState(
                     icon: Icons.gavel_outlined,
@@ -83,6 +88,7 @@ class ShipperBidSelectionScreen extends ConsumerWidget {
                       .map((bid) => _BidCard(
                             bid: bid,
                             cargoId: cargoId,
+                            priceType: priceType,
                             onAccepted: () {
                               ref.invalidate(bidsForCargoProvider(cargoId));
                               ref.invalidate(bookingListProvider);
@@ -176,12 +182,14 @@ class _CargoHeaderCard extends StatelessWidget {
 class _BidCard extends ConsumerStatefulWidget {
   final Bid bid;
   final int cargoId;
+  final String priceType;
   final VoidCallback onAccepted;
   final VoidCallback onRejected;
 
   const _BidCard({
     required this.bid,
     required this.cargoId,
+    required this.priceType,
     required this.onAccepted,
     required this.onRejected,
   });
@@ -359,7 +367,8 @@ class _BidCardState extends ConsumerState<_BidCard> {
   @override
   Widget build(BuildContext context) {
     final b = widget.bid;
-    final hasDriverCounter = b.needsShipperAction;
+    final isFixed = widget.priceType == 'fixed';
+    final hasDriverCounter = b.needsShipperAction && !isFixed;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -403,7 +412,7 @@ class _BidCardState extends ConsumerState<_BidCard> {
                           color: kTextPrimary)),
                   if (b.isRecommended) ...[
                     const SizedBox(width: 8),
-                    _BestPriceBadge(),
+                    _RecommendedBadge(isFixed: isFixed),
                   ],
                 ]),
                 const SizedBox(height: 2),
@@ -645,6 +654,52 @@ class _BidCardState extends ConsumerState<_BidCard> {
                           strokeWidth: 2, color: kDanger))
                   : Text('bid.reject'.tr(),
                       style: GoogleFonts.inter(fontSize: 12)),
+            ),
+          ]),
+        ] else if (isFixed) ...[
+          // Fixed-price: select or reject — no counter allowed
+          Row(children: [
+            Expanded(
+              child: ElevatedButton(
+                onPressed: _busy ? null : _accept,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: kGreen,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                  elevation: 0,
+                ),
+                child: _accepting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : Text('Select This Driver',
+                        style: GoogleFonts.inter(
+                            fontSize: 13, fontWeight: FontWeight.w600)),
+              ),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton(
+              onPressed: _busy ? null : _reject,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: kDanger,
+                side: const BorderSide(color: kDanger, width: 0.5),
+                padding: const EdgeInsets.symmetric(
+                    vertical: 12, horizontal: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+              child: _rejecting
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: kDanger))
+                  : Text('bid.reject'.tr(),
+                      style: GoogleFonts.inter(fontSize: 13)),
             ),
           ]),
         ] else ...[
@@ -889,9 +944,14 @@ class _CounterOfferSheetState extends ConsumerState<_CounterOfferSheet> {
 
 // ── Subwidgets ────────────────────────────────────────────────────────────
 
-class _BestPriceBadge extends StatelessWidget {
+class _RecommendedBadge extends StatelessWidget {
+  final bool isFixed;
+  const _RecommendedBadge({required this.isFixed});
+
   @override
   Widget build(BuildContext context) {
+    final label = isFixed ? 'Top Rated' : 'bid.best_price'.tr();
+    final icon  = isFixed ? Icons.star_rounded : Icons.check_circle_rounded;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
@@ -901,9 +961,9 @@ class _BestPriceBadge extends StatelessWidget {
             Border.all(color: kGreen.withValues(alpha: 0.24), width: 0.5),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.check_circle_rounded, size: 11, color: kGreen),
+        Icon(icon, size: 11, color: kGreen),
         const SizedBox(width: 3),
-        Text('bid.best_price'.tr(),
+        Text(label,
             style: GoogleFonts.inter(
                 fontSize: 10,
                 color: kGreen,
