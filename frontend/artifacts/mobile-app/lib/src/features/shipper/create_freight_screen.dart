@@ -1293,7 +1293,6 @@ class _IntraStep2 extends StatelessWidget {
         const SizedBox(height: 8),
         TextFormField(
           readOnly: true,
-          initialValue: preferredDate,
           onTap: () async {
             final d = await showDatePicker(
               context: context,
