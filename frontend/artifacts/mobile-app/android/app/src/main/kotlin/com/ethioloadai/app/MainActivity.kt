@@ -1,4 +1,4 @@
-package com.example.ethioload_ai
+package com.ethioloadai.app
 
 import io.flutter.embedding.android.FlutterActivity
 

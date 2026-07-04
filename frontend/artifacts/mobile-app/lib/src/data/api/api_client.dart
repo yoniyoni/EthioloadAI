@@ -5,15 +5,13 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logger/logger.dart';
 
 // ── Base URL selection ─────────────────────────────────────────────────────
-// Herd serves the backend at http://backend.test (all platforms on same machine)
-// For production or a different machine, change this to the actual server URL.
+// Override at build time with: --dart-define=API_BASE_URL=http://your-server/api
+// Falls back to the Herd local server when no override is provided.
+const String _kApiBaseUrlOverride = String.fromEnvironment('API_BASE_URL');
+
 String get kBaseUrl {
-  if (kIsWeb) {
-    // Chrome can reach Herd's .test domain directly
-    return 'http://backend.test/api';
-  }
-  // Android emulator cannot resolve .test domains — use the host machine's LAN IP
-  // e.g. 'http://192.168.1.10/api'  — update this to your machine's LAN IP
+  if (_kApiBaseUrlOverride.isNotEmpty) return _kApiBaseUrlOverride;
+  if (kIsWeb) return 'http://backend.test/api';
   return 'http://backend.test/api';
 }
 

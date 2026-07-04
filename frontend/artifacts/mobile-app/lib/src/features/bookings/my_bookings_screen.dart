@@ -870,7 +870,7 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
       );
     }
 
-    // ── DRIVER: confirmed → booking complete + rate shipper ──────────────
+    // ── DRIVER: confirmed → booking complete ─────────────────────────────
     if (isDriver && (status == 'confirmed' || status == 'completed')) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -884,32 +884,6 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
             message: 'Payment received — booking complete!',
             color: kSuccess,
           ),
-          if (!widget.booking.hasRating) ...[
-            const SizedBox(height: 10),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.star_rounded, size: 18),
-              label: Text('Rate the Shipper',
-                  style: GoogleFonts.inter(
-                      fontSize: 14, fontWeight: FontWeight.w600)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kAmber,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-                elevation: 0,
-              ),
-              onPressed: () => _showRatingDialog(context),
-            ),
-          ] else
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                '✓ You have already rated this booking',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(fontSize: 12, color: kTextMuted),
-              ),
-            ),
         ],
       );
     }
@@ -1047,7 +1021,7 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text(
-            widget.isDriver ? 'Rate the Shipper' : 'Rate the Driver',
+            'Rate the Driver',
             style: GoogleFonts.inter(
                 fontWeight: FontWeight.bold, color: kTextPrimary),
           ),
@@ -1055,9 +1029,7 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                widget.isDriver
-                    ? 'How was your experience with ${widget.booking.shipperName ?? "the shipper"}?'
-                    : 'How was ${widget.booking.driverName ?? "the driver"}\'s service?',
+                'How was ${widget.booking.driverName ?? "the driver"}\'s service?',
                 style: GoogleFonts.inter(fontSize: 13, color: kTextSecond),
               ),
               const SizedBox(height: 16),

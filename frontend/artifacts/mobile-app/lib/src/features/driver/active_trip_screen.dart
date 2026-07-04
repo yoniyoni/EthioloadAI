@@ -381,34 +381,25 @@ class _TripBodyState extends ConsumerState<_TripBody> {
           const SizedBox(height: 32),
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton.icon(
+            child: ElevatedButton(
               onPressed: () => Navigator.of(context).pop(),
-              icon: const Icon(Icons.star_rounded, size: 20),
-              label: const Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Rate Your Shipper →',
-                      style: TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w700)),
-                  Text('ላኪውን ምደብ', style: TextStyle(fontSize: 11)),
-                ],
-              ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFF59E0B),
+                backgroundColor: const Color(0xFF0F3D1A),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
                 elevation: 0,
               ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
-              'Go to My Jobs / ወደ ስራዎቼ',
-              style: TextStyle(color: Color(0xFF6B7280), fontSize: 14),
+              child: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Go to My Jobs',
+                      style: TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w700)),
+                  Text('ወደ ስራዎቼ', style: TextStyle(fontSize: 11)),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 24),

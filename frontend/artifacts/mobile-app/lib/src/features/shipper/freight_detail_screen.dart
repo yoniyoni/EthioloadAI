@@ -472,11 +472,71 @@ class _FixedPriceDriverActionState
   }
 }
 
-// ── Shipper: View Bids ────────────────────────────────────────────────────
+// ── Shipper: View Bids + Cancel Cargo ────────────────────────────────────
 
-class _ShipperBidLink extends StatelessWidget {
+class _ShipperBidLink extends ConsumerStatefulWidget {
   final CargoRequest cargo;
   const _ShipperBidLink({required this.cargo});
+
+  @override
+  ConsumerState<_ShipperBidLink> createState() => _ShipperBidLinkState();
+}
+
+class _ShipperBidLinkState extends ConsumerState<_ShipperBidLink> {
+  bool _deleting = false;
+
+  Future<void> _confirmDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: kSurface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Cancel this cargo?',
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w700, color: kTextPrimary)),
+        content: Text(
+          'This will permanently remove the cargo listing. '
+          'Any drivers who bid will be notified that it was cancelled.',
+          style: GoogleFonts.inter(fontSize: 13, color: kTextMuted),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('Keep it',
+                style: GoogleFonts.inter(color: kTextMuted)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('Yes, cancel',
+                style: GoogleFonts.inter(
+                    color: kDanger, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _deleting = true);
+    try {
+      await ref.read(cargoRepositoryProvider).delete(widget.cargo.id);
+      if (!mounted) return;
+      ref.invalidate(cargoListProvider);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Cargo cancelled. Bidders have been notified.'),
+        backgroundColor: kGreen,
+      ));
+      context.go('/shipper');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Failed to cancel: $e'),
+        backgroundColor: kDanger,
+      ));
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -509,7 +569,32 @@ class _ShipperBidLink extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10)),
               elevation: 0,
             ),
-            onPressed: () => context.go('/cargo-bids/${cargo.id}'),
+            onPressed: () => context.go('/cargo-bids/${widget.cargo.id}'),
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            icon: _deleting
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: kDanger),
+                  )
+                : const Icon(Icons.cancel_outlined, size: 18),
+            label: Text('Cancel This Cargo',
+                style: GoogleFonts.inter(
+                    fontSize: 14, fontWeight: FontWeight.w600)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: kDanger,
+              side: const BorderSide(color: kDanger, width: 0.8),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: _deleting ? null : _confirmDelete,
           ),
         ),
       ],
