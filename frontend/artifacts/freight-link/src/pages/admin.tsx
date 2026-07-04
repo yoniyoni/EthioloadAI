@@ -155,6 +155,7 @@ export default function Admin() {
   });
 
   const [selectedCargo, setSelectedCargo] = useState<any>(null);
+  const [cargoServiceFilter, setCargoServiceFilter] = useState<'all' | 'intercity' | 'intracity'>('all');
 
   const { data: cargoData, isLoading: cargoLoading } = useQuery({
     queryKey: ["admin-cargo"],
@@ -708,6 +709,13 @@ export default function Admin() {
                                   </span>
                                 )}
                               </div>
+                              {selectedCargo?.service_type === "intracity" && bid.available_datetime && (
+                                <div className="mt-1">
+                                  <span className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5">
+                                    Available: {new Date(bid.available_datetime).toLocaleString('en-ET', { dateStyle: 'medium', timeStyle: 'short' })}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                             {/* Amount & status */}
                             <div className="text-right shrink-0">
@@ -749,6 +757,19 @@ export default function Admin() {
                     onChange={(e) => { setCargoSearch(e.target.value); setCargoPage(0); }}
                   />
                 </div>
+                <div className="flex gap-1">
+                  {(['all', 'intercity', 'intracity'] as const).map((f) => (
+                    <Button
+                      key={f}
+                      size="sm"
+                      variant={cargoServiceFilter === f ? 'default' : 'outline'}
+                      className={`h-9 text-xs rounded-lg capitalize ${cargoServiceFilter === f ? 'bg-emerald-600 hover:bg-emerald-700' : ''}`}
+                      onClick={() => { setCargoServiceFilter(f); setCargoPage(0); }}
+                    >
+                      {f === 'all' ? 'All' : f === 'intercity' ? 'Intercity' : 'Intra-city'}
+                    </Button>
+                  ))}
+                </div>
               </div>
             </CardHeader>
             <CardContent>
@@ -757,11 +778,15 @@ export default function Admin() {
               ) : (() => {
                 const allCargo: any[] = Array.isArray(cargoData) ? cargoData : ((cargoData as any)?.data ?? []);
                 const filtered = allCargo.filter((c: any) => {
+                  if (cargoServiceFilter !== 'all' && c.service_type !== cargoServiceFilter) return false;
                   if (!cargoSearch) return true;
                   const q = cargoSearch.toLowerCase();
                   return (
                     (c.pickup_location ?? "").toLowerCase().includes(q) ||
                     (c.destination ?? "").toLowerCase().includes(q) ||
+                    (c.pickup_area ?? "").toLowerCase().includes(q) ||
+                    (c.dropoff_area ?? "").toLowerCase().includes(q) ||
+                    (c.city ?? "").toLowerCase().includes(q) ||
                     (c.material_type ?? "").toLowerCase().includes(q)
                   );
                 });
@@ -773,6 +798,7 @@ export default function Admin() {
                         <thead>
                           <tr className="border-b text-left">
                             <th className="pb-3 font-medium text-muted-foreground">#</th>
+                            <th className="pb-3 font-medium text-muted-foreground">Service</th>
                             <th className="pb-3 font-medium text-muted-foreground">Route</th>
                             <th className="pb-3 font-medium text-muted-foreground">Cargo Type</th>
                             <th className="pb-3 font-medium text-muted-foreground">Weight</th>
@@ -786,16 +812,32 @@ export default function Admin() {
                         <tbody className="divide-y">
                           {paged.map((c: any) => {
                             const isFixed = c.price_type === "fixed";
+                            const isIntracity = c.service_type === "intracity";
                             return (
                               <tr key={c.id} className="hover:bg-muted/30 transition-colors">
                                 <td className="py-3 font-medium text-muted-foreground text-xs">#{c.id}</td>
                                 <td className="py-3">
-                                  <span className="flex items-center gap-1 text-xs font-medium">
-                                    <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
-                                    {c.pickup_location} → {c.destination}
-                                  </span>
+                                  <Badge className={`text-[10px] border ${isIntracity ? "bg-purple-50 text-purple-700 border-purple-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>
+                                    {isIntracity ? "Intra-city" : "Intercity"}
+                                  </Badge>
                                 </td>
-                                <td className="py-3 text-xs text-muted-foreground">{c.material_type ?? "—"}</td>
+                                <td className="py-3">
+                                  {isIntracity ? (
+                                    <span className="flex flex-col gap-0.5">
+                                      <span className="flex items-center gap-1 text-xs font-medium">
+                                        <MapPin className="h-3 w-3 text-purple-400 shrink-0" />
+                                        {c.city ?? "—"}
+                                      </span>
+                                      <span className="text-[11px] text-muted-foreground">{c.pickup_area ?? "—"} → {c.dropoff_area ?? "—"}</span>
+                                    </span>
+                                  ) : (
+                                    <span className="flex items-center gap-1 text-xs font-medium">
+                                      <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
+                                      {c.pickup_location} → {c.destination}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-3 text-xs text-muted-foreground">{isIntracity ? (c.items_description ?? "—") : (c.material_type ?? "—")}</td>
                                 <td className="py-3 text-xs text-muted-foreground">{c.weight ? `${c.weight} t` : "—"}</td>
                                 <td className="py-3">
                                   <Badge className={`text-[10px] border ${
@@ -838,7 +880,7 @@ export default function Admin() {
                           })}
                           {paged.length === 0 && (
                             <tr>
-                              <td colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
+                              <td colSpan={10} className="py-10 text-center text-sm text-muted-foreground">
                                 No cargo requests found
                               </td>
                             </tr>
@@ -1982,6 +2024,33 @@ export default function Admin() {
                   {savePricing.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                   Save Pricing Rates
                 </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/60 rounded-xl">
+              <CardHeader className="flex flex-row items-center gap-2 pb-3">
+                <MapPin className="h-4 w-4 text-purple-600" />
+                <CardTitle className="text-base">Intra-city Moving Reference Rates (ETB / move)</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Reference price range displayed to shippers for intra-city moving requests. Configure these in the backend settings.
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label className="text-muted-foreground">Minimum rate</Label>
+                    <div className="h-9 px-3 flex items-center rounded-md border bg-muted/40 text-sm text-muted-foreground">
+                      {(pricingData as any)?.intracity_rate_min ?? "—"} ETB
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-muted-foreground">Maximum rate</Label>
+                    <div className="h-9 px-3 flex items-center rounded-md border bg-muted/40 text-sm text-muted-foreground">
+                      {(pricingData as any)?.intracity_rate_max ?? "—"} ETB
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">These rates are read-only. Update via backend admin settings API.</p>
               </CardContent>
             </Card>
           </div>

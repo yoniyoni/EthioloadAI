@@ -51,6 +51,13 @@ class _LandingScreenState extends State<LandingScreen>
                   ),
                 ),
 
+                // Language toggle — top right
+                Positioned(
+                  top: MediaQuery.of(context).padding.top + 12,
+                  right: 16,
+                  child: _LangToggle(),
+                ),
+
                 // Hero content
                 SafeArea(
                   bottom: false,
@@ -202,6 +209,61 @@ class _LandingScreenState extends State<LandingScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Language toggle ───────────────────────────────────────────────────────
+
+class _LangToggle extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final isEn = context.locale.languageCode == 'en';
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      _LangBtn(
+        label: 'EN',
+        active: isEn,
+        onTap: () => context.setLocale(const Locale('en', 'US')),
+      ),
+      const SizedBox(width: 6),
+      _LangBtn(
+        label: 'አማ',
+        active: !isEn,
+        onTap: () => context.setLocale(const Locale('am', 'ET')),
+      ),
+    ]);
+  }
+}
+
+class _LangBtn extends StatelessWidget {
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+  const _LangBtn({required this.label, required this.active, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: active ? kAmber : Colors.white.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: active ? kAmber : Colors.white.withValues(alpha: 0.4),
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: active ? const Color(0xFF111827) : Colors.white,
+          ),
+        ),
       ),
     );
   }

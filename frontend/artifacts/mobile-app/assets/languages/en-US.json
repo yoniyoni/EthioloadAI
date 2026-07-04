@@ -90,6 +90,18 @@
     "edit": "Edit",
     "delete": "Delete",
     "share": "Share",
+    "service_type": "Service Type",
+    "intercity": "Intercity Freight",
+    "intracity": "Intra-city Moving",
+    "intercity_sub": "Transport cargo between cities",
+    "intracity_sub": "Move items within the same city",
+    "what_moving": "What are you moving?",
+    "city": "City",
+    "pickup_area": "Pickup Area / Neighborhood",
+    "dropoff_area": "Dropoff Area / Neighborhood",
+    "items_description": "What are you moving?",
+    "preferred_date": "Preferred Date",
+    "vehicle_type_needed": "Vehicle Type Needed (optional)",
     "cargo_types": {
       "fuel": "Fuel",
       "livestock": "Livestock",
@@ -135,7 +147,10 @@
     "hello": "Hello, {name}!",
     "needs_action": "{count} Job(s) Needing Action",
     "booking_label": "Booking #{id}",
-    "counter_offers_waiting": "{count} Counter Offer{plural} Waiting"
+    "counter_offers_waiting": "{count} Counter Offer{plural} Waiting",
+    "city_unset_title": "Set your current city",
+    "city_unset_sub": "Showing all intra-city cargo. Tap to set your city to see only nearby jobs.",
+    "available_from": "Available from"
   },
 
   "shipper": {
@@ -281,7 +296,9 @@
     "privacy": "Privacy",
     "terms": "Terms of Service",
     "logout": "Logout",
-    "confirm_logout": "Are you sure you want to logout?"
+    "confirm_logout": "Are you sure you want to logout?",
+    "current_city": "Current City",
+    "city_updated": "Current city updated to {city}"
   },
 
   "nav": {
