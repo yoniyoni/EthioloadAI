@@ -272,6 +272,24 @@ class CargoRepository {
     } catch (_) {}
     return (city: null, cargo: <CargoRequest>[]);
   }
+
+  // GET /cargo-requests/{id}/nearby-drivers
+  Future<List<NearbyDriver>> nearbyDrivers(int cargoId) async {
+    final response =
+        await _api.dio.get('/cargo-requests/$cargoId/nearby-drivers');
+    if (response.statusCode == 200) {
+      final raw = response.data;
+      final list = (raw is Map && raw.containsKey('data'))
+          ? raw['data'] as List
+          : raw as List;
+      return list
+          .map((e) => NearbyDriver.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    throw ApiException(
+        message: 'Failed to load nearby drivers',
+        statusCode: response.statusCode);
+  }
 }
 
 final cargoRepositoryProvider = Provider<CargoRepository>(
@@ -557,6 +575,21 @@ class TripRepository {
     try {
       await _api.dio.patch('/recommendations/$recId/dismiss');
     } catch (_) {}
+  }
+
+  // GET /trips/{trip}/location
+  Future<TripLocation> getLocation(int tripId) async {
+    final response = await _api.dio.get('/trips/$tripId/location');
+    if (response.statusCode == 200) {
+      final raw = response.data;
+      final data = (raw is Map && raw.containsKey('data'))
+          ? raw['data'] as Map<String, dynamic>
+          : raw as Map<String, dynamic>;
+      return TripLocation.fromJson(data);
+    }
+    throw ApiException(
+        message: 'Failed to load trip location',
+        statusCode: response.statusCode);
   }
 }
 

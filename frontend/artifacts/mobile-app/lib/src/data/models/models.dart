@@ -154,6 +154,7 @@ class CargoRequest {
   final DateTime? preferredDate;
   final String? itemsDescription;
   final String? vehicleTypeNeeded;
+  final double? distanceKm;
 
   CargoRequest({
     required this.id,
@@ -176,6 +177,7 @@ class CargoRequest {
     this.preferredDate,
     this.itemsDescription,
     this.vehicleTypeNeeded,
+    this.distanceKm,
   });
 
   factory CargoRequest.fromJson(Map<String, dynamic> json) => CargoRequest(
@@ -209,6 +211,9 @@ class CargoRequest {
             : null,
         itemsDescription: json['items_description'] as String?,
         vehicleTypeNeeded: json['vehicle_type_needed'] as String?,
+        distanceKm: json['distance_km'] != null
+            ? double.tryParse(json['distance_km'].toString())
+            : null,
       );
 
   Map<String, dynamic> toCreateJson() => {
@@ -941,6 +946,92 @@ class AppNotification {
       createdAt:
           DateTime.tryParse(json['created_at'] as String? ?? '') ??
               DateTime.now(),
+    );
+  }
+}
+
+// ── NearbyDriver ──────────────────────────────────────────────────────────
+
+class NearbyDriver {
+  final int driverId;
+  final String name;
+  final String truckType;
+  final String plateNumber;
+  final double rating;
+  final int tripCount;
+  final double? distanceKm;
+  final String lastSeen;
+  final String? vehicleCategory;
+
+  NearbyDriver({
+    required this.driverId,
+    required this.name,
+    required this.truckType,
+    required this.plateNumber,
+    required this.rating,
+    required this.tripCount,
+    this.distanceKm,
+    required this.lastSeen,
+    this.vehicleCategory,
+  });
+
+  factory NearbyDriver.fromJson(Map<String, dynamic> j) => NearbyDriver(
+        driverId:        j['driver_id'] as int,
+        name:            (j['name'] ?? '') as String,
+        truckType:       (j['truck_type'] ?? '') as String,
+        plateNumber:     (j['plate_number'] ?? '') as String,
+        rating:          double.tryParse(j['rating'].toString()) ?? 0.0,
+        tripCount:       (j['trip_count'] ?? 0) as int,
+        distanceKm:      j['distance_km'] != null
+            ? double.tryParse(j['distance_km'].toString())
+            : null,
+        lastSeen:        (j['last_seen'] ?? '') as String,
+        vehicleCategory: j['vehicle_category'] as String?,
+      );
+}
+
+// ── TripLocation ──────────────────────────────────────────────────────────
+
+class TripLocation {
+  final double? currentLat;
+  final double? currentLng;
+  final String? currentCity;
+  final DateTime? lastUpdatedAt;
+  final int? minutesSinceUpdate;
+  final List<Map<String, dynamic>> routeData;
+
+  TripLocation({
+    this.currentLat,
+    this.currentLng,
+    this.currentCity,
+    this.lastUpdatedAt,
+    this.minutesSinceUpdate,
+    this.routeData = const [],
+  });
+
+  bool get hasPosition => currentLat != null && currentLng != null;
+
+  factory TripLocation.fromJson(Map<String, dynamic> j) {
+    final rawRoute = j['route_data'];
+    final List<Map<String, dynamic>> route = rawRoute is List
+        ? rawRoute
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList()
+        : [];
+    return TripLocation(
+      currentLat: j['current_lat'] != null
+          ? double.tryParse(j['current_lat'].toString())
+          : null,
+      currentLng: j['current_lng'] != null
+          ? double.tryParse(j['current_lng'].toString())
+          : null,
+      currentCity:         j['current_city'] as String?,
+      lastUpdatedAt:       j['last_updated_at'] != null
+          ? DateTime.tryParse(j['last_updated_at'] as String)
+          : null,
+      minutesSinceUpdate:  j['minutes_since_update'] as int?,
+      routeData:           route,
     );
   }
 }

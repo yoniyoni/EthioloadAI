@@ -150,7 +150,10 @@
     "counter_offers_waiting": "{count} Counter Offer{plural} Waiting",
     "city_unset_title": "Set your current city",
     "city_unset_sub": "Showing all intra-city cargo. Tap to set your city to see only nearby jobs.",
-    "available_from": "Available from"
+    "available_from": "Available from",
+    "enable_gps_title": "Enable GPS location",
+    "enable_gps_sub": "Shippers can find you and you'll see nearby cargo sorted by distance.",
+    "distance_km": "{km} km away"
   },
 
   "shipper": {
@@ -241,7 +244,19 @@
     "picked_up": "Picked Up",
     "in_transit": "In Transit",
     "arrived": "Arrived",
-    "delivered": "Delivered"
+    "delivered": "Delivered",
+    "track_cargo": "Track Cargo",
+    "nearby_drivers": "Nearby Drivers",
+    "nearby_drivers_sub": "Available drivers within range",
+    "no_location_data": "No location data yet",
+    "last_updated": "Last updated",
+    "route_on_map": "Trip Route",
+    "driver_is_here": "Driver Location",
+    "refresh_map": "Refresh",
+    "minutes_ago": "{n} min ago",
+    "hours_ago": "{n} h ago",
+    "no_trip": "No active trip found",
+    "city_label": "City"
   },
 
   "chat": {

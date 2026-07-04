@@ -198,6 +198,19 @@ final returnCargoProvider =
   return ref.read(cargoRepositoryProvider).returnCargo();
 });
 
+// Live GPS location for a trip (shipper tracking screen)
+final tripLocationProvider =
+    FutureProvider.autoDispose.family<TripLocation, int>((ref, tripId) async {
+  return ref.read(tripRepositoryProvider).getLocation(tripId);
+});
+
+// Nearby available drivers for a cargo request (shipper cargo detail)
+final nearbyDriversProvider =
+    FutureProvider.autoDispose.family<List<NearbyDriver>, int>(
+        (ref, cargoId) async {
+  return ref.read(cargoRepositoryProvider).nearbyDrivers(cargoId);
+});
+
 // ── AI providers ──────────────────────────────────────────────────────────
 
 class TruckRecommendationParams {

@@ -150,7 +150,10 @@
     "counter_offers_waiting": "{count} የመልስ ጨረታ{plural} በጥበቃ ላይ",
     "city_unset_title": "አሁን ያሉበትን ከተማ ያስቀምጡ",
     "city_unset_sub": "ሁሉም የከተማ ውስጥ ጭነቶች ይታያሉ። ቅርብ ሥራዎችን ብቻ ለማየት ከተማዎን ያስቀምጡ።",
-    "available_from": "ከ"
+    "available_from": "ከ",
+    "enable_gps_title": "GPS ቦታ ያብሩ",
+    "enable_gps_sub": "ጭነት ላኪዎች ሊያገኙዎ እና ቅርብ ጭነቶችን በርቀት ሊያዩ ይችላሉ።",
+    "distance_km": "{km} ኪ.ሜ ርቀት"
   },
 
   "shipper": {
@@ -241,7 +244,19 @@
     "picked_up": "ተነስቷል",
     "in_transit": "በጉዞ ላይ",
     "arrived": "ደርሷል",
-    "delivered": "ተሰጥቷል"
+    "delivered": "ተሰጥቷል",
+    "track_cargo": "ጭነቱን ክትተል",
+    "nearby_drivers": "ቅርብ አሽከርካሪዎች",
+    "nearby_drivers_sub": "ቅርበት ላይ ዝግጁ አሽከርካሪዎች",
+    "no_location_data": "እስካሁን ምንም የቦታ ዳታ የለም",
+    "last_updated": "ለመጨረሻ ጊዜ የተዘመነ",
+    "route_on_map": "የጉዞ መስመር",
+    "driver_is_here": "አሽከርካሪ ቦታ",
+    "refresh_map": "አድስ",
+    "minutes_ago": "{n} ደቂቃ በፊት",
+    "hours_ago": "{n} ሰዓት በፊት",
+    "no_trip": "ንቁ ጉዞ አልተገኘም",
+    "city_label": "ከተማ"
   },
 
   "chat": {

@@ -919,6 +919,26 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
             message: 'Driver is on the way — payment is collected after delivery.',
             color: kAmber,
           ),
+          if (b.isTripOngoing) ...[
+            const SizedBox(height: 10),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.gps_fixed_rounded, size: 18),
+              label: Text(
+                'Track Cargo / ጭነቱን ክትተል',
+                style: GoogleFonts.inter(
+                    fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kGreen,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                elevation: 0,
+              ),
+              onPressed: () => context.push('/tracking/${b.cargoId}'),
+            ),
+          ],
         ],
       );
     }

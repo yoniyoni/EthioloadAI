@@ -6,6 +6,7 @@ import '../../data/api/api_client.dart';
 import '../../data/providers/data_providers.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/repositories.dart';
+import '../../services/location_service.dart';
 import '../shared/widgets/shared_widgets.dart';
 
 // ── Palette ───────────────────────────────────────────────────────────────
@@ -16,11 +17,32 @@ const _bg = Color(0xFFF8FBF8);
 const _border = Color(0xFFE5E7EB);
 const _textSecondary = Color(0xFF6B7280);
 
-class DriverDashboardScreen extends ConsumerWidget {
+class DriverDashboardScreen extends ConsumerStatefulWidget {
   const DriverDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DriverDashboardScreen> createState() =>
+      _DriverDashboardScreenState();
+}
+
+class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Start GPS background pings (25-min polling). Silent failure inside.
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => LocationService.startTracking(ref),
+    );
+  }
+
+  @override
+  void dispose() {
+    LocationService.stopTracking();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final driver = ref.read(authNotifierProvider).user;
     final cargoWithMetaAsync = ref.watch(cargoListWithMetaProvider);
     final bookingsAsync = ref.watch(bookingListProvider);
@@ -96,11 +118,17 @@ class DriverDashboardScreen extends ConsumerWidget {
               error: (_, __) => const SizedBox.shrink(),
             ),
 
-            // ── City unset banner ─────────────────────────────────────
+            // ── GPS / location unset banner ───────────────────────────
             cargoWithMetaAsync.whenData((meta) {
               if (!meta.locationUnset) return const SizedBox.shrink();
-              return _CityUnsetBanner(
-                  onTap: () => context.go('/profile'));
+              return _GpsUnsetBanner(
+                onEnableGps: () async {
+                  final granted =
+                      await LocationService.showPermissionDialog(context);
+                  if (granted) LocationService.startTracking(ref);
+                },
+                onSetCity: () => context.go('/profile'),
+              );
             }).valueOrNull ?? const SizedBox.shrink(),
 
             // ── Available cargo ───────────────────────────────────────
@@ -218,48 +246,77 @@ class _GreetingCard extends StatelessWidget {
   }
 }
 
-// ── City unset banner ─────────────────────────────────────────────────────
+// ── GPS / location unset banner ───────────────────────────────────────────
 
-class _CityUnsetBanner extends StatelessWidget {
-  final VoidCallback onTap;
-  const _CityUnsetBanner({required this.onTap});
+class _GpsUnsetBanner extends StatelessWidget {
+  final VoidCallback onEnableGps;
+  final VoidCallback onSetCity;
+  const _GpsUnsetBanner(
+      {required this.onEnableGps, required this.onSetCity});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFF7ED),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFF59E0B).withAlpha(100)),
-        ),
-        child: Row(children: [
-          const Icon(Icons.location_off_outlined,
-              color: Color(0xFFF59E0B), size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Set your current city',
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF92400E))),
-                const SizedBox(height: 2),
-                const Text(
-                    'Showing all intra-city cargo. Tap to set your city to see only nearby jobs.',
-                    style: TextStyle(fontSize: 11, color: Color(0xFFB45309))),
-              ],
-            ),
-          ),
-          const Icon(Icons.chevron_right_rounded,
-              color: Color(0xFFF59E0B), size: 18),
-        ]),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFF59E0B).withAlpha(100)),
       ),
+      child: Row(children: [
+        const Icon(Icons.gps_off_rounded,
+            color: Color(0xFFF59E0B), size: 20),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('driver.enable_gps_title'.tr(),
+                  style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF92400E))),
+              const SizedBox(height: 2),
+              Text('driver.enable_gps_sub'.tr(),
+                  style:
+                      const TextStyle(fontSize: 11, color: Color(0xFFB45309))),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Column(
+          children: [
+            GestureDetector(
+              onTap: onEnableGps,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: _amber,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text('driver.enable_gps_title'.tr().split(' ').first,
+                    style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white)),
+              ),
+            ),
+            const SizedBox(height: 4),
+            GestureDetector(
+              onTap: onSetCity,
+              child: Text(
+                'driver.city_unset_title'.tr().split(' ').first,
+                style: const TextStyle(
+                    fontSize: 10,
+                    color: Color(0xFFB45309),
+                    decoration: TextDecoration.underline),
+              ),
+            ),
+          ],
+        ),
+      ]),
     );
   }
 }
@@ -839,6 +896,22 @@ class _CargoCard extends StatelessWidget {
             if (!_isIntracity && deadline != null) ...[
               const SizedBox(height: 6),
               _DeadlineBanner(deadline: deadline, isClosed: isClosed),
+            ],
+            // Distance badge — shown when server computed haversine distance
+            if (cargo.distanceKm != null) ...[
+              const SizedBox(height: 6),
+              Row(children: [
+                const Icon(Icons.near_me_outlined,
+                    size: 13, color: _textSecondary),
+                const SizedBox(width: 4),
+                Text(
+                  'driver.distance_km'.tr(namedArgs: {
+                    'km': cargo.distanceKm!.toStringAsFixed(1)
+                  }),
+                  style: const TextStyle(
+                      fontSize: 11, color: _textSecondary),
+                ),
+              ]),
             ],
             const SizedBox(height: 8),
             const Divider(height: 1, color: _border),

@@ -27,6 +27,10 @@ dependencies:
   # Location / GPS
   geolocator: ^10.1.0
 
+  # Map rendering (OpenStreetMap tiles, no API key needed)
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+
   # Localization
   easy_localization: ^3.0.7
 
