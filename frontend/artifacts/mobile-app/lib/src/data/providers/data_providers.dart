@@ -115,6 +115,12 @@ final cargoListProvider = FutureProvider.autoDispose<List<CargoRequest>>((ref) a
   return ref.read(cargoRepositoryProvider).list();
 });
 
+// cargo list + location_unset flag (for driver dashboard city banner)
+final cargoListWithMetaProvider = FutureProvider.autoDispose<
+    ({bool locationUnset, List<CargoRequest> cargo})>((ref) async {
+  return ref.read(cargoRepositoryProvider).listWithMeta();
+});
+
 final singleCargoProvider =
     FutureProvider.autoDispose.family<CargoRequest, int>((ref, id) async {
   return ref.read(cargoRepositoryProvider).get(id);

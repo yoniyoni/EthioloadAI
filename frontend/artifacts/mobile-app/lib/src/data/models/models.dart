@@ -89,6 +89,7 @@ class Vehicle {
   /// 'available' | 'busy' | 'offline'
   final String availabilityStatus;
   final double rating;
+  final String? vehicleCategory;
 
   Vehicle({
     required this.id,
@@ -101,6 +102,7 @@ class Vehicle {
     this.longitude,
     required this.availabilityStatus,
     required this.rating,
+    this.vehicleCategory,
   });
 
   factory Vehicle.fromJson(Map<String, dynamic> json) => Vehicle(
@@ -121,6 +123,7 @@ class Vehicle {
             (json['availability_status'] ?? 'available') as String,
         // rating comes as "0.00" (string) or 0 (num) depending on the endpoint
         rating: double.tryParse(json['rating'].toString()) ?? 0.0,
+        vehicleCategory: json['vehicle_category'] as String?,
       );
 }
 
@@ -144,6 +147,13 @@ class CargoRequest {
   final String status;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final String serviceType;
+  final String? city;
+  final String? pickupArea;
+  final String? dropoffArea;
+  final DateTime? preferredDate;
+  final String? itemsDescription;
+  final String? vehicleTypeNeeded;
 
   CargoRequest({
     required this.id,
@@ -159,15 +169,22 @@ class CargoRequest {
     required this.status,
     this.createdAt,
     this.updatedAt,
+    this.serviceType = 'intercity',
+    this.city,
+    this.pickupArea,
+    this.dropoffArea,
+    this.preferredDate,
+    this.itemsDescription,
+    this.vehicleTypeNeeded,
   });
 
   factory CargoRequest.fromJson(Map<String, dynamic> json) => CargoRequest(
         id: json['id'] as int,
         userId: json['user_id'] as int,
-        pickupLocation: json['pickup_location'] as String,
-        destination: json['destination'] as String,
-        materialType: json['material_type'] as String,
-        weight: double.tryParse(json['weight'].toString()) ?? 0.0,
+        pickupLocation: (json['pickup_location'] ?? '') as String,
+        destination: (json['destination'] ?? '') as String,
+        materialType: (json['material_type'] ?? '') as String,
+        weight: double.tryParse(json['weight']?.toString() ?? '0') ?? 0.0,
         urgencyLevel: (json['urgency_level'] ?? 'normal') as String,
         budget: json['budget'] != null
             ? double.tryParse(json['budget'].toString())
@@ -183,6 +200,15 @@ class CargoRequest {
         updatedAt: json['updated_at'] != null
             ? DateTime.tryParse(json['updated_at'] as String)
             : null,
+        serviceType: (json['service_type'] ?? 'intercity') as String,
+        city: json['city'] as String?,
+        pickupArea: json['pickup_area'] as String?,
+        dropoffArea: json['dropoff_area'] as String?,
+        preferredDate: json['preferred_date'] != null
+            ? DateTime.tryParse(json['preferred_date'] as String)
+            : null,
+        itemsDescription: json['items_description'] as String?,
+        vehicleTypeNeeded: json['vehicle_type_needed'] as String?,
       );
 
   Map<String, dynamic> toCreateJson() => {
@@ -192,6 +218,14 @@ class CargoRequest {
         'weight': weight,
         'urgency_level': urgencyLevel,
         if (budget != null) 'budget': budget,
+        'service_type': serviceType,
+        if (city != null) 'city': city,
+        if (pickupArea != null) 'pickup_area': pickupArea,
+        if (dropoffArea != null) 'dropoff_area': dropoffArea,
+        if (preferredDate != null)
+          'preferred_date': preferredDate!.toIso8601String().split('T')[0],
+        if (itemsDescription != null) 'items_description': itemsDescription,
+        if (vehicleTypeNeeded != null) 'vehicle_type_needed': vehicleTypeNeeded,
       };
 }
 
@@ -495,6 +529,12 @@ class Bid {
   final double? cargoBudget;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final DateTime? availableDatetime;
+  final String? vehicleCategory;
+  final String? cargoServiceType;
+  final String? cargoCity;
+  final String? cargoPickupArea;
+  final String? cargoDropoffArea;
 
   Bid({
     required this.id,
@@ -528,6 +568,12 @@ class Bid {
     this.cargoBudget,
     this.createdAt,
     this.updatedAt,
+    this.availableDatetime,
+    this.vehicleCategory,
+    this.cargoServiceType,
+    this.cargoCity,
+    this.cargoPickupArea,
+    this.cargoDropoffArea,
   });
 
   bool get isCountered => status == 'countered';
@@ -586,6 +632,14 @@ class Bid {
         updatedAt: json['updated_at'] != null
             ? DateTime.tryParse(json['updated_at'].toString())
             : null,
+        availableDatetime: json['available_datetime'] != null
+            ? DateTime.tryParse(json['available_datetime'].toString())
+            : null,
+        vehicleCategory: json['vehicle_category'] as String?,
+        cargoServiceType: json['cargo_service_type'] as String?,
+        cargoCity: json['cargo_city'] as String?,
+        cargoPickupArea: json['cargo_pickup_area'] as String?,
+        cargoDropoffArea: json['cargo_dropoff_area'] as String?,
       );
 }
 

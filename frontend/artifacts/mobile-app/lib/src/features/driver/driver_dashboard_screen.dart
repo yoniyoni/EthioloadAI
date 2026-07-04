@@ -22,7 +22,7 @@ class DriverDashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final driver = ref.read(authNotifierProvider).user;
-    final cargoAsync = ref.watch(cargoListProvider);
+    final cargoWithMetaAsync = ref.watch(cargoListWithMetaProvider);
     final bookingsAsync = ref.watch(bookingListProvider);
     final myBids = ref.watch(myBidsProvider).valueOrNull;
 
@@ -45,7 +45,7 @@ class DriverDashboardScreen extends ConsumerWidget {
       body: RefreshIndicator(
         color: _amber,
         onRefresh: () async {
-          ref.invalidate(cargoListProvider);
+          ref.invalidate(cargoListWithMetaProvider);
           ref.invalidate(bookingListProvider);
         },
         child: ListView(
@@ -96,6 +96,13 @@ class DriverDashboardScreen extends ConsumerWidget {
               error: (_, __) => const SizedBox.shrink(),
             ),
 
+            // ── City unset banner ─────────────────────────────────────
+            cargoWithMetaAsync.whenData((meta) {
+              if (!meta.locationUnset) return const SizedBox.shrink();
+              return _CityUnsetBanner(
+                  onTap: () => context.go('/profile'));
+            }).valueOrNull ?? const SizedBox.shrink(),
+
             // ── Available cargo ───────────────────────────────────────
             const SizedBox(height: 4),
             _Section(
@@ -103,9 +110,9 @@ class DriverDashboardScreen extends ConsumerWidget {
               actionLabel: null,
               onAction: null,
               children: [
-                cargoAsync.when(
-                  data: (list) {
-                    final available = list
+                cargoWithMetaAsync.when(
+                  data: (meta) {
+                    final available = meta.cargo
                         .where((c) => c.status == 'pending')
                         .take(8)
                         .toList();
@@ -207,6 +214,52 @@ class _GreetingCard extends StatelessWidget {
           ),
         ),
       ]),
+    );
+  }
+}
+
+// ── City unset banner ─────────────────────────────────────────────────────
+
+class _CityUnsetBanner extends StatelessWidget {
+  final VoidCallback onTap;
+  const _CityUnsetBanner({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF7ED),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFF59E0B).withAlpha(100)),
+        ),
+        child: Row(children: [
+          const Icon(Icons.location_off_outlined,
+              color: Color(0xFFF59E0B), size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Set your current city',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF92400E))),
+                const SizedBox(height: 2),
+                const Text(
+                    'Showing all intra-city cargo. Tap to set your city to see only nearby jobs.',
+                    style: TextStyle(fontSize: 11, color: Color(0xFFB45309))),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right_rounded,
+              color: Color(0xFFF59E0B), size: 18),
+        ]),
+      ),
     );
   }
 }
@@ -622,9 +675,13 @@ class _CargoCard extends StatelessWidget {
     return matches.isEmpty ? null : matches.first;
   }
 
+  bool get _isIntracity => cargo.serviceType == 'intracity';
+
+  String _fmtDate(DateTime d) =>
+      '${d.day}/${d.month}/${d.year}';
+
   @override
   Widget build(BuildContext context) {
-    final urgencyColor = _urgencyColor(cargo.urgencyLevel);
     final existingBid = _existingBid;
     final deadline = cargo.bidDeadline;
     final isClosed = deadline != null && DateTime.now().isAfter(deadline);
@@ -639,8 +696,12 @@ class _CargoCard extends StatelessWidget {
           color: isClosed ? const Color(0xFFF5F5F5) : Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isClosed ? const Color(0xFFD1D5DB) : _border,
-            width: 0.5,
+            color: isClosed
+                ? const Color(0xFFD1D5DB)
+                : (_isIntracity
+                    ? const Color(0xFF1E40AF).withAlpha(60)
+                    : _border),
+            width: _isIntracity ? 1.0 : 0.5,
           ),
         ),
         child: Column(
@@ -651,12 +712,21 @@ class _CargoCard extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: (isClosed ? Colors.grey : _green).withAlpha(15),
+                  color: (isClosed
+                          ? Colors.grey
+                          : (_isIntracity
+                              ? const Color(0xFF1E40AF)
+                              : _green))
+                      .withAlpha(15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
-                  Icons.inventory_2_outlined,
-                  color: isClosed ? Colors.grey : _green,
+                  _isIntracity
+                      ? Icons.airport_shuttle_outlined
+                      : Icons.inventory_2_outlined,
+                  color: isClosed
+                      ? Colors.grey
+                      : (_isIntracity ? const Color(0xFF1E40AF) : _green),
                   size: 20,
                 ),
               ),
@@ -665,124 +735,157 @@ class _CargoCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('${cargo.pickupLocation} → ${cargo.destination}',
+                    if (_isIntracity) ...[
+                      Text(
+                        '${cargo.pickupArea ?? '?'} → ${cargo.dropoffArea ?? '?'}',
                         style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                             color: isClosed
                                 ? Colors.grey
-                                : const Color(0xFF111827))),
-                    const SizedBox(height: 2),
-                    Text(
+                                : const Color(0xFF111827)),
+                      ),
+                      const SizedBox(height: 2),
+                      Row(children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color:
+                                const Color(0xFF1E40AF).withAlpha(18),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            cargo.city ?? 'Unknown city',
+                            style: const TextStyle(
+                                fontSize: 10,
+                                color: Color(0xFF1E40AF),
+                                fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        if (cargo.preferredDate != null) ...[
+                          const SizedBox(width: 6),
+                          Text(
+                            _fmtDate(cargo.preferredDate!),
+                            style: const TextStyle(
+                                fontSize: 11, color: _textSecondary),
+                          ),
+                        ],
+                      ]),
+                    ] else ...[
+                      Text(
+                        '${cargo.pickupLocation} → ${cargo.destination}',
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: isClosed
+                                ? Colors.grey
+                                : const Color(0xFF111827)),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
                         '${cargo.materialType}  ·  ${cargo.weight.toStringAsFixed(0)} t',
                         style: TextStyle(
                             fontSize: 12,
                             color: isClosed
                                 ? Colors.grey[400]
-                                : _textSecondary)),
+                                : _textSecondary),
+                      ),
+                    ],
                   ],
                 ),
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: (isClosed ? Colors.grey : urgencyColor).withAlpha(25),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
+              // Badge: intracity shows vehicle type; intercity shows urgency
+              if (_isIntracity && cargo.vehicleTypeNeeded != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color:
+                        const Color(0xFF1E40AF).withAlpha(18),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    cargo.vehicleTypeNeeded!,
+                    style: const TextStyle(
+                        fontSize: 10,
+                        color: Color(0xFF1E40AF),
+                        fontWeight: FontWeight.w600),
+                  ),
+                )
+              else if (!_isIntracity)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: (isClosed
+                            ? Colors.grey
+                            : _urgencyColor(cargo.urgencyLevel))
+                        .withAlpha(25),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
                     isClosed ? 'Closed' : cargo.urgencyLevel,
                     style: TextStyle(
                         fontSize: 10,
-                        color: isClosed ? Colors.grey : urgencyColor,
-                        fontWeight: FontWeight.w600)),
-              ),
+                        color: isClosed
+                            ? Colors.grey
+                            : _urgencyColor(cargo.urgencyLevel),
+                        fontWeight: FontWeight.w600),
+                  ),
+                ),
             ]),
-            // Bid deadline banner
-            if (deadline != null) ...[
+            // Bid deadline banner (intercity only)
+            if (!_isIntracity && deadline != null) ...[
               const SizedBox(height: 6),
               _DeadlineBanner(deadline: deadline, isClosed: isClosed),
             ],
-            if (cargo.budget != null) ...[
-              const SizedBox(height: 8),
-              const Divider(height: 1, color: _border),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '${isFixed ? 'Fixed Price' : 'bid.budget_label'.tr()} ETB ${_fmt(cargo.budget!)}',
-                    style: const TextStyle(
-                        fontSize: 12,
-                        color: _amber,
-                        fontWeight: FontWeight.w600),
-                  ),
-                  if (isFixed)
-                    ElevatedButton(
-                      onPressed: isClosed
-                          ? null
-                          : () => context.go('/freight/${cargo.id}'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _green,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                        elevation: 0,
-                      ),
-                      child: const Text('Accept Offer',
-                          style: TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.w600)),
-                    )
-                  else
-                    _BidActionButton(
-                      existingBid: existingBid,
-                      enabled: !isClosed,
-                      onTap: isClosed
-                          ? () {}
-                          : () => _showBidSheet(context, cargo,
-                              existingBid: existingBid),
-                    ),
-                ],
-              ),
-            ] else ...[
-              const SizedBox(height: 8),
-              Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('bid.budget_label'.tr(),
+            const SizedBox(height: 8),
+            const Divider(height: 1, color: _border),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                cargo.budget != null
+                    ? Text(
+                        '${isFixed ? 'Fixed' : 'bid.budget_label'.tr()} ETB ${_fmt(cargo.budget!)}',
+                        style: const TextStyle(
+                            fontSize: 12,
+                            color: _amber,
+                            fontWeight: FontWeight.w600),
+                      )
+                    : Text('bid.budget_label'.tr(),
                         style: const TextStyle(
                             fontSize: 12, color: _textSecondary)),
-                    if (isFixed)
-                      ElevatedButton(
-                        onPressed: isClosed
-                            ? null
-                            : () => context.go('/freight/${cargo.id}'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _green,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 8),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
-                          elevation: 0,
-                        ),
-                        child: const Text('Accept Offer',
-                            style: TextStyle(
-                                fontSize: 12, fontWeight: FontWeight.w600)),
-                      )
-                    else
-                      _BidActionButton(
-                        existingBid: existingBid,
-                        enabled: !isClosed,
-                        onTap: isClosed
-                            ? () {}
-                            : () => _showBidSheet(context, cargo,
-                                existingBid: existingBid),
-                      ),
-                  ]),
-            ],
+                if (isFixed && !_isIntracity)
+                  ElevatedButton(
+                    onPressed: isClosed
+                        ? null
+                        : () => context.go('/freight/${cargo.id}'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _green,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 8),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      elevation: 0,
+                    ),
+                    child: const Text('Accept Offer',
+                        style: TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w600)),
+                  )
+                else
+                  _BidActionButton(
+                    existingBid: existingBid,
+                    enabled: !isClosed,
+                    onTap: isClosed
+                        ? () {}
+                        : () => _showBidSheet(context, cargo,
+                            existingBid: existingBid),
+                  ),
+              ],
+            ),
           ],
         ),
       ),
@@ -954,7 +1057,10 @@ class _PlaceBidSheet extends ConsumerStatefulWidget {
 class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
   late TextEditingController _amountCtrl;
   late TextEditingController _noteCtrl;
+  DateTime? _availableDatetime;
   bool _submitting = false;
+
+  bool get _isIntracity => widget.cargo.serviceType == 'intracity';
 
   @override
   void initState() {
@@ -965,6 +1071,7 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
           : '',
     );
     _noteCtrl = TextEditingController(text: widget.existingBid?.note ?? '');
+    _availableDatetime = widget.existingBid?.availableDatetime;
   }
 
   @override
@@ -974,12 +1081,44 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
     super.dispose();
   }
 
+  Future<void> _pickDatetime() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now().add(const Duration(days: 1)),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 60)),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+            colorScheme: const ColorScheme.light(primary: _green)),
+        child: child!,
+      ),
+    );
+    if (date == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: const TimeOfDay(hour: 8, minute: 0),
+    );
+    if (!mounted) return;
+    setState(() {
+      _availableDatetime = time == null
+          ? DateTime(date.year, date.month, date.day, 8)
+          : DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    });
+  }
+
   Future<void> _submit() async {
     final amountText = _amountCtrl.text.trim();
     final amount = double.tryParse(amountText);
     if (amount == null || amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('common.error'.tr()),
+        backgroundColor: Colors.red,
+      ));
+      return;
+    }
+    if (_isIntracity && _availableDatetime == null && widget.existingBid == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Please select your available date & time'),
         backgroundColor: Colors.red,
       ));
       return;
@@ -1004,12 +1143,22 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
           setState(() => _submitting = false);
           return;
         }
-        await ref.read(bidRepositoryProvider).place(
-              cargoId: widget.cargo.id,
-              vehicleId: vehicles.first.id,
-              amount: amount,
-              note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
-            );
+        if (_isIntracity) {
+          await ref.read(bidRepositoryProvider).placeWithDatetime(
+                cargoId: widget.cargo.id,
+                vehicleId: vehicles.first.id,
+                amount: amount,
+                note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+                availableDatetime: _availableDatetime,
+              );
+        } else {
+          await ref.read(bidRepositoryProvider).place(
+                cargoId: widget.cargo.id,
+                vehicleId: vehicles.first.id,
+                amount: amount,
+                note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+              );
+        }
       }
       if (mounted) {
         Navigator.of(context).pop();
@@ -1030,6 +1179,13 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  String _fmtDatetime(DateTime dt) {
+    final months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    final h = dt.hour.toString().padLeft(2, '0');
+    final m = dt.minute.toString().padLeft(2, '0');
+    return '${dt.day} ${months[dt.month - 1]} · $h:$m';
   }
 
   @override
@@ -1061,8 +1217,17 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF111827))),
           const SizedBox(height: 4),
-          Text('${c.pickupLocation} → ${c.destination}  ·  ${c.weight.toStringAsFixed(0)} t  ·  ${c.materialType}',
-              style: const TextStyle(fontSize: 13, color: _textSecondary)),
+          // Route subtitle differs by service type
+          if (_isIntracity)
+            Text(
+              '${c.city ?? ''} · ${c.pickupArea ?? '?'} → ${c.dropoffArea ?? '?'}',
+              style: const TextStyle(fontSize: 13, color: _textSecondary),
+            )
+          else
+            Text(
+              '${c.pickupLocation} → ${c.destination}  ·  ${c.weight.toStringAsFixed(0)} t  ·  ${c.materialType}',
+              style: const TextStyle(fontSize: 13, color: _textSecondary),
+            ),
           const SizedBox(height: 20),
 
           Text('bid.amount_label'.tr(),
@@ -1091,6 +1256,46 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
             ),
           ),
           const SizedBox(height: 12),
+
+          // Available datetime picker — intracity only
+          if (_isIntracity) ...[
+            const Text('Your available date & time',
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF374151))),
+            const SizedBox(height: 6),
+            GestureDetector(
+              onTap: _pickDatetime,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: _availableDatetime != null ? _green : _border,
+                    width: _availableDatetime != null ? 1.5 : 1,
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(children: [
+                  Icon(Icons.event_available_outlined,
+                      color: _availableDatetime != null ? _green : _textSecondary,
+                      size: 18),
+                  const SizedBox(width: 10),
+                  Text(
+                    _availableDatetime != null
+                        ? _fmtDatetime(_availableDatetime!)
+                        : 'Tap to select date & time',
+                    style: TextStyle(
+                        fontSize: 14,
+                        color: _availableDatetime != null
+                            ? const Color(0xFF111827)
+                            : _textSecondary),
+                  ),
+                ]),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
 
           Text('bid.note_label'.tr(),
               style: const TextStyle(

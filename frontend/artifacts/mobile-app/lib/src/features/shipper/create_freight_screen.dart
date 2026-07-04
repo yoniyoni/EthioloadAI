@@ -16,6 +16,10 @@ class CreateFreightScreen extends ConsumerStatefulWidget {
 }
 
 class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
+  // ── Service type: null = selector, 'intercity', 'intracity' ──────────────
+  String? _serviceType;
+
+  // ── Intercity form state ──────────────────────────────────────────────────
   final _pageController = PageController();
   int _step = 0;
 
@@ -28,73 +32,80 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
   String? description;
   String priceType = 'negotiable';
 
-  // AI price prediction state
   int? _priceMin;
   int? _priceMax;
   int? _priceDistKm;
   bool _priceLoading = false;
   String? _priceError;
 
+  // ── Intracity form state ──────────────────────────────────────────────────
+  final _intraPageController = PageController();
+  int _intraStep = 0;
+
+  String? _intraCity;
+  final _pickupAreaCtrl = TextEditingController();
+  final _dropoffAreaCtrl = TextEditingController();
+  final _itemsDescCtrl = TextEditingController();
+  String? _preferredDate;
+  String? _vehicleTypeNeeded;
+
+  // ── Static data ───────────────────────────────────────────────────────────
+
   static const _cargoTypes = [
-    'agricultural',
-    'construction',
-    'electronics',
-    'fragile',
-    'fuel',
-    'general',
-    'livestock',
-    'machinery',
-    'medical',
-    'perishable',
-    'textiles',
-    'other',
+    'agricultural', 'construction', 'electronics', 'fragile', 'fuel',
+    'general', 'livestock', 'machinery', 'medical', 'perishable',
+    'textiles', 'other',
   ];
 
   static const _cities = [
-    'Addis Ababa',
-    'Adama / Nazret',
-    'Arba Minch',
-    'Asella',
-    'Assosa',
-    'Axum',
-    'Adigrat',
-    'Bale Robe',
-    'Bahir Dar',
-    'Bishoftu',
-    'Debre Birhan',
-    'Debre Markos',
-    'Dessie',
-    'Dilla',
-    'Dire Dawa',
-    'Gambela',
-    'Goba',
-    'Gondar',
-    'Harar',
-    'Hawassa',
-    'Jijiga',
-    'Jimma',
-    'Kebri Dahar',
-    'Mekele',
-    'Moyale',
-    'Nekemte',
-    'Shire / Endaselassie',
-    'Shashemene',
-    'Sodo / Wolaita',
-    'Woldia',
-    'Other',
+    'Addis Ababa', 'Adama / Nazret', 'Arba Minch', 'Asella', 'Assosa',
+    'Axum', 'Adigrat', 'Bale Robe', 'Bahir Dar', 'Bishoftu', 'Debre Birhan',
+    'Debre Markos', 'Dessie', 'Dilla', 'Dire Dawa', 'Gambela', 'Goba',
+    'Gondar', 'Harar', 'Hawassa', 'Jijiga', 'Jimma', 'Kebri Dahar', 'Mekele',
+    'Moyale', 'Nekemte', 'Shire / Endaselassie', 'Shashemene',
+    'Sodo / Wolaita', 'Woldia', 'Other',
   ];
 
-  static const _steps = ['Locations', 'Cargo', 'Budget', 'Review'];
+  static const _intracityCities = [
+    'Addis Ababa', 'Adama', 'Adigrat', 'Adwa', 'Arba Minch', 'Asela',
+    'Assosa', 'Axum', 'Bahir Dar', 'Bure', 'Butajira', 'Debre Birhan',
+    'Debre Markos', 'Debre Tabor', 'Dessie', 'Dilla', 'Dire Dawa',
+    'Finote Selam', 'Gambela', 'Gimbi', 'Goba', 'Gondar', 'Harar',
+    'Hawassa', 'Hosaena', 'Humera', 'Injibara', 'Jijiga', 'Jimma',
+    'Kombolcha', 'Lalibela', 'Mekele', 'Metema', 'Motta', 'Nekemte',
+    'Robe', 'Shashamane', 'Shire', 'Welkite', 'Woldia', 'Woreta',
+    'Yirgalem', 'Addis Zemen', 'Ambo',
+  ];
+
+  static const _vehicleTypesLight = ['pickup', 'minivan', 'bajaj'];
+
+  static const _intercitySteps = ['Locations', 'Cargo', 'Budget', 'Review'];
+  static const _intracitySteps = ['City & Areas', 'Details', 'Review'];
 
   @override
   void dispose() {
     _pageController.dispose();
+    _intraPageController.dispose();
+    _pickupAreaCtrl.dispose();
+    _dropoffAreaCtrl.dispose();
+    _itemsDescCtrl.dispose();
     super.dispose();
   }
 
+  // ── Navigation ────────────────────────────────────────────────────────────
+
   void _next() {
+    if (_serviceType == 'intracity') {
+      if (_intraStep < 2) {
+        _intraPageController.nextPage(
+            duration: const Duration(milliseconds: 250), curve: Curves.easeInOut);
+      } else {
+        _submitIntracity();
+      }
+      return;
+    }
+    // Intercity
     if (_step < 3) {
-      // When leaving the cargo-details step, kick off the AI price estimate
       if (_step == 1) _fetchPricePrediction();
       _pageController.nextPage(
           duration: const Duration(milliseconds: 250), curve: Curves.easeInOut);
@@ -104,18 +115,29 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
   }
 
   void _back() {
-    if (_step > 0) {
+    if (_serviceType == 'intracity') {
+      if (_intraStep > 0) {
+        _intraPageController.previousPage(
+            duration: const Duration(milliseconds: 250), curve: Curves.easeInOut);
+      } else {
+        setState(() => _serviceType = null);
+      }
+      return;
+    }
+    // Intercity
+    if (_step == 0) {
+      setState(() => _serviceType = null);
+    } else {
       _pageController.previousPage(
           duration: const Duration(milliseconds: 250), curve: Curves.easeInOut);
     }
   }
 
+  // ── Intercity helpers ─────────────────────────────────────────────────────
+
   Future<void> _fetchPricePrediction() async {
     if (pickupLocation == null || deliveryLocation == null) return;
-    setState(() {
-      _priceLoading = true;
-      _priceError = null;
-    });
+    setState(() { _priceLoading = true; _priceError = null; });
     try {
       final result = await ref.read(cargoRepositoryProvider).predictPrice(
             pickup: pickupLocation!,
@@ -140,42 +162,28 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
         }
       }
     } catch (_) {
-      if (mounted) {
-        setState(() {
-          _priceLoading = false;
-          _priceError = 'Could not fetch price estimate';
-        });
-      }
+      if (mounted) setState(() { _priceLoading = false; _priceError = 'Could not fetch price estimate'; });
     }
   }
 
   Future<void> _submit() async {
-    if (pickupLocation == null ||
-        deliveryLocation == null ||
-        cargoType == null ||
-        weight == null ||
-        budget == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text('Please fill in all required fields',
-                style: GoogleFonts.inter()),
-            backgroundColor: kDanger),
-      );
+    if (pickupLocation == null || deliveryLocation == null ||
+        cargoType == null || weight == null || budget == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Please fill in all required fields', style: GoogleFonts.inter()),
+        backgroundColor: kDanger,
+      ));
       return;
     }
-
     try {
       if (!mounted) return;
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (_) => Center(
-            child: EthioCard(
-                child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: CircularProgressIndicator(color: kGreen)))),
+        builder: (_) => Center(child: EthioCard(child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: CircularProgressIndicator(color: kGreen)))),
       );
-
       await ref.read(cargoRepositoryProvider).create(
             pickupLocation: pickupLocation!,
             destination: deliveryLocation!,
@@ -186,88 +194,180 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
             priceType: priceType,
             bidDeadline: deadline != null ? DateTime.tryParse(deadline!) : null,
           );
-
       if (mounted) Navigator.pop(context);
-
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Cargo request created!',
-                  style: GoogleFonts.inter()),
-              backgroundColor: kSuccess),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Cargo request created!', style: GoogleFonts.inter()),
+          backgroundColor: kSuccess,
+        ));
         await Future.delayed(const Duration(milliseconds: 800));
         if (mounted) context.go('/freight');
       }
     } catch (e) {
       if (mounted) Navigator.pop(context);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Error: $e', style: GoogleFonts.inter()),
-              backgroundColor: kDanger),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: $e', style: GoogleFonts.inter()),
+          backgroundColor: kDanger,
+        ));
       }
     }
   }
 
+  // ── Intracity submit ──────────────────────────────────────────────────────
+
+  Future<void> _submitIntracity() async {
+    if (_intraCity == null || _pickupAreaCtrl.text.isEmpty ||
+        _dropoffAreaCtrl.text.isEmpty || _itemsDescCtrl.text.isEmpty ||
+        _preferredDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Please fill in all required fields', style: GoogleFonts.inter()),
+        backgroundColor: kDanger,
+      ));
+      return;
+    }
+    try {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => Center(child: EthioCard(child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: CircularProgressIndicator(color: kGreen)))),
+      );
+      await ref.read(cargoRepositoryProvider).createIntracity(
+            city: _intraCity!,
+            pickupArea: _pickupAreaCtrl.text.trim(),
+            dropoffArea: _dropoffAreaCtrl.text.trim(),
+            itemsDescription: _itemsDescCtrl.text.trim(),
+            preferredDate: DateTime.parse(_preferredDate!),
+            vehicleTypeNeeded: _vehicleTypeNeeded,
+          );
+      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Moving request created!', style: GoogleFonts.inter()),
+          backgroundColor: kSuccess,
+        ));
+        await Future.delayed(const Duration(milliseconds: 800));
+        if (mounted) context.go('/freight');
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: $e', style: GoogleFonts.inter()),
+          backgroundColor: kDanger,
+        ));
+      }
+    }
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
+    // ── 0. Service type selector ───────────────────────────────────────────
+    if (_serviceType == null) {
+      return Scaffold(
+        backgroundColor: kBackground,
+        appBar: EthioAppBar(title: 'shipper.post_cargo'.tr()),
+        body: _ServiceTypeSelector(
+          onSelect: (type) => setState(() => _serviceType = type),
+        ),
+      );
+    }
+
+    final steps = _serviceType == 'intracity' ? _intracitySteps : _intercitySteps;
+    final currentStep = _serviceType == 'intracity' ? _intraStep : _step;
+    final isLast = _serviceType == 'intracity' ? _intraStep == 2 : _step == 3;
+
     return Scaffold(
       backgroundColor: kBackground,
       appBar: EthioAppBar(title: 'shipper.post_cargo'.tr()),
       body: Column(
         children: [
-          _StepIndicator(current: _step, steps: _steps),
+          _StepIndicator(current: currentStep, steps: steps),
           Divider(height: 1, color: kBorder),
 
           Expanded(
-            child: PageView(
-              controller: _pageController,
-              physics: const NeverScrollableScrollPhysics(),
-              onPageChanged: (i) => setState(() => _step = i),
-              children: [
-                _Step1(
-                  pickupLocation: pickupLocation,
-                  deliveryLocation: deliveryLocation,
-                  cities: _cities,
-                  onPickup: (v) => setState(() => pickupLocation = v),
-                  onDelivery: (v) => setState(() => deliveryLocation = v),
-                ),
-                _Step2(
-                  cargoType: cargoType,
-                  weight: weight,
-                  description: description,
-                  cargoTypes: _cargoTypes,
-                  onType: (v) => setState(() => cargoType = v),
-                  onWeight: (v) => setState(() => weight = v),
-                  onDesc: (v) => setState(() => description = v),
-                ),
-                _Step3(
-                  budget: budget,
-                  deadline: deadline,
-                  priceType: priceType,
-                  priceMin: _priceMin,
-                  priceMax: _priceMax,
-                  priceDistKm: _priceDistKm,
-                  priceLoading: _priceLoading,
-                  priceError: _priceError,
-                  onBudget: (v) => setState(() => budget = v),
-                  onDeadline: (v) => setState(() => deadline = v),
-                  onPriceType: (v) => setState(() => priceType = v),
-                ),
-                _Step4(
-                  pickup: pickupLocation,
-                  delivery: deliveryLocation,
-                  cargo: cargoType,
-                  weight: weight,
-                  budget: budget,
-                  deadline: deadline,
-                  description: description,
-                  priceType: priceType,
-                ),
-              ],
-            ),
+            child: _serviceType == 'intracity'
+                ? PageView(
+                    controller: _intraPageController,
+                    physics: const NeverScrollableScrollPhysics(),
+                    onPageChanged: (i) => setState(() => _intraStep = i),
+                    children: [
+                      _IntraStep1(
+                        city: _intraCity,
+                        pickupCtrl: _pickupAreaCtrl,
+                        dropoffCtrl: _dropoffAreaCtrl,
+                        cities: _intracityCities,
+                        onCity: (v) => setState(() => _intraCity = v),
+                      ),
+                      _IntraStep2(
+                        descCtrl: _itemsDescCtrl,
+                        preferredDate: _preferredDate,
+                        vehicleType: _vehicleTypeNeeded,
+                        vehicleTypes: _vehicleTypesLight,
+                        onDate: (v) => setState(() => _preferredDate = v),
+                        onVehicleType: (v) => setState(() => _vehicleTypeNeeded = v),
+                      ),
+                      _IntraStep3Review(
+                        city: _intraCity,
+                        pickupArea: _pickupAreaCtrl.text,
+                        dropoffArea: _dropoffAreaCtrl.text,
+                        itemsDesc: _itemsDescCtrl.text,
+                        preferredDate: _preferredDate,
+                        vehicleType: _vehicleTypeNeeded,
+                      ),
+                    ],
+                  )
+                : PageView(
+                    controller: _pageController,
+                    physics: const NeverScrollableScrollPhysics(),
+                    onPageChanged: (i) => setState(() => _step = i),
+                    children: [
+                      _Step1(
+                        pickupLocation: pickupLocation,
+                        deliveryLocation: deliveryLocation,
+                        cities: _cities,
+                        onPickup: (v) => setState(() => pickupLocation = v),
+                        onDelivery: (v) => setState(() => deliveryLocation = v),
+                      ),
+                      _Step2(
+                        cargoType: cargoType,
+                        weight: weight,
+                        description: description,
+                        cargoTypes: _cargoTypes,
+                        onType: (v) => setState(() => cargoType = v),
+                        onWeight: (v) => setState(() => weight = v),
+                        onDesc: (v) => setState(() => description = v),
+                      ),
+                      _Step3(
+                        budget: budget,
+                        deadline: deadline,
+                        priceType: priceType,
+                        priceMin: _priceMin,
+                        priceMax: _priceMax,
+                        priceDistKm: _priceDistKm,
+                        priceLoading: _priceLoading,
+                        priceError: _priceError,
+                        onBudget: (v) => setState(() => budget = v),
+                        onDeadline: (v) => setState(() => deadline = v),
+                        onPriceType: (v) => setState(() => priceType = v),
+                      ),
+                      _Step4(
+                        pickup: pickupLocation,
+                        delivery: deliveryLocation,
+                        cargo: cargoType,
+                        weight: weight,
+                        budget: budget,
+                        deadline: deadline,
+                        description: description,
+                        priceType: priceType,
+                      ),
+                    ],
+                  ),
           ),
 
           // Navigation buttons
@@ -279,23 +379,23 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             child: Row(
               children: [
-                if (_step > 0) ...[
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _back,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: kGreen,
-                        side: BorderSide(color: kGreen),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10)),
-                      ),
-                      child: Text('Back',
-                          style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _back,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: kGreen,
+                      side: BorderSide(color: kGreen),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: Text(
+                      currentStep == 0 ? 'Change Type' : 'Back',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w600),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                ],
+                ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
                     onPressed: _next,
@@ -307,7 +407,7 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
                           borderRadius: BorderRadius.circular(10)),
                     ),
                     child: Text(
-                      _step == 3 ? 'Submit' : 'Continue',
+                      isLast ? 'Submit' : 'Continue',
                       style: GoogleFonts.inter(fontWeight: FontWeight.w600),
                     ),
                   ),
@@ -316,6 +416,130 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Service type selector ─────────────────────────────────────────────────────
+
+class _ServiceTypeSelector extends StatelessWidget {
+  final ValueChanged<String> onSelect;
+  const _ServiceTypeSelector({required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        const SizedBox(height: 8),
+        Text('What are you moving?',
+            style: GoogleFonts.inter(
+                fontSize: 20, fontWeight: FontWeight.bold, color: kTextPrimary)),
+        const SizedBox(height: 8),
+        Text('Choose the type of service you need',
+            style: GoogleFonts.inter(fontSize: 14, color: kTextSecond)),
+        const SizedBox(height: 28),
+        _ServiceCard(
+          icon: Icons.local_shipping_rounded,
+          title: 'Intercity Freight',
+          subtitle: 'Transport cargo between cities',
+          examples: 'e.g. Addis Ababa → Hawassa · Heavy loads',
+          color: kGreen,
+          onTap: () => onSelect('intercity'),
+        ),
+        const SizedBox(height: 16),
+        _ServiceCard(
+          icon: Icons.airport_shuttle_rounded,
+          title: 'Intra-city Moving',
+          subtitle: 'Move items within the same city',
+          examples: 'e.g. Pickup, minivan, or bajaj within Addis',
+          color: const Color(0xFF1E40AF),
+          onTap: () => onSelect('intracity'),
+        ),
+        const SizedBox(height: 32),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+              color: kGreenTint,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: kGreen.withValues(alpha: 0.2))),
+          child: Row(children: [
+            Icon(Icons.info_outline, color: kGreen, size: 16),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Intercity uses heavy trucks. Intra-city uses pickups, minivans, and bajaj vehicles.',
+                style: GoogleFonts.inter(fontSize: 12, color: kTextPrimary),
+              ),
+            ),
+          ]),
+        ),
+      ],
+    );
+  }
+}
+
+class _ServiceCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String examples;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ServiceCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.examples,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: kSurface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
+        ),
+        child: Row(children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: color, size: 28),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: kTextPrimary)),
+                const SizedBox(height: 3),
+                Text(subtitle,
+                    style: GoogleFonts.inter(fontSize: 13, color: kTextSecond)),
+                const SizedBox(height: 4),
+                Text(examples,
+                    style: GoogleFonts.inter(
+                        fontSize: 11, color: color, fontWeight: FontWeight.w500)),
+              ],
+            ),
+          ),
+          Icon(Icons.chevron_right_rounded, color: color, size: 22),
+        ]),
       ),
     );
   }
@@ -433,14 +657,10 @@ class _DropdownWithOtherState extends State<_DropdownWithOther> {
   void initState() {
     super.initState();
     final sel = widget.selected;
-    // "Other" sentinel is always lowercase 'other' in the cargo list,
-    // but a city like 'Other' may also appear in the city list.
-    // If the selected value exists verbatim in options → use it.
-    // Otherwise it's a custom typed value → show "Other" + pre-fill text field.
     if (sel == null || widget.options.contains(sel)) {
       _dropdownValue = sel;
     } else {
-      _dropdownValue = widget.options.last; // "Other" / "other"
+      _dropdownValue = widget.options.last;
       _ctrl.text = sel;
     }
   }
@@ -463,8 +683,7 @@ class _DropdownWithOtherState extends State<_DropdownWithOther> {
       children: [
         DropdownButtonFormField<String>(
           value: _dropdownValue,
-          hint: Text(widget.hint,
-              style: GoogleFonts.inter(color: kTextMuted)),
+          hint: Text(widget.hint, style: GoogleFonts.inter(color: kTextMuted)),
           isExpanded: true,
           decoration: _inputDeco.copyWith(
             prefixIcon: Icon(widget.prefixIcon, color: kGreen, size: 20),
@@ -506,7 +725,7 @@ class _DropdownWithOtherState extends State<_DropdownWithOther> {
   }
 }
 
-// ── Step 1: Locations ─────────────────────────────────────────────────────────
+// ── Intercity Step 1: Locations ───────────────────────────────────────────────
 
 class _Step1 extends StatelessWidget {
   final String? pickupLocation;
@@ -529,8 +748,7 @@ class _Step1 extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: [
         Text('Pickup Location',
-            style: GoogleFonts.inter(
-                fontWeight: FontWeight.w600, color: kTextPrimary)),
+            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         _DropdownWithOther(
           selected: pickupLocation,
@@ -543,8 +761,7 @@ class _Step1 extends StatelessWidget {
         ),
         const SizedBox(height: 20),
         Text('Destination',
-            style: GoogleFonts.inter(
-                fontWeight: FontWeight.w600, color: kTextPrimary)),
+            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         _DropdownWithOther(
           selected: deliveryLocation,
@@ -572,8 +789,7 @@ class _Step1 extends StatelessWidget {
               Expanded(
                 child: Text('$pickupLocation → $deliveryLocation',
                     style: GoogleFonts.inter(
-                        fontWeight: FontWeight.w600, color: kGreen,
-                        fontSize: 13)),
+                        fontWeight: FontWeight.w600, color: kGreen, fontSize: 13)),
               ),
             ]),
           ),
@@ -583,7 +799,7 @@ class _Step1 extends StatelessWidget {
   }
 }
 
-// ── Step 2: Cargo details ─────────────────────────────────────────────────────
+// ── Intercity Step 2: Cargo details ──────────────────────────────────────────
 
 class _Step2 extends StatelessWidget {
   final String? cargoType;
@@ -618,8 +834,7 @@ class _Step2 extends StatelessWidget {
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
             borderSide: BorderSide(color: kGreen, width: 1.5)),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       );
 
   @override
@@ -628,8 +843,7 @@ class _Step2 extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: [
         Text('Cargo Type',
-            style: GoogleFonts.inter(
-                fontWeight: FontWeight.w600, color: kTextPrimary)),
+            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         _DropdownWithOther(
           selected: cargoType,
@@ -642,21 +856,18 @@ class _Step2 extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         Text('Weight (tons)',
-            style: GoogleFonts.inter(
-                fontWeight: FontWeight.w600, color: kTextPrimary)),
+            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         TextFormField(
           initialValue: weight,
-          keyboardType:
-              const TextInputType.numberWithOptions(decimal: true),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
           onChanged: onWeight,
           decoration: _inputDeco(hint: 'e.g. 20', suffix: 'tons'),
           style: GoogleFonts.inter(fontSize: 14),
         ),
         const SizedBox(height: 16),
         Text('Notes (optional)',
-            style: GoogleFonts.inter(
-                fontWeight: FontWeight.w600, color: kTextPrimary)),
+            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         TextFormField(
           initialValue: description,
@@ -670,7 +881,7 @@ class _Step2 extends StatelessWidget {
   }
 }
 
-// ── Step 3: Budget & timeline ─────────────────────────────────────────────────
+// ── Intercity Step 3: Budget & timeline ──────────────────────────────────────
 
 class _Step3 extends StatelessWidget {
   final String? budget;
@@ -713,8 +924,7 @@ class _Step3 extends StatelessWidget {
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
             borderSide: BorderSide(color: kGreen, width: 1.5)),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       );
 
   String _fmt(int v) {
@@ -731,37 +941,25 @@ class _Step3 extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: [
         Text('Pricing Type',
-            style: GoogleFonts.inter(
-                fontWeight: FontWeight.w600, color: kTextPrimary)),
+            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         Row(children: [
-          Expanded(
-            child: _PriceTypeOption(
-              title: 'Negotiable',
-              subtitle: 'Drivers bid on your cargo',
-              icon: Icons.gavel_rounded,
-              selected: priceType == 'negotiable',
-              onTap: () => onPriceType('negotiable'),
-            ),
-          ),
+          Expanded(child: _PriceTypeOption(
+            title: 'Negotiable', subtitle: 'Drivers bid on your cargo',
+            icon: Icons.gavel_rounded, selected: priceType == 'negotiable',
+            onTap: () => onPriceType('negotiable'),
+          )),
           const SizedBox(width: 10),
-          Expanded(
-            child: _PriceTypeOption(
-              title: 'Fixed Price',
-              subtitle: 'Drivers accept or reject',
-              icon: Icons.price_check_rounded,
-              selected: priceType == 'fixed',
-              onTap: () => onPriceType('fixed'),
-            ),
-          ),
+          Expanded(child: _PriceTypeOption(
+            title: 'Fixed Price', subtitle: 'Drivers accept or reject',
+            icon: Icons.price_check_rounded, selected: priceType == 'fixed',
+            onTap: () => onPriceType('fixed'),
+          )),
         ]),
         const SizedBox(height: 16),
         Text(
-          priceType == 'fixed'
-              ? 'Budget (ETB) — required for fixed price'
-              : 'Budget (ETB)',
-          style: GoogleFonts.inter(
-              fontWeight: FontWeight.w600, color: kTextPrimary)),
+          priceType == 'fixed' ? 'Budget (ETB) — required for fixed price' : 'Budget (ETB)',
+          style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         TextFormField(
           initialValue: budget,
@@ -772,8 +970,7 @@ class _Step3 extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         Text('Bid Deadline / የጨረታ የመጨረሻ ቀን',
-            style: GoogleFonts.inter(
-                fontWeight: FontWeight.w600, color: kTextPrimary)),
+            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         TextFormField(
           readOnly: true,
@@ -785,9 +982,7 @@ class _Step3 extends StatelessWidget {
               firstDate: DateTime.now(),
               lastDate: DateTime.now().add(const Duration(days: 90)),
               builder: (ctx, child) => Theme(
-                data: Theme.of(ctx).copyWith(
-                  colorScheme: ColorScheme.light(primary: kGreen),
-                ),
+                data: Theme.of(ctx).copyWith(colorScheme: ColorScheme.light(primary: kGreen)),
                 child: child!,
               ),
             );
@@ -795,76 +990,52 @@ class _Step3 extends StatelessWidget {
           },
           decoration: _inputDeco(
             hint: 'Tap to select date',
-            prefixIcon: Icon(Icons.calendar_today_outlined,
-                color: kGreen, size: 20),
+            prefixIcon: Icon(Icons.calendar_today_outlined, color: kGreen, size: 20),
           ),
           style: GoogleFonts.inter(fontSize: 14),
         ),
         const SizedBox(height: 20),
-
-        // ── AI Price Suggestion card ──────────────────────────────────────
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
               color: kGreenTint,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: kGreen.withValues(alpha: 0.25))),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Icon(Icons.psychology_outlined, color: kGreen, size: 18),
+              const SizedBox(width: 6),
+              Text('AI Price Suggestion',
+                  style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: kGreen)),
+            ]),
+            const SizedBox(height: 10),
+            if (priceLoading)
               Row(children: [
-                Icon(Icons.psychology_outlined, color: kGreen, size: 18),
-                const SizedBox(width: 6),
-                Text('AI Price Suggestion',
+                SizedBox(width: 18, height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: kGreen)),
+                const SizedBox(width: 10),
+                Text('Calculating route price...',
+                    style: GoogleFonts.inter(fontSize: 13, color: kTextSecond)),
+              ])
+            else if (priceMin != null && priceMax != null)
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('ETB ${_fmt(priceMin!)} – ${_fmt(priceMax!)}',
                     style: GoogleFonts.inter(
-                        fontWeight: FontWeight.bold, color: kGreen)),
-              ]),
-              const SizedBox(height: 10),
-              if (priceLoading)
-                Row(children: [
-                  SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: kGreen)),
-                  const SizedBox(width: 10),
-                  Text('Calculating route price...',
-                      style: GoogleFonts.inter(
-                          fontSize: 13, color: kTextSecond)),
-                ])
-              else if (priceMin != null && priceMax != null)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'ETB ${_fmt(priceMin!)} – ${_fmt(priceMax!)}',
-                      style: GoogleFonts.inter(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: kGreen),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      priceDistKm != null
-                          ? 'Based on ~$priceDistKm km route and cargo weight'
-                          : 'Based on route and cargo type',
-                      style: GoogleFonts.inter(
-                          fontSize: 12, color: kTextSecond),
-                    ),
-                  ],
-                )
-              else if (priceError != null)
-                Text(priceError!,
-                    style:
-                        GoogleFonts.inter(fontSize: 12, color: kDanger))
-              else
+                        fontSize: 22, fontWeight: FontWeight.bold, color: kGreen)),
+                const SizedBox(height: 4),
                 Text(
-                  'Enter cargo details on the previous step to get a price estimate.',
-                  style: GoogleFonts.inter(
-                      fontSize: 12, color: kTextSecond),
+                  priceDistKm != null
+                      ? 'Based on ~$priceDistKm km route and cargo weight'
+                      : 'Based on route and cargo type',
+                  style: GoogleFonts.inter(fontSize: 12, color: kTextSecond),
                 ),
-            ],
-          ),
+              ])
+            else if (priceError != null)
+              Text(priceError!, style: GoogleFonts.inter(fontSize: 12, color: kDanger))
+            else
+              Text('Enter cargo details on the previous step to get a price estimate.',
+                  style: GoogleFonts.inter(fontSize: 12, color: kTextSecond)),
+          ]),
         ),
       ],
     );
@@ -881,11 +1052,8 @@ class _PriceTypeOption extends StatelessWidget {
   final VoidCallback onTap;
 
   const _PriceTypeOption({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
+    required this.title, required this.subtitle, required this.icon,
+    required this.selected, required this.onTap,
   });
 
   @override
@@ -897,32 +1065,24 @@ class _PriceTypeOption extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? kGreen.withValues(alpha: 0.06) : kSurface,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: selected ? kGreen : kBorder,
-            width: selected ? 1.5 : 0.5,
-          ),
+          border: Border.all(color: selected ? kGreen : kBorder, width: selected ? 1.5 : 0.5),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: selected ? kGreen : kTextMuted, size: 20),
-            const SizedBox(height: 6),
-            Text(title,
-                style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: selected ? kGreen : kTextPrimary)),
-            const SizedBox(height: 2),
-            Text(subtitle,
-                style: GoogleFonts.inter(fontSize: 11, color: kTextMuted)),
-          ],
-        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(icon, color: selected ? kGreen : kTextMuted, size: 20),
+          const SizedBox(height: 6),
+          Text(title,
+              style: GoogleFonts.inter(
+                  fontSize: 13, fontWeight: FontWeight.w600,
+                  color: selected ? kGreen : kTextPrimary)),
+          const SizedBox(height: 2),
+          Text(subtitle, style: GoogleFonts.inter(fontSize: 11, color: kTextMuted)),
+        ]),
       ),
     );
   }
 }
 
-// ── Step 4: Review ────────────────────────────────────────────────────────────
+// ── Intercity Step 4: Review ──────────────────────────────────────────────────
 
 class _Step4 extends StatelessWidget {
   final String? pickup;
@@ -935,14 +1095,9 @@ class _Step4 extends StatelessWidget {
   final String priceType;
 
   const _Step4({
-    required this.pickup,
-    required this.delivery,
-    required this.cargo,
-    required this.weight,
-    required this.budget,
-    required this.deadline,
-    required this.description,
-    required this.priceType,
+    required this.pickup, required this.delivery, required this.cargo,
+    required this.weight, required this.budget, required this.deadline,
+    required this.description, required this.priceType,
   });
 
   @override
@@ -952,9 +1107,7 @@ class _Step4 extends StatelessWidget {
       children: [
         Text('Review & Confirm',
             style: GoogleFonts.inter(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: kTextPrimary)),
+                fontSize: 16, fontWeight: FontWeight.bold, color: kTextPrimary)),
         const SizedBox(height: 16),
         _ReviewRow('Pickup', pickup ?? '—'),
         _ReviewRow('Destination', delivery ?? '—'),
@@ -963,8 +1116,7 @@ class _Step4 extends StatelessWidget {
         _ReviewRow('Pricing', priceType == 'fixed' ? 'Fixed Price' : 'Negotiable'),
         _ReviewRow('Budget', budget != null ? 'ETB $budget' : '—'),
         _ReviewRow('Bid Deadline', deadline ?? 'Not set'),
-        if (description != null && description!.isNotEmpty)
-          _ReviewRow('Notes', description!),
+        if (description != null && description!.isNotEmpty) _ReviewRow('Notes', description!),
         const SizedBox(height: 20),
         Container(
           padding: const EdgeInsets.all(14),
@@ -972,24 +1124,285 @@ class _Step4 extends StatelessWidget {
               color: kAmberLight,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: kAmber.withValues(alpha: 0.4))),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.info_outline, color: kAmber, size: 18),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Once submitted, your request will be visible to available drivers. Platform commission: 10%.',
-                  style: GoogleFonts.inter(fontSize: 12, color: kTextPrimary),
-                ),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(Icons.info_outline, color: kAmber, size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Once submitted, your request will be visible to available drivers. Platform commission: 10%.',
+                style: GoogleFonts.inter(fontSize: 12, color: kTextPrimary),
               ),
-            ],
-          ),
+            ),
+          ]),
         ),
       ],
     );
   }
 }
+
+// ── Intracity Step 1: City & Areas ────────────────────────────────────────────
+
+class _IntraStep1 extends StatelessWidget {
+  final String? city;
+  final TextEditingController pickupCtrl;
+  final TextEditingController dropoffCtrl;
+  final List<String> cities;
+  final ValueChanged<String> onCity;
+
+  const _IntraStep1({
+    required this.city, required this.pickupCtrl, required this.dropoffCtrl,
+    required this.cities, required this.onCity,
+  });
+
+  InputDecoration _deco({String? hint, Widget? prefix}) => InputDecoration(
+        hintText: hint,
+        hintStyle: GoogleFonts.inter(color: kTextMuted),
+        prefixIcon: prefix,
+        filled: true,
+        fillColor: kSurface,
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: kBorder)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: kGreen, width: 1.5)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+              color: const Color(0xFF1E40AF).withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFF1E40AF).withValues(alpha: 0.2))),
+          child: Row(children: [
+            const Icon(Icons.airport_shuttle_rounded, color: Color(0xFF1E40AF), size: 18),
+            const SizedBox(width: 8),
+            Expanded(child: Text('Intra-city Moving · light vehicles only',
+                style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF1E40AF),
+                    fontWeight: FontWeight.w600))),
+          ]),
+        ),
+        const SizedBox(height: 20),
+        Text('City', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: city,
+          hint: Text('Select city', style: GoogleFonts.inter(color: kTextMuted)),
+          isExpanded: true,
+          decoration: _deco(prefix: Icon(Icons.location_city_outlined, color: kGreen, size: 20)),
+          items: cities.map((c) => DropdownMenuItem(
+                value: c, child: Text(c, style: GoogleFonts.inter(fontSize: 14)))).toList(),
+          onChanged: (v) { if (v != null) onCity(v); },
+        ),
+        const SizedBox(height: 20),
+        Text('Pickup Area / Neighborhood',
+            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
+        const SizedBox(height: 8),
+        TextField(
+          controller: pickupCtrl,
+          decoration: _deco(
+            hint: 'e.g. Bole, Piazza, Kazanchis',
+            prefix: Icon(Icons.trip_origin, color: kGreen, size: 20),
+          ),
+          style: GoogleFonts.inter(fontSize: 14),
+        ),
+        const SizedBox(height: 20),
+        Text('Dropoff Area / Neighborhood',
+            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
+        const SizedBox(height: 8),
+        TextField(
+          controller: dropoffCtrl,
+          decoration: _deco(
+            hint: 'e.g. CMC, Megenagna, Sarbet',
+            prefix: Icon(Icons.location_on_outlined, color: kGreen, size: 20),
+          ),
+          style: GoogleFonts.inter(fontSize: 14),
+        ),
+        if (city != null && pickupCtrl.text.isNotEmpty && dropoffCtrl.text.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+                color: kGreenTint,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: kGreen.withValues(alpha: 0.3))),
+            child: Row(children: [
+              Icon(Icons.route, color: kGreen, size: 18),
+              const SizedBox(width: 8),
+              Expanded(child: Text('$city · ${pickupCtrl.text} → ${dropoffCtrl.text}',
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kGreen, fontSize: 13))),
+            ]),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+// ── Intracity Step 2: Details ─────────────────────────────────────────────────
+
+class _IntraStep2 extends StatelessWidget {
+  final TextEditingController descCtrl;
+  final String? preferredDate;
+  final String? vehicleType;
+  final List<String> vehicleTypes;
+  final ValueChanged<String> onDate;
+  final ValueChanged<String?> onVehicleType;
+
+  const _IntraStep2({
+    required this.descCtrl, required this.preferredDate, required this.vehicleType,
+    required this.vehicleTypes, required this.onDate, required this.onVehicleType,
+  });
+
+  InputDecoration _deco({String? hint, Widget? prefix}) => InputDecoration(
+        hintText: hint,
+        hintStyle: GoogleFonts.inter(color: kTextMuted),
+        prefixIcon: prefix,
+        filled: true,
+        fillColor: kSurface,
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: kBorder)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: kGreen, width: 1.5)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text('What are you moving?',
+            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
+        const SizedBox(height: 8),
+        TextField(
+          controller: descCtrl,
+          maxLines: 4,
+          decoration: _deco(hint: 'e.g. 2-bedroom furniture, boxes, appliances...'),
+          style: GoogleFonts.inter(fontSize: 14),
+        ),
+        const SizedBox(height: 20),
+        Text('Preferred Date',
+            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
+        const SizedBox(height: 8),
+        TextFormField(
+          readOnly: true,
+          initialValue: preferredDate,
+          onTap: () async {
+            final d = await showDatePicker(
+              context: context,
+              initialDate: DateTime.now().add(const Duration(days: 1)),
+              firstDate: DateTime.now(),
+              lastDate: DateTime.now().add(const Duration(days: 90)),
+              builder: (ctx, child) => Theme(
+                data: Theme.of(ctx).copyWith(colorScheme: ColorScheme.light(primary: kGreen)),
+                child: child!,
+              ),
+            );
+            if (d != null) onDate(d.toString().split(' ')[0]);
+          },
+          decoration: _deco(
+            hint: 'Tap to select moving date',
+            prefix: Icon(Icons.calendar_today_outlined, color: kGreen, size: 20),
+          ),
+          controller: TextEditingController(text: preferredDate ?? ''),
+          style: GoogleFonts.inter(fontSize: 14),
+        ),
+        const SizedBox(height: 20),
+        Text('Vehicle Type Needed (optional)',
+            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: vehicleType,
+          hint: Text('Any available vehicle', style: GoogleFonts.inter(color: kTextMuted)),
+          isExpanded: true,
+          decoration: _deco(prefix: Icon(Icons.airport_shuttle_outlined, color: kGreen, size: 20)),
+          items: [
+            const DropdownMenuItem<String>(value: null, child: Text('Any available vehicle')),
+            ...vehicleTypes.map((t) => DropdownMenuItem(
+                  value: t,
+                  child: Text(t[0].toUpperCase() + t.substring(1),
+                      style: GoogleFonts.inter(fontSize: 14)),
+                )),
+          ],
+          onChanged: onVehicleType,
+        ),
+      ],
+    );
+  }
+}
+
+// ── Intracity Step 3: Review ──────────────────────────────────────────────────
+
+class _IntraStep3Review extends StatelessWidget {
+  final String? city;
+  final String pickupArea;
+  final String dropoffArea;
+  final String itemsDesc;
+  final String? preferredDate;
+  final String? vehicleType;
+
+  const _IntraStep3Review({
+    required this.city, required this.pickupArea, required this.dropoffArea,
+    required this.itemsDesc, required this.preferredDate, required this.vehicleType,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text('Review & Confirm',
+            style: GoogleFonts.inter(
+                fontSize: 16, fontWeight: FontWeight.bold, color: kTextPrimary)),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+              color: const Color(0xFF1E40AF).withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(8)),
+          child: Text('Intra-city Moving',
+              style: GoogleFonts.inter(
+                  fontSize: 12, color: const Color(0xFF1E40AF),
+                  fontWeight: FontWeight.w600)),
+        ),
+        const SizedBox(height: 16),
+        _ReviewRow('City', city ?? '—'),
+        _ReviewRow('Pickup Area', pickupArea.isEmpty ? '—' : pickupArea),
+        _ReviewRow('Dropoff Area', dropoffArea.isEmpty ? '—' : dropoffArea),
+        _ReviewRow('Items', itemsDesc.isEmpty ? '—' : itemsDesc),
+        _ReviewRow('Preferred Date', preferredDate ?? 'Not set'),
+        _ReviewRow('Vehicle', vehicleType != null
+            ? vehicleType![0].toUpperCase() + vehicleType!.substring(1)
+            : 'Any available'),
+        const SizedBox(height: 20),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+              color: kAmberLight,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: kAmber.withValues(alpha: 0.4))),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(Icons.info_outline, color: kAmber, size: 18),
+            const SizedBox(width: 10),
+            Expanded(child: Text(
+              'Drivers in your city will bid on this request. No AI price for intra-city moves. Platform commission: 10%.',
+              style: GoogleFonts.inter(fontSize: 12, color: kTextPrimary),
+            )),
+          ]),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Shared review row ─────────────────────────────────────────────────────────
 
 class _ReviewRow extends StatelessWidget {
   final String label;
@@ -1011,15 +1424,12 @@ class _ReviewRow extends StatelessWidget {
             width: 90,
             child: Text(label,
                 style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: kTextSecond,
-                    fontWeight: FontWeight.w500)),
+                    fontSize: 12, color: kTextSecond, fontWeight: FontWeight.w500)),
           ),
           Expanded(
             child: Text(value,
                 style: GoogleFonts.inter(
-                    fontSize: 13, fontWeight: FontWeight.w600,
-                    color: kTextPrimary)),
+                    fontSize: 13, fontWeight: FontWeight.w600, color: kTextPrimary)),
           ),
         ],
       ),

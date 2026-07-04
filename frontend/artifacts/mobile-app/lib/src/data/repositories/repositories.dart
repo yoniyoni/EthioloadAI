@@ -205,6 +205,58 @@ class CargoRepository {
     return (min: null, max: null, distanceKm: null);
   }
 
+  // POST /cargo/create — intracity variant
+  Future<CargoRequest> createIntracity({
+    required String city,
+    required String pickupArea,
+    required String dropoffArea,
+    required String itemsDescription,
+    required DateTime preferredDate,
+    String? vehicleTypeNeeded,
+    String priceType = 'negotiable',
+    double? budget,
+    DateTime? bidDeadline,
+  }) async =>
+      _api.post<CargoRequest>(
+        '/cargo/create',
+        data: {
+          'service_type': 'intracity',
+          'city': city,
+          'pickup_area': pickupArea,
+          'dropoff_area': dropoffArea,
+          'items_description': itemsDescription,
+          'preferred_date': preferredDate.toIso8601String().split('T')[0],
+          if (vehicleTypeNeeded != null && vehicleTypeNeeded.isNotEmpty)
+            'vehicle_type_needed': vehicleTypeNeeded,
+          'price_type': priceType,
+          if (budget != null) 'budget': budget,
+          if (bidDeadline != null) 'bid_deadline': bidDeadline.toIso8601String(),
+        },
+        fromJson: (json) =>
+            CargoRequest.fromJson(json as Map<String, dynamic>),
+      );
+
+  // GET /cargo-requests with meta (location_unset flag for drivers)
+  Future<({bool locationUnset, List<CargoRequest> cargo})> listWithMeta() async {
+    final response = await _api.dio.get('/cargo-requests');
+    if (response.statusCode == 200) {
+      final raw = response.data;
+      final locationUnset = raw is Map && raw['location_unset'] == true;
+      final list = (raw is Map && raw.containsKey('data'))
+          ? raw['data'] as List
+          : raw as List;
+      return (
+        locationUnset: locationUnset,
+        cargo: list
+            .map((e) => CargoRequest.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+    }
+    throw ApiException(
+        message: 'Failed to load cargo requests',
+        statusCode: response.statusCode);
+  }
+
   // GET /driver/return-cargo — cargo at driver's current destination
   Future<({String? city, List<CargoRequest> cargo})> returnCargo() async {
     try {
@@ -254,6 +306,7 @@ class VehicleRepository {
     required String plateNumber,
     required double capacity,
     required String currentCity,
+    String? vehicleCategory,
   }) async =>
       _api.post<Vehicle>(
         '/vehicle/register',
@@ -262,8 +315,15 @@ class VehicleRepository {
           'plate_number': plateNumber,
           'capacity': capacity,
           'current_city': currentCity,
+          if (vehicleCategory != null) 'vehicle_category': vehicleCategory,
         },
         fromJson: (json) => Vehicle.fromJson(json as Map<String, dynamic>),
+      );
+
+  // ✓ PATCH /driver/current-city
+  Future<void> updateCurrentCity(String city) => _api.patch<void>(
+        '/driver/current-city',
+        data: {'city': city},
       );
 
   // ✓ PATCH /vehicles/{vehicle}/location
@@ -720,6 +780,26 @@ class BidRepository {
           'vehicle_id': vehicleId,
           'amount': amount,
           if (note != null && note.isNotEmpty) 'note': note,
+        },
+        fromJson: (json) => Bid.fromJson(json as Map<String, dynamic>),
+      );
+
+  // POST /cargo-requests/{cargoId}/bids — with available_datetime for intracity
+  Future<Bid> placeWithDatetime({
+    required int cargoId,
+    required int vehicleId,
+    required double amount,
+    String? note,
+    DateTime? availableDatetime,
+  }) async =>
+      _api.post<Bid>(
+        '/cargo-requests/$cargoId/bids',
+        data: {
+          'vehicle_id': vehicleId,
+          'amount': amount,
+          if (note != null && note.isNotEmpty) 'note': note,
+          if (availableDatetime != null)
+            'available_datetime': availableDatetime.toIso8601String(),
         },
         fromJson: (json) => Bid.fromJson(json as Map<String, dynamic>),
       );

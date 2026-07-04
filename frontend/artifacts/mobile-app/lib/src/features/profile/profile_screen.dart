@@ -124,6 +124,13 @@ class ProfileScreen extends ConsumerWidget {
                     value: 'Off',
                     onTap: () {},
                   ),
+                  if (user?.role == 'driver')
+                    _SettingTile(
+                      icon: Icons.location_city_outlined,
+                      label: 'Current City',
+                      value: 'Update',
+                      onTap: () => _showCityPicker(context, ref),
+                    ),
                 ],
               ),
             ),
@@ -195,6 +202,67 @@ class ProfileScreen extends ConsumerWidget {
 
   String _capitalize(String s) =>
       s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+
+  static const _ethiopianCities = [
+    'Addis Ababa', 'Adama', 'Adigrat', 'Adwa', 'Arba Minch', 'Asela',
+    'Assosa', 'Axum', 'Bahir Dar', 'Bure', 'Butajira', 'Debre Birhan',
+    'Debre Markos', 'Debre Tabor', 'Dessie', 'Dilla', 'Dire Dawa',
+    'Finote Selam', 'Gambela', 'Gimbi', 'Goba', 'Gondar', 'Harar',
+    'Hawassa', 'Hosaena', 'Humera', 'Injibara', 'Jijiga', 'Jimma',
+    'Kombolcha', 'Lalibela', 'Mekele', 'Metema', 'Motta', 'Nekemte',
+    'Robe', 'Shashamane', 'Shire', 'Welkite', 'Woldia', 'Woreta',
+    'Yirgalem', 'Addis Zemen', 'Ambo',
+  ];
+
+  void _showCityPicker(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Select Current City',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        contentPadding: const EdgeInsets.symmetric(vertical: 8),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: _ethiopianCities.length,
+            itemBuilder: (_, i) {
+              final city = _ethiopianCities[i];
+              return ListTile(
+                dense: true,
+                title: Text(city, style: const TextStyle(fontSize: 14)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  try {
+                    await ref.read(vehicleRepositoryProvider).updateCurrentCity(city);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text('Current city updated to $city'),
+                        backgroundColor: Colors.green,
+                      ));
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text('Error: $e'),
+                        backgroundColor: Colors.red,
+                      ));
+                    }
+                  }
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _showEditDialog(BuildContext context, User? user) {
     final nameCtrl =

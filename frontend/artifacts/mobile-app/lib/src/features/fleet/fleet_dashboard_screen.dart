@@ -336,27 +336,22 @@ class _FleetAddVehicleScreenState
   final _plateCtrl = TextEditingController();
   final _capacityCtrl = TextEditingController();
   final _driverIdCtrl = TextEditingController();
+  String? _vehicleCategory; // null = not yet chosen
   String _truckType = 'flatbed';
   String _city = 'Addis Ababa';
   bool _loading = false;
 
-  static const _types = [
-    'flatbed',
-    'tanker',
-    'refrigerated',
-    'container',
-    'tipper',
-    'general'
+  static const _typesHeavy = [
+    'flatbed', 'tanker', 'refrigerated', 'container', 'tipper',
   ];
+  static const _typesLight = ['pickup', 'minivan', 'bajaj'];
+
+  List<String> get _types =>
+      _vehicleCategory == 'light' ? _typesLight : _typesHeavy;
+
   static const _cities = [
-    'Addis Ababa',
-    'Adama',
-    'Hawassa',
-    'Dire Dawa',
-    'Bahir Dar',
-    'Gondar',
-    'Mekele',
-    'Jimma'
+    'Addis Ababa', 'Adama', 'Hawassa', 'Dire Dawa', 'Bahir Dar',
+    'Gondar', 'Mekele', 'Jimma', 'Jijiga', 'Nekemte',
   ];
 
   @override
@@ -368,7 +363,8 @@ class _FleetAddVehicleScreenState
   }
 
   Future<void> _submit() async {
-    if (_plateCtrl.text.isEmpty || _capacityCtrl.text.isEmpty) return;
+    if (_plateCtrl.text.isEmpty || _capacityCtrl.text.isEmpty ||
+        _vehicleCategory == null) return;
     setState(() => _loading = true);
     try {
       final driverId = int.tryParse(_driverIdCtrl.text.trim());
@@ -379,6 +375,7 @@ class _FleetAddVehicleScreenState
           'plate_number': _plateCtrl.text.trim().toUpperCase(),
           'capacity': double.tryParse(_capacityCtrl.text.trim()) ?? 0,
           'current_city': _city,
+          'vehicle_category': _vehicleCategory,
           if (driverId != null) 'driver_id': driverId,
         },
       );
@@ -409,13 +406,45 @@ class _FleetAddVehicleScreenState
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          const Text('Vehicle Category',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(child: _CategoryCard(
+              icon: Icons.local_shipping_rounded,
+              title: 'Heavy',
+              subtitle: 'Flatbed, tanker, container…',
+              selected: _vehicleCategory == 'heavy',
+              onTap: () => setState(() {
+                _vehicleCategory = 'heavy';
+                _truckType = _typesHeavy.first;
+              }),
+            )),
+            const SizedBox(width: 10),
+            Expanded(child: _CategoryCard(
+              icon: Icons.airport_shuttle_rounded,
+              title: 'Light',
+              subtitle: 'Pickup, minivan, bajaj',
+              selected: _vehicleCategory == 'light',
+              onTap: () => setState(() {
+                _vehicleCategory = 'light';
+                _truckType = _typesLight.first;
+              }),
+            )),
+          ]),
+          if (_vehicleCategory == null) ...[
+            const SizedBox(height: 6),
+            const Text('Please select a category to continue',
+                style: TextStyle(fontSize: 11, color: Colors.red)),
+          ],
+          const SizedBox(height: 16),
           const Text('Vehicle Details',
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            initialValue: _truckType,
+            value: _types.contains(_truckType) ? _truckType : _types.first,
             decoration: InputDecoration(
-              labelText: 'Truck Type',
+              labelText: 'Vehicle Type',
               prefixIcon: const Icon(Icons.local_shipping_outlined),
               border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8)),
@@ -489,6 +518,57 @@ class _FleetAddVehicleScreenState
                         fontSize: 15, fontWeight: FontWeight.bold)),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Category card ─────────────────────────────────────────────────────────
+
+class _CategoryCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _CategoryCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = Colors.green;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: selected
+              ? const Color(0xFF0F3D1A).withAlpha(12)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? accent : const Color(0xFFE5E7EB),
+            width: selected ? 1.5 : 0.5,
+          ),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(icon, color: selected ? accent : Colors.grey, size: 22),
+          const SizedBox(height: 6),
+          Text(title,
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: selected ? const Color(0xFF0F3D1A) : const Color(0xFF111827))),
+          const SizedBox(height: 2),
+          Text(subtitle,
+              style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
+        ]),
       ),
     );
   }

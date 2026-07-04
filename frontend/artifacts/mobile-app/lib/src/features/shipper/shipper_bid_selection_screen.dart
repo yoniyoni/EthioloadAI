@@ -123,14 +123,28 @@ class _CargoHeaderCard extends StatelessWidget {
   final CargoRequest cargo;
   const _CargoHeaderCard({required this.cargo});
 
+  bool get _isIntracity => cargo.serviceType == 'intracity';
+
+  String _fmtDate(DateTime d) {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return '${d.day} ${months[d.month - 1]} ${d.year}';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final accentColor = _isIntracity ? const Color(0xFF1E40AF) : kGreen;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: kSurface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: kBorder, width: 0.5),
+        border: Border.all(
+          color: _isIntracity
+              ? const Color(0xFF1E40AF).withValues(alpha: 0.25)
+              : kBorder,
+          width: _isIntracity ? 1.0 : 0.5,
+        ),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
@@ -138,30 +152,100 @@ class _CargoHeaderCard extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: kGreen.withValues(alpha: 0.07),
+              color: accentColor.withValues(alpha: 0.07),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.inventory_2_outlined, color: kGreen, size: 22),
+            child: Icon(
+              _isIntracity
+                  ? Icons.airport_shuttle_outlined
+                  : Icons.inventory_2_outlined,
+              color: accentColor,
+              size: 22,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${cargo.pickupLocation} → ${cargo.destination}',
+                if (_isIntracity) ...[
+                  Text(
+                    '${cargo.pickupArea ?? '?'} → ${cargo.dropoffArea ?? '?'}',
                     style: GoogleFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: kTextPrimary)),
-                const SizedBox(height: 2),
-                Text(
+                        color: kTextPrimary),
+                  ),
+                  const SizedBox(height: 2),
+                  Row(children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E40AF).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        cargo.city ?? '',
+                        style: GoogleFonts.inter(
+                            fontSize: 10,
+                            color: const Color(0xFF1E40AF),
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    if (cargo.preferredDate != null) ...[
+                      const SizedBox(width: 6),
+                      Text(
+                        _fmtDate(cargo.preferredDate!),
+                        style: GoogleFonts.inter(
+                            fontSize: 11, color: kTextSecond),
+                      ),
+                    ],
+                  ]),
+                ] else ...[
+                  Text(
+                    '${cargo.pickupLocation} → ${cargo.destination}',
+                    style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: kTextPrimary),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
                     '${cargo.materialType}  ·  ${cargo.weight.toStringAsFixed(0)} t',
-                    style: GoogleFonts.inter(fontSize: 12, color: kTextSecond)),
+                    style: GoogleFonts.inter(fontSize: 12, color: kTextSecond),
+                  ),
+                ],
               ],
             ),
           ),
-          _UrgencyBadge(level: cargo.urgencyLevel),
+          if (!_isIntracity) _UrgencyBadge(level: cargo.urgencyLevel)
+          else Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E40AF).withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text('Intra-city',
+                style: GoogleFonts.inter(
+                    fontSize: 10,
+                    color: const Color(0xFF1E40AF),
+                    fontWeight: FontWeight.w600)),
+          ),
         ]),
+        // Items description for intracity
+        if (_isIntracity && cargo.itemsDescription != null &&
+            cargo.itemsDescription!.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          const Divider(height: 1, color: kBorder),
+          const SizedBox(height: 10),
+          Text(
+            cargo.itemsDescription!,
+            style: GoogleFonts.inter(fontSize: 12, color: kTextSecond),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
         if (cargo.budget != null) ...[
           const SizedBox(height: 10),
           const Divider(height: 1, color: kBorder),
@@ -364,6 +448,13 @@ class _BidCardState extends ConsumerState<_BidCard> {
 
   bool get _busy => _accepting || _rejecting || _acceptingCounter;
 
+  String _fmtDatetime(DateTime dt) {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    final h = dt.hour.toString().padLeft(2, '0');
+    final m = dt.minute.toString().padLeft(2, '0');
+    return '${dt.day} ${months[dt.month - 1]} · $h:$m';
+  }
+
   @override
   Widget build(BuildContext context) {
     final b = widget.bid;
@@ -550,6 +641,28 @@ class _BidCardState extends ConsumerState<_BidCard> {
                           GoogleFonts.inter(fontSize: 11, color: kTextSecond)),
                 ]),
               ],
+            ]),
+          ),
+        ],
+
+        // ── Available datetime (intracity only) ───────────────────
+        if (b.availableDatetime != null) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            decoration: BoxDecoration(
+                color: kGreenTint, borderRadius: BorderRadius.circular(8)),
+            child: Row(children: [
+              const Icon(Icons.event_available_outlined,
+                  size: 15, color: kGreen),
+              const SizedBox(width: 6),
+              Text(
+                'Available: ${_fmtDatetime(b.availableDatetime!)}',
+                style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: kGreen,
+                    fontWeight: FontWeight.w600),
+              ),
             ]),
           ),
         ],
