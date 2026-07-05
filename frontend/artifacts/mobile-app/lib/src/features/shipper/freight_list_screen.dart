@@ -37,12 +37,17 @@ class _FreightListScreenState extends ConsumerState<FreightListScreen> {
       ),
       body: cargoListAsync.when(
         data: (cargoList) {
+          final q = searchController.text.toLowerCase();
           final filtered = cargoList.where((c) {
             final matchesFilter = selectedFilter == 'all' || c.status == selectedFilter;
-            final matchesSearch = searchController.text.isEmpty ||
-                c.pickupLocation.toLowerCase().contains(searchController.text.toLowerCase()) ||
-                c.materialType.toLowerCase().contains(searchController.text.toLowerCase()) ||
-                c.destination.toLowerCase().contains(searchController.text.toLowerCase());
+            final matchesSearch = q.isEmpty ||
+                c.pickupLocation.toLowerCase().contains(q) ||
+                c.destination.toLowerCase().contains(q) ||
+                c.materialType.toLowerCase().contains(q) ||
+                (c.city ?? '').toLowerCase().contains(q) ||
+                (c.pickupArea ?? '').toLowerCase().contains(q) ||
+                (c.dropoffArea ?? '').toLowerCase().contains(q) ||
+                (c.itemsDescription ?? '').toLowerCase().contains(q);
             return matchesFilter && matchesSearch;
           }).toList();
 
@@ -232,6 +237,8 @@ class _CargoCard extends StatelessWidget {
     }
   }
 
+  bool get _isIntracity => cargo.serviceType == 'intracity';
+
   @override
   Widget build(BuildContext context) {
     return InkWell(
@@ -244,7 +251,7 @@ class _CargoCard extends StatelessWidget {
           border: Border.all(color: Colors.grey[200]!),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha:0.05),
               blurRadius: 4,
               offset: const Offset(0, 2),
             ),
@@ -258,25 +265,42 @@ class _CargoCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
-                  child: Text(
-                    '${cargo.pickupLocation} → ${cargo.destination}',
-                    style: const TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
+                  child: _isIntracity
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${cargo.city ?? ''}: ${cargo.pickupArea ?? ''} → ${cargo.dropoffArea ?? ''}',
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.purple.withValues(alpha:0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Text('Intra-city Moving',
+                                  style: TextStyle(fontSize: 10, color: Colors.purple, fontWeight: FontWeight.w600)),
+                            ),
+                          ],
+                        )
+                      : Text(
+                          '${cargo.pickupLocation} → ${cargo.destination}',
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                        ),
                 ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _statusColor.withOpacity(0.1),
+                    color: _statusColor.withValues(alpha:0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     cargo.status.toUpperCase(),
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: _statusColor),
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _statusColor),
                   ),
                 ),
               ],
@@ -284,10 +308,19 @@ class _CargoCard extends StatelessWidget {
             const SizedBox(height: 10),
             Row(
               children: [
-                const Icon(Icons.inventory_2, size: 16, color: Colors.grey),
+                Icon(_isIntracity ? Icons.move_to_inbox : Icons.inventory_2,
+                    size: 16, color: Colors.grey),
                 const SizedBox(width: 6),
-                Text('${cargo.materialType} • ${cargo.weight} tons',
-                    style: const TextStyle(fontSize: 13)),
+                Expanded(
+                  child: Text(
+                    _isIntracity
+                        ? (cargo.itemsDescription?.isNotEmpty == true ? cargo.itemsDescription! : 'Intra-city move')
+                        : '${cargo.materialType} • ${cargo.weight.toStringAsFixed(1)} tons',
+                    style: const TextStyle(fontSize: 13),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 10),
@@ -297,34 +330,34 @@ class _CargoCard extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Budget',
-                        style: TextStyle(fontSize: 11, color: Colors.grey)),
+                    const Text('Budget', style: TextStyle(fontSize: 11, color: Colors.grey)),
                     Text(
                       cargo.budget != null
                           ? 'ETB ${cargo.budget!.toStringAsFixed(0)}'
                           : 'Negotiable',
                       style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green),
+                          fontSize: 15, fontWeight: FontWeight.bold, color: Colors.green),
                     ),
                   ],
                 ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.purple.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
+                if (!_isIntracity)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.purple.withValues(alpha:0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      cargo.urgencyLevel.toUpperCase(),
+                      style: const TextStyle(
+                          fontSize: 11, color: Colors.purple, fontWeight: FontWeight.w600),
+                    ),
+                  )
+                else if (cargo.preferredDate != null)
+                  Text(
+                    '📅 ${cargo.preferredDate!.day}/${cargo.preferredDate!.month}/${cargo.preferredDate!.year}',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
                   ),
-                  child: Text(
-                    cargo.urgencyLevel.toUpperCase(),
-                    style: const TextStyle(
-                        fontSize: 11,
-                        color: Colors.purple,
-                        fontWeight: FontWeight.w600),
-                  ),
-                ),
               ],
             ),
           ],

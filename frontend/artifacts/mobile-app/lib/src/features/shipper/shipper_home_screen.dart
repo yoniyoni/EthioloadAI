@@ -435,15 +435,37 @@ class _CargoListItem extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  RouteDisplay(
-                    from: cargo.pickupLocation,
-                    to: cargo.destination,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${cargo.materialType} · ${cargo.weight.toStringAsFixed(0)} t',
-                    style: GoogleFonts.inter(fontSize: 11, color: kTextMuted),
-                  ),
+                  if (cargo.serviceType == 'intracity') ...[
+                    Row(children: [
+                      const Icon(Icons.location_city, size: 13, color: kGreen),
+                      const SizedBox(width: 3),
+                      Expanded(
+                        child: Text(
+                          '${cargo.city ?? ''}: ${cargo.pickupArea ?? ''} → ${cargo.dropoffArea ?? ''}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600, color: kTextPrimary),
+                        ),
+                      ),
+                    ]),
+                    const SizedBox(height: 2),
+                    Text(
+                      cargo.itemsDescription ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(fontSize: 11, color: kTextMuted),
+                    ),
+                  ] else ...[
+                    RouteDisplay(
+                      from: cargo.pickupLocation,
+                      to: cargo.destination,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${cargo.materialType} · ${cargo.weight.toStringAsFixed(0)} t',
+                      style: GoogleFonts.inter(fontSize: 11, color: kTextMuted),
+                    ),
+                  ],
                 ],
               ),
             ),
