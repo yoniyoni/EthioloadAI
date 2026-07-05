@@ -1,0 +1,40 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('cargo_requests', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
+            $table->string('pickup_location');
+            $table->string('destination');
+            $table->string('material_type');
+            $table->float('weight');
+            $table->string('urgency_level');
+            $table->float('budget')->nullable();
+            $table->enum('status', [
+                         'pending',
+                         'matched',
+                         'completed'
+                        ])->default('pending');
+            $table->timestamps();
+        });
+    }
+   
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('cargo_requests');
+    }
+};
