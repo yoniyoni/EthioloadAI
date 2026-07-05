@@ -256,7 +256,10 @@
     "minutes_ago": "{n} min ago",
     "hours_ago": "{n} h ago",
     "no_trip": "No active trip found",
-    "city_label": "City"
+    "city_label": "City",
+    "driver_offline": "Driver may be offline",
+    "updates_every_5": "Updates every 5 minutes · Tap refresh for latest",
+    "updates_every_25": "Updates every 25 minutes · Tap refresh for latest"
   },
 
   "chat": {

@@ -58,7 +58,11 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
 
     setState(() => _tripId = tripId);
     await _refresh();
-    _pollTimer = Timer.periodic(const Duration(minutes: 30), (_) => _refresh());
+    final serviceType = _booking?.serviceType ?? 'intercity';
+    final pollInterval = serviceType == 'intracity'
+        ? const Duration(minutes: 5)
+        : const Duration(minutes: 30);
+    _pollTimer = Timer.periodic(pollInterval, (_) => _refresh());
   }
 
   Future<void> _refresh() async {
@@ -85,14 +89,29 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
     }
   }
 
+  bool get _isIntracity => _booking?.serviceType == 'intracity';
+
   String _lastUpdatedText() {
     final mins = _location?.minutesSinceUpdate;
     if (mins == null) return '—';
-    if (mins < 60) {
-      return 'tracking.minutes_ago'.tr(namedArgs: {'n': '$mins'});
+    final offline = _isIntracity ? mins > 10 : mins > 60;
+    if (offline) return 'tracking.driver_offline'.tr();
+    if (mins < 60) return 'tracking.minutes_ago'.tr(namedArgs: {'n': '$mins'});
+    return 'tracking.hours_ago'.tr(namedArgs: {'n': '${(mins / 60).floor()}'});
+  }
+
+  Color _statusColor() {
+    final mins = _location?.minutesSinceUpdate;
+    if (mins == null) return Colors.grey;
+    if (_isIntracity) {
+      if (mins < 5)  return const Color(0xFF059669);
+      if (mins < 10) return const Color(0xFFF59E0B);
+      return Colors.red;
+    } else {
+      if (mins < 30)  return const Color(0xFF059669);
+      if (mins < 60)  return const Color(0xFFF59E0B);
+      return Colors.red;
     }
-    return 'tracking.hours_ago'
-        .tr(namedArgs: {'n': '${(mins / 60).floor()}'});
   }
 
   // Ethiopia center (Addis Ababa) used as default when no location data yet
@@ -235,29 +254,32 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
         const SizedBox(height: 8),
 
         // Driver location status
-        Row(children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: (loc != null && loc.hasPosition) ? _green : Colors.grey,
+        Builder(builder: (_) {
+          final dotColor = (loc != null && loc.hasPosition)
+              ? _statusColor()
+              : Colors.grey;
+          return Row(children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: dotColor,
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            (loc != null && loc.hasPosition)
-                ? 'tracking.driver_is_here'.tr()
-                : 'tracking.no_location_data'.tr(),
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
-              color: (loc != null && loc.hasPosition)
-                  ? _green
-                  : Colors.grey[600],
+            const SizedBox(width: 8),
+            Text(
+              (loc != null && loc.hasPosition)
+                  ? 'tracking.driver_is_here'.tr()
+                  : 'tracking.no_location_data'.tr(),
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: dotColor,
+              ),
             ),
-          ),
-        ]),
+          ]);
+        }),
 
         const SizedBox(height: 10),
 
@@ -272,6 +294,7 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
             icon: Icons.access_time_outlined,
             label: 'tracking.last_updated'.tr(),
             value: _lastUpdatedText(),
+            valueColor: _statusColor(),
           ),
           const SizedBox(height: 4),
           _InfoRow(
@@ -291,14 +314,17 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
           ),
         ],
 
-        // Polling note
+        // Polling interval note
         const SizedBox(height: 16),
         Row(children: [
           const Icon(Icons.info_outline, size: 14, color: Colors.grey),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
-              'Location updates every 25 min · Tap refresh for latest',
+              (_isIntracity
+                      ? 'tracking.updates_every_5'
+                      : 'tracking.updates_every_25')
+                  .tr(),
               style: TextStyle(fontSize: 11, color: Colors.grey[500]),
             ),
           ),

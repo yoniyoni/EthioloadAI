@@ -26,13 +26,49 @@ class DriverDashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
+  bool _trackingCalibrated = false;
+
   @override
   void initState() {
     super.initState();
-    // Start GPS background pings (25-min polling). Silent failure inside.
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => LocationService.startTracking(ref),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      LocationService.startTracking(ref);
+      await _calibrateTrackingInterval();
+    });
+  }
+
+  /// Reads the driver's active booking once bookings have loaded.
+  /// If the active trip is intracity, restarts the location timer at 5 min.
+  Future<void> _calibrateTrackingInterval() async {
+    if (_trackingCalibrated) return;
+    try {
+      final bookings = await ref.read(bookingListProvider.future);
+      if (!mounted) return;
+      Booking? active;
+      try {
+        active = bookings.firstWhere((b) => b.isTripOngoing);
+      } catch (_) {}
+      final serviceType = active?.serviceType ?? 'intercity';
+      if (serviceType == 'intracity') {
+        await LocationService.startTracking(ref, serviceType: 'intracity');
+        if (LocationService.consumeBatteryWarning() && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Location updates every 5 min for this city job. '
+                'This uses more battery. / '
+                'ለዚህ የከተማ ስራ ቦታ በ5 ደቂቃ ይዘምናል። ይህ ባትሪ ይጠቀማል።',
+              ),
+              duration: Duration(seconds: 6),
+            ),
+          );
+        }
+      }
+    } catch (_) {
+      // Bookings unavailable — keep the default intercity interval.
+    } finally {
+      if (mounted) _trackingCalibrated = true;
+    }
   }
 
   @override
@@ -125,7 +161,11 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
                 onEnableGps: () async {
                   final granted =
                       await LocationService.showPermissionDialog(context);
-                  if (granted) LocationService.startTracking(ref);
+                  if (granted) {
+                    _trackingCalibrated = false;
+                    LocationService.startTracking(ref);
+                    _calibrateTrackingInterval();
+                  }
                 },
                 onSetCity: () => context.go('/profile'),
               );

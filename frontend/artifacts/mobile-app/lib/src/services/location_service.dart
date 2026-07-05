@@ -6,16 +6,35 @@ import '../data/api/api_client.dart';
 
 class LocationService {
   static Timer? _timer;
+  static bool _batteryWarnShown = false;
 
-  // Call when driver logs in. Sends one immediate ping then every 25 minutes.
-  static Future<void> startTracking(WidgetRef ref) async {
+  /// Returns true the first time an intracity tracking session starts,
+  /// then false on every subsequent call. Caller should show the battery
+  /// warning snackbar when this returns true.
+  static bool consumeBatteryWarning() {
+    if (_batteryWarnShown) return false;
+    _batteryWarnShown = true;
+    return true;
+  }
+
+  // Call when driver logs in or a trip starts.
+  // serviceType: 'intercity' → 25-min interval (default)
+  //              'intracity' → 5-min interval
+  static Future<void> startTracking(
+    WidgetRef ref, {
+    String serviceType = 'intercity',
+  }) async {
+    final interval = serviceType == 'intracity'
+        ? const Duration(minutes: 5)
+        : const Duration(minutes: 25);
+
     final position = await _requestAndGet();
     if (position != null) {
       await _push(ref, position);
     }
 
     _timer?.cancel();
-    _timer = Timer.periodic(const Duration(minutes: 25), (_) async {
+    _timer = Timer.periodic(interval, (_) async {
       final pos = await getCurrentPosition();
       if (pos != null) {
         await _push(ref, pos);

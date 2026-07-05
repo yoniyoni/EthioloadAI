@@ -260,6 +260,8 @@ class Booking {
   final String? materialType;
   final double? weight;
   final String? urgencyLevel;
+  final String serviceType;
+  final String? city;
   // Contact info — shown after accepted/confirmed
   final String? driverPhone;
   final String? driverName;
@@ -295,6 +297,8 @@ class Booking {
     this.materialType,
     this.weight,
     this.urgencyLevel,
+    this.serviceType = 'intercity',
+    this.city,
     this.driverPhone,
     this.driverName,
     this.shipperPhone,
@@ -345,6 +349,8 @@ class Booking {
             ? double.tryParse(json['weight'].toString())
             : null,
         urgencyLevel: json['urgency_level'] as String?,
+        serviceType: (json['service_type'] ?? 'intercity') as String,
+        city: json['city'] as String?,
         driverPhone: json['driver_phone'] as String?,
         driverName: json['driver_name'] as String?,
         shipperPhone: json['shipper_phone'] as String?,
