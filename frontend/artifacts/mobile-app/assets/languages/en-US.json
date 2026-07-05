@@ -236,7 +236,7 @@
     "live_tracking": "Live Tracking",
     "driver_location": "Driver Location",
     "current_location": "Current Location",
-    "eta": "Estimated Time of Arrival",
+    "eta": "ETA",
     "distance_remaining": "Distance Remaining",
     "current_speed": "Current Speed",
     "tracking_history": "Tracking History",
@@ -259,7 +259,33 @@
     "city_label": "City",
     "driver_offline": "Driver may be offline",
     "updates_every_5": "Updates every 5 minutes · Tap refresh for latest",
-    "updates_every_25": "Updates every 25 minutes · Tap refresh for latest"
+    "updates_every_25": "Updates every 25 minutes · Tap refresh for latest",
+    "currently_near": "Currently near",
+    "destination": "Destination",
+    "planned_route": "Planned route",
+    "traveled": "Traveled",
+    "nearby_trucks": "Nearby Trucks",
+    "no_nearby_trucks": "No trucks found in this area",
+    "all_types": "All types",
+    "heavy": "Heavy",
+    "light": "Light"
+  },
+
+  "navigation": {
+    "navigate": "Navigate",
+    "best_route": "Best Route",
+    "alternative": "Alternative",
+    "distance": "Distance",
+    "duration": "Duration",
+    "via": "Via",
+    "steps": "Steps",
+    "map": "Map",
+    "offline": "Offline estimate",
+    "eta": "ETA",
+    "estimate": "Estimate",
+    "search_place": "Search for a place...",
+    "no_places": "No places found",
+    "route_unavailable": "Route not available"
   },
 
   "location": {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/repositories.dart';
 
@@ -133,10 +134,46 @@ class _TripBody extends ConsumerStatefulWidget {
 }
 
 class _TripBodyState extends ConsumerState<_TripBody> {
-  bool _completing = false;
+  bool _completing  = false;
+  bool _navigating  = false;
   bool _showSuccess = false;
   String? _paymentMethod;
   double _amountEarned = 0;
+
+  Future<void> _onNavigate() async {
+    setState(() => _navigating = true);
+    try {
+      final loc = await ref
+          .read(tripRepositoryProvider)
+          .getLocation(widget.tripId);
+      if (!mounted) return;
+
+      if (!loc.hasDestination) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Destination coordinates not available yet.'),
+        ));
+        return;
+      }
+
+      final params = StringBuffer(
+          '/navigate?dest_lat=${loc.destinationLat}'
+          '&dest_lng=${loc.destinationLng}'
+          '&dest_name=${Uri.encodeComponent(loc.destination ?? widget.trip.destination ?? '')}');
+      if (loc.hasPosition) {
+        params.write('&orig_lat=${loc.currentLat}&orig_lng=${loc.currentLng}');
+      }
+
+      if (mounted) context.push(params.toString());
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Could not load navigation data. Try again.'),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _navigating = false);
+    }
+  }
 
   Future<void> _completeTrip() async {
     setState(() => _completing = true);
@@ -236,6 +273,36 @@ class _TripBodyState extends ConsumerState<_TripBody> {
         ],
 
         if (widget.trip.tripStatus == 'ongoing') ...[
+          // Navigate button — opens OSRM navigation to destination
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _navigating ? null : _onNavigate,
+              icon: _navigating
+                  ? const SizedBox(
+                      width: 18, height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.navigation_rounded, size: 20),
+              label: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Navigate / መንገድ ፈልግ',
+                      style: TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w700)),
+                ],
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1565C0),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: () => _showAddStopSheet(context, stops.length + 1),
             icon: const Icon(Icons.add_location_alt_outlined),

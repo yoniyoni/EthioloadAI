@@ -7,8 +7,10 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../../data/providers/data_providers.dart';
 import '../../data/repositories/repositories.dart';
+import '../../data/models/models.dart' show PlaceResult;
 import '../../services/location_service.dart';
 import '../shared/widgets/shared_widgets.dart';
+import '../shared/widgets/place_search_field.dart';
 
 class CreateFreightScreen extends ConsumerStatefulWidget {
   const CreateFreightScreen({super.key});
@@ -28,6 +30,8 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
 
   String? pickupLocation;
   String? deliveryLocation;
+  double? _deliveryLat;
+  double? _deliveryLng;
   String? cargoType;
   String? weight;
   String? budget;
@@ -209,11 +213,13 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
     setState(() { _priceLoading = true; _priceError = null; });
     try {
       final result = await ref.read(cargoRepositoryProvider).predictPrice(
-            pickup: pickupLocation!,
+            pickup:      pickupLocation!,
             destination: deliveryLocation!,
-            weight: double.tryParse(weight ?? '') ?? 10,
+            weight:      double.tryParse(weight ?? '') ?? 10,
             urgencyLevel: 'normal',
             materialType: cargoType ?? 'general',
+            toLat:  _deliveryLat,
+            toLng:  _deliveryLng,
           );
       if (mounted) {
         if (result.min != null && result.max != null) {
@@ -414,6 +420,11 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
                         cities: _cities,
                         onPickup: (v) => setState(() => pickupLocation = v),
                         onDelivery: (v) => setState(() => deliveryLocation = v),
+                        onDeliveryPlace: (p) => setState(() {
+                          deliveryLocation = p.shortName;
+                          _deliveryLat = p.lat;
+                          _deliveryLng = p.lng;
+                        }),
                         gpsPickupMode: _gpsPickupMode,
                         detectingLocation: _detectingLocation,
                         detectedCity: _detectedCityName,
@@ -986,6 +997,7 @@ class _Step1 extends StatelessWidget {
   final List<String> cities;
   final ValueChanged<String> onPickup;
   final ValueChanged<String> onDelivery;
+  final ValueChanged<PlaceResult>? onDeliveryPlace;
   final bool gpsPickupMode;
   final bool detectingLocation;
   final String? detectedCity;
@@ -999,6 +1011,7 @@ class _Step1 extends StatelessWidget {
     required this.cities,
     required this.onPickup,
     required this.onDelivery,
+    this.onDeliveryPlace,
     required this.gpsPickupMode,
     required this.detectingLocation,
     required this.detectedCity,
@@ -1047,14 +1060,15 @@ class _Step1 extends StatelessWidget {
         Text('Destination',
             style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
-        _DropdownWithOther(
-          selected: deliveryLocation,
-          options: cities,
-          hint: 'Select destination city',
-          otherHint: 'Enter city name (e.g. Kombolcha)',
-          prefixIcon: Icons.location_on_outlined,
-          labelOf: (c) => c,
-          onSelect: onDelivery,
+        PlaceSearchField(
+          label: 'freight.delivery_location'.tr(),
+          initialValue: deliveryLocation,
+          onSelected: (place) {
+            onDelivery(place.shortName);
+            onDeliveryPlace?.call(place);
+          },
+          validator: (v) =>
+              (v == null || v.trim().isEmpty) ? 'freight.delivery_location'.tr() : null,
         ),
         if (pickupLocation != null &&
             pickupLocation!.isNotEmpty &&

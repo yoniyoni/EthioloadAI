@@ -20,9 +20,11 @@ import '../../features/driver/active_trip_screen.dart';
 import '../../features/fleet/fleet_dashboard_screen.dart';
 import '../../features/fleet/fleet_dispatch_screen.dart';
 import '../../features/driver/driver_documents_screen.dart';
+import '../../features/driver/navigation_screen.dart';
 import '../../features/bookings/my_bookings_screen.dart';
 import '../../features/profile/profile_screen.dart';
 import '../../features/ai/ai_tools_screen.dart';
+import '../../features/shipper/nearby_trucks_screen.dart';
 
 // ── Router notifier ───────────────────────────────────────────────────────
 
@@ -161,6 +163,43 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, state) {
           final id = int.parse(state.pathParameters['tripId']!);
           return ActiveTripScreen(tripId: id);
+        },
+      ),
+      GoRoute(
+        path: '/navigate',
+        builder: (_, state) {
+          final q       = state.uri.queryParameters;
+          final destLat = double.tryParse(q['dest_lat'] ?? '');
+          final destLng = double.tryParse(q['dest_lng'] ?? '');
+          final destName = q['dest_name'] ?? '';
+          final origLat  = double.tryParse(q['orig_lat'] ?? '');
+          final origLng  = double.tryParse(q['orig_lng'] ?? '');
+          if (destLat == null || destLng == null) {
+            return const Scaffold(
+              body: Center(child: Text('Destination not available')),
+            );
+          }
+          return NavigationScreen(
+            destLat:   destLat,
+            destLng:   destLng,
+            destName:  destName,
+            originLat: origLat,
+            originLng: origLng,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/nearby-trucks',
+        builder: (_, state) {
+          final q    = state.uri.queryParameters;
+          final lat  = double.tryParse(q['lat'] ?? '');
+          final lng  = double.tryParse(q['lng'] ?? '');
+          final name = q['name'];
+          return NearbyTrucksScreen(
+            centerLat:    lat,
+            centerLng:    lng,
+            locationName: name,
+          );
         },
       ),
 

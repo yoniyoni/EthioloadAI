@@ -259,7 +259,33 @@
     "city_label": "ከተማ",
     "driver_offline": "አሽከርካሪ ከስርዓቱ ውጪ ሊሆን ይችላል",
     "updates_every_5": "በ5 ደቂቃ ይዘምናል · ለዘመነ ዳታ አድስ",
-    "updates_every_25": "በ25 ደቂቃ ይዘምናል · ለዘመነ ዳታ አድስ"
+    "updates_every_25": "በ25 ደቂቃ ይዘምናል · ለዘመነ ዳታ አድስ",
+    "currently_near": "አሁን ቅርብ",
+    "destination": "መድረሻ",
+    "planned_route": "የታቀደ መስመር",
+    "traveled": "የተጓዘ",
+    "nearby_trucks": "ቅርብ ተሽከርካሪዎች",
+    "no_nearby_trucks": "በዚህ አካባቢ ምንም ተሽከርካሪ አልተገኘም",
+    "all_types": "ሁሉም ዓይነቶች",
+    "heavy": "ከባድ",
+    "light": "ቀላል"
+  },
+
+  "navigation": {
+    "navigate": "መንገድ ፈልግ",
+    "best_route": "ምርጥ መስመር",
+    "alternative": "አማራጭ",
+    "distance": "ርቀት",
+    "duration": "ጊዜ",
+    "via": "በኩል",
+    "steps": "ደረጃዎች",
+    "map": "ካርታ",
+    "offline": "የርቀት ግምት",
+    "eta": "የሚደርስበት ጊዜ",
+    "estimate": "ግምት",
+    "search_place": "ቦታ ፈልግ...",
+    "no_places": "ቦታ አልተገኘም",
+    "route_unavailable": "መስመር አይገኝም"
   },
 
   "location": {

@@ -968,6 +968,8 @@ class NearbyDriver {
   final double? distanceKm;
   final String lastSeen;
   final String? vehicleCategory;
+  final double? latitude;
+  final double? longitude;
 
   NearbyDriver({
     required this.driverId,
@@ -979,13 +981,15 @@ class NearbyDriver {
     this.distanceKm,
     required this.lastSeen,
     this.vehicleCategory,
+    this.latitude,
+    this.longitude,
   });
 
   factory NearbyDriver.fromJson(Map<String, dynamic> j) => NearbyDriver(
         driverId:        j['driver_id'] as int,
-        name:            (j['name'] ?? '') as String,
-        truckType:       (j['truck_type'] ?? '') as String,
-        plateNumber:     (j['plate_number'] ?? '') as String,
+        name:            (j['driver_name'] ?? j['name'] ?? '') as String,
+        truckType:       (j['vehicle_type'] ?? j['truck_type'] ?? '') as String,
+        plateNumber:     (j['vehicle_plate'] ?? j['plate_number'] ?? '') as String,
         rating:          double.tryParse(j['rating'].toString()) ?? 0.0,
         tripCount:       (j['trip_count'] ?? 0) as int,
         distanceKm:      j['distance_km'] != null
@@ -993,6 +997,153 @@ class NearbyDriver {
             : null,
         lastSeen:        (j['last_seen'] ?? '') as String,
         vehicleCategory: j['vehicle_category'] as String?,
+        latitude:        j['latitude'] != null
+            ? double.tryParse(j['latitude'].toString())
+            : null,
+        longitude:       j['longitude'] != null
+            ? double.tryParse(j['longitude'].toString())
+            : null,
+      );
+}
+
+// ── NearbyTruck ───────────────────────────────────────────────────────────
+
+class NearbyTruck {
+  final int vehicleId;
+  final int? driverId;
+  final String driverName;
+  final String vehicleType;
+  final String vehiclePlate;
+  final String? vehicleCategory;
+  final double latitude;
+  final double longitude;
+  final String? currentCity;
+  final double rating;
+  final double distanceKm;
+  final String lastSeen;
+
+  NearbyTruck({
+    required this.vehicleId,
+    this.driverId,
+    required this.driverName,
+    required this.vehicleType,
+    required this.vehiclePlate,
+    this.vehicleCategory,
+    required this.latitude,
+    required this.longitude,
+    this.currentCity,
+    required this.rating,
+    required this.distanceKm,
+    required this.lastSeen,
+  });
+
+  factory NearbyTruck.fromJson(Map<String, dynamic> j) => NearbyTruck(
+        vehicleId:       j['vehicle_id'] as int,
+        driverId:        j['driver_id'] as int?,
+        driverName:      (j['driver_name'] ?? '') as String,
+        vehicleType:     (j['vehicle_type'] ?? '') as String,
+        vehiclePlate:    (j['vehicle_plate'] ?? '') as String,
+        vehicleCategory: j['vehicle_category'] as String?,
+        latitude:        double.tryParse(j['latitude'].toString()) ?? 0.0,
+        longitude:       double.tryParse(j['longitude'].toString()) ?? 0.0,
+        currentCity:     j['current_city'] as String?,
+        rating:          double.tryParse(j['rating'].toString()) ?? 0.0,
+        distanceKm:      double.tryParse(j['distance_km'].toString()) ?? 0.0,
+        lastSeen:        (j['last_seen'] ?? '') as String,
+      );
+}
+
+// ── RouteResult ───────────────────────────────────────────────────────────
+
+class RouteStep {
+  final String instruction;
+  final int distanceM;
+  final int durationS;
+  final String maneuver;
+
+  RouteStep({
+    required this.instruction,
+    required this.distanceM,
+    required this.durationS,
+    required this.maneuver,
+  });
+
+  factory RouteStep.fromJson(Map<String, dynamic> j) => RouteStep(
+        instruction: (j['instruction'] ?? '') as String,
+        distanceM:   (j['distance_m'] ?? 0) as int,
+        durationS:   (j['duration_s'] ?? 0) as int,
+        maneuver:    (j['maneuver'] ?? 'turn') as String,
+      );
+
+  String get distanceLabel {
+    if (distanceM < 1000) return '$distanceM m';
+    return '${(distanceM / 1000).toStringAsFixed(1)} km';
+  }
+}
+
+class RouteResult {
+  final double distanceKm;
+  final int durationMin;
+  /// Polyline as list of [lng, lat] pairs (OSRM order)
+  final List<List<double>> polyline;
+  final List<RouteStep> steps;
+  final String source;
+
+  RouteResult({
+    required this.distanceKm,
+    required this.durationMin,
+    required this.polyline,
+    required this.steps,
+    required this.source,
+  });
+
+  factory RouteResult.fromJson(Map<String, dynamic> j) {
+    final rawPolyline = j['polyline'] as List? ?? [];
+    final polyline = rawPolyline
+        .whereType<List>()
+        .map((p) => p.whereType<num>().map((n) => n.toDouble()).toList())
+        .where((p) => p.length >= 2)
+        .toList();
+
+    final rawSteps = j['steps'] as List? ?? [];
+    final steps = rawSteps
+        .whereType<Map<String, dynamic>>()
+        .map(RouteStep.fromJson)
+        .toList();
+
+    return RouteResult(
+      distanceKm:  double.tryParse(j['distance_km'].toString()) ?? 0.0,
+      durationMin: (j['duration_min'] ?? 0) as int,
+      polyline:    polyline,
+      steps:       steps,
+      source:      (j['source'] ?? 'unknown') as String,
+    );
+  }
+}
+
+// ── PlaceResult ───────────────────────────────────────────────────────────
+
+class PlaceResult {
+  final String name;
+  final String shortName;
+  final double lat;
+  final double lng;
+  final String type;
+
+  PlaceResult({
+    required this.name,
+    required this.shortName,
+    required this.lat,
+    required this.lng,
+    required this.type,
+  });
+
+  factory PlaceResult.fromJson(Map<String, dynamic> j) => PlaceResult(
+        name:      (j['name'] ?? '') as String,
+        shortName: (j['short_name'] ?? (j['name'] ?? '')) as String,
+        lat:       double.tryParse(j['lat'].toString()) ?? 0.0,
+        lng:       double.tryParse(j['lng'].toString()) ?? 0.0,
+        type:      (j['type'] ?? '') as String,
       );
 }
 
@@ -1005,6 +1156,11 @@ class TripLocation {
   final DateTime? lastUpdatedAt;
   final int? minutesSinceUpdate;
   final List<Map<String, dynamic>> routeData;
+  final String? destination;
+  final double? destinationLat;
+  final double? destinationLng;
+  final double? pickupLat;
+  final double? pickupLng;
 
   TripLocation({
     this.currentLat,
@@ -1013,9 +1169,15 @@ class TripLocation {
     this.lastUpdatedAt,
     this.minutesSinceUpdate,
     this.routeData = const [],
+    this.destination,
+    this.destinationLat,
+    this.destinationLng,
+    this.pickupLat,
+    this.pickupLng,
   });
 
   bool get hasPosition => currentLat != null && currentLng != null;
+  bool get hasDestination => destinationLat != null && destinationLng != null;
 
   factory TripLocation.fromJson(Map<String, dynamic> j) {
     final rawRoute = j['route_data'];
@@ -1038,6 +1200,19 @@ class TripLocation {
           : null,
       minutesSinceUpdate:  j['minutes_since_update'] as int?,
       routeData:           route,
+      destination:         j['destination'] as String?,
+      destinationLat:      j['destination_lat'] != null
+          ? double.tryParse(j['destination_lat'].toString())
+          : null,
+      destinationLng:      j['destination_lng'] != null
+          ? double.tryParse(j['destination_lng'].toString())
+          : null,
+      pickupLat:           j['pickup_lat'] != null
+          ? double.tryParse(j['pickup_lat'].toString())
+          : null,
+      pickupLng:           j['pickup_lng'] != null
+          ? double.tryParse(j['pickup_lng'].toString())
+          : null,
     );
   }
 }
