@@ -3,8 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../../data/providers/data_providers.dart';
 import '../../data/repositories/repositories.dart';
+import '../../services/location_service.dart';
 import '../shared/widgets/shared_widgets.dart';
 
 class CreateFreightScreen extends ConsumerStatefulWidget {
@@ -49,6 +52,14 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
   String? _preferredDate;
   String? _vehicleTypeNeeded;
 
+  // ── GPS pickup state (shared for both service types) ─────────────────────
+  double? _pickupLat;
+  double? _pickupLng;
+  bool _gpsPickupMode = false;
+  bool _detectingLocation = false;
+  String? _detectedCityName;
+  double? _detectedAccuracyKm;
+
   // ── Static data ───────────────────────────────────────────────────────────
 
   static const _cargoTypes = [
@@ -90,6 +101,64 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
     _dropoffAreaCtrl.dispose();
     _itemsDescCtrl.dispose();
     super.dispose();
+  }
+
+  // ── GPS pickup detection ──────────────────────────────────────────────────
+
+  Future<void> _detectPickupLocation() async {
+    setState(() {
+      _detectingLocation = true;
+      _gpsPickupMode = false;
+    });
+    try {
+      final pos = await LocationService.getCurrentPosition();
+      if (pos == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('location.denied'.tr()),
+            backgroundColor: kDanger,
+          ));
+          setState(() => _detectingLocation = false);
+        }
+        return;
+      }
+      final result = await ref
+          .read(cargoRepositoryProvider)
+          .nearestCity(pos.latitude, pos.longitude);
+      if (!mounted) return;
+      setState(() {
+        _pickupLat = pos.latitude;
+        _pickupLng = pos.longitude;
+        _detectedCityName = result.city;
+        _detectedAccuracyKm = result.distanceKm;
+        _gpsPickupMode = true;
+        _detectingLocation = false;
+        pickupLocation = result.city;
+        _intraCity = result.city;
+        if (_pickupAreaCtrl.text.isEmpty ||
+            _pickupAreaCtrl.text.startsWith('Near ')) {
+          _pickupAreaCtrl.text = 'Near ${result.city} (GPS location)';
+        }
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('location.unavailable'.tr()),
+          backgroundColor: kDanger,
+        ));
+        setState(() => _detectingLocation = false);
+      }
+    }
+  }
+
+  void _clearGpsPickup() {
+    setState(() {
+      _pickupLat = null;
+      _pickupLng = null;
+      _gpsPickupMode = false;
+      _detectedCityName = null;
+      _detectedAccuracyKm = null;
+    });
   }
 
   // ── Navigation ────────────────────────────────────────────────────────────
@@ -193,6 +262,8 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
             budget: double.tryParse(budget ?? ''),
             priceType: priceType,
             bidDeadline: deadline != null ? DateTime.tryParse(deadline!) : null,
+            pickupLat: _pickupLat,
+            pickupLng: _pickupLng,
           );
       if (mounted) Navigator.pop(context);
       if (mounted) {
@@ -242,6 +313,8 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
             itemsDescription: _itemsDescCtrl.text.trim(),
             preferredDate: DateTime.parse(_preferredDate!),
             vehicleTypeNeeded: _vehicleTypeNeeded,
+            pickupLat: _pickupLat,
+            pickupLng: _pickupLng,
           );
       if (mounted) Navigator.pop(context);
       if (mounted) {
@@ -303,6 +376,14 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
                         dropoffCtrl: _dropoffAreaCtrl,
                         cities: _intracityCities,
                         onCity: (v) => setState(() => _intraCity = v),
+                        gpsPickupMode: _gpsPickupMode,
+                        detectingLocation: _detectingLocation,
+                        detectedCity: _detectedCityName,
+                        detectedAccuracyKm: _detectedAccuracyKm,
+                        gpsLat: _pickupLat,
+                        gpsLng: _pickupLng,
+                        onUseGps: _detectPickupLocation,
+                        onClearGps: _clearGpsPickup,
                       ),
                       _IntraStep2(
                         descCtrl: _itemsDescCtrl,
@@ -333,6 +414,12 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
                         cities: _cities,
                         onPickup: (v) => setState(() => pickupLocation = v),
                         onDelivery: (v) => setState(() => deliveryLocation = v),
+                        gpsPickupMode: _gpsPickupMode,
+                        detectingLocation: _detectingLocation,
+                        detectedCity: _detectedCityName,
+                        detectedAccuracyKm: _detectedAccuracyKm,
+                        onUseGps: _detectPickupLocation,
+                        onClearGps: _clearGpsPickup,
                       ),
                       _Step2(
                         cargoType: cargoType,
@@ -609,6 +696,172 @@ class _StepIndicator extends StatelessWidget {
   }
 }
 
+// ── GPS / Manual pickup mode toggle ──────────────────────────────────────────
+
+class _PickupModeToggle extends StatelessWidget {
+  final bool gpsMode;
+  final bool loading;
+  final VoidCallback onGps;
+  final VoidCallback onManual;
+
+  const _PickupModeToggle({
+    required this.gpsMode,
+    required this.loading,
+    required this.onGps,
+    required this.onManual,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      Expanded(
+        child: _ModeButton(
+          icon: loading ? null : Icons.location_pin,
+          label: loading
+              ? 'location.detecting'.tr()
+              : 'location.use_my_location'.tr(),
+          selected: gpsMode || loading,
+          loading: loading,
+          onTap: (gpsMode || loading) ? null : onGps,
+        ),
+      ),
+      const SizedBox(width: 10),
+      Expanded(
+        child: _ModeButton(
+          icon: Icons.location_city_outlined,
+          label: 'location.select_city'.tr(),
+          selected: !gpsMode && !loading,
+          loading: false,
+          onTap: (!gpsMode && !loading) ? null : onManual,
+        ),
+      ),
+    ]);
+  }
+}
+
+class _ModeButton extends StatelessWidget {
+  final IconData? icon;
+  final String label;
+  final bool selected;
+  final bool loading;
+  final VoidCallback? onTap;
+
+  const _ModeButton({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.loading,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? kGreen.withValues(alpha: 0.07) : kSurface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? kGreen : kBorder,
+            width: selected ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          if (loading)
+            SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: kGreen),
+            )
+          else if (icon != null)
+            Icon(icon, size: 16, color: selected ? kGreen : kTextMuted),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: selected ? kGreen : kTextSecond,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+// ── GPS detected city badge ───────────────────────────────────────────────────
+
+class _GpsDetectedBadge extends StatelessWidget {
+  final String cityName;
+  final double? accuracyKm;
+  final VoidCallback onClear;
+
+  const _GpsDetectedBadge({
+    required this.cityName,
+    required this.accuracyKm,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: kGreen.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: kGreen.withValues(alpha: 0.35)),
+      ),
+      child: Row(children: [
+        const Icon(Icons.location_pin, color: Color(0xFF059669), size: 18),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(
+              cityName,
+              style: GoogleFonts.inter(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: kGreen),
+            ),
+            if (accuracyKm != null)
+              Text(
+                'location.accuracy_km'
+                    .tr(namedArgs: {'km': accuracyKm!.toStringAsFixed(1)}),
+                style: GoogleFonts.inter(fontSize: 11, color: kTextSecond),
+              ),
+          ]),
+        ),
+        GestureDetector(
+          onTap: onClear,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: kSurface,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: kBorder),
+            ),
+            child: Text(
+              'location.change'.tr(),
+              style: GoogleFonts.inter(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: kTextSecond),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
 // ── Shared: dropdown with "Other" → text field ────────────────────────────────
 
 class _DropdownWithOther extends StatefulWidget {
@@ -733,6 +986,12 @@ class _Step1 extends StatelessWidget {
   final List<String> cities;
   final ValueChanged<String> onPickup;
   final ValueChanged<String> onDelivery;
+  final bool gpsPickupMode;
+  final bool detectingLocation;
+  final String? detectedCity;
+  final double? detectedAccuracyKm;
+  final VoidCallback onUseGps;
+  final VoidCallback onClearGps;
 
   const _Step1({
     required this.pickupLocation,
@@ -740,6 +999,12 @@ class _Step1 extends StatelessWidget {
     required this.cities,
     required this.onPickup,
     required this.onDelivery,
+    required this.gpsPickupMode,
+    required this.detectingLocation,
+    required this.detectedCity,
+    required this.detectedAccuracyKm,
+    required this.onUseGps,
+    required this.onClearGps,
   });
 
   @override
@@ -750,15 +1015,34 @@ class _Step1 extends StatelessWidget {
         Text('Pickup Location',
             style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
-        _DropdownWithOther(
-          selected: pickupLocation,
-          options: cities,
-          hint: 'Select pickup city',
-          otherHint: 'Enter city name (e.g. Mojo)',
-          prefixIcon: Icons.trip_origin,
-          labelOf: (c) => c,
-          onSelect: onPickup,
+
+        // GPS / Manual toggle
+        _PickupModeToggle(
+          gpsMode: gpsPickupMode,
+          loading: detectingLocation,
+          onGps: onUseGps,
+          onManual: onClearGps,
         ),
+        const SizedBox(height: 12),
+
+        // Show detected badge OR manual dropdown
+        if (gpsPickupMode && detectedCity != null)
+          _GpsDetectedBadge(
+            cityName: detectedCity!,
+            accuracyKm: detectedAccuracyKm,
+            onClear: onClearGps,
+          )
+        else if (!detectingLocation)
+          _DropdownWithOther(
+            selected: pickupLocation,
+            options: cities,
+            hint: 'location.select_city'.tr(),
+            otherHint: 'Enter city name (e.g. Mojo)',
+            prefixIcon: Icons.trip_origin,
+            labelOf: (c) => c,
+            onSelect: onPickup,
+          ),
+
         const SizedBox(height: 20),
         Text('Destination',
             style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
@@ -1148,10 +1432,29 @@ class _IntraStep1 extends StatelessWidget {
   final TextEditingController dropoffCtrl;
   final List<String> cities;
   final ValueChanged<String> onCity;
+  final bool gpsPickupMode;
+  final bool detectingLocation;
+  final String? detectedCity;
+  final double? detectedAccuracyKm;
+  final double? gpsLat;
+  final double? gpsLng;
+  final VoidCallback onUseGps;
+  final VoidCallback onClearGps;
 
   const _IntraStep1({
-    required this.city, required this.pickupCtrl, required this.dropoffCtrl,
-    required this.cities, required this.onCity,
+    required this.city,
+    required this.pickupCtrl,
+    required this.dropoffCtrl,
+    required this.cities,
+    required this.onCity,
+    required this.gpsPickupMode,
+    required this.detectingLocation,
+    required this.detectedCity,
+    required this.detectedAccuracyKm,
+    required this.gpsLat,
+    required this.gpsLng,
+    required this.onUseGps,
+    required this.onClearGps,
   });
 
   InputDecoration _deco({String? hint, Widget? prefix}) => InputDecoration(
@@ -1188,17 +1491,42 @@ class _IntraStep1 extends StatelessWidget {
           ]),
         ),
         const SizedBox(height: 20),
+
+        // ── GPS / Manual pickup toggle ───────────────────────────────────
+        Text('Pickup Location',
+            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
+        const SizedBox(height: 8),
+        _PickupModeToggle(
+          gpsMode: gpsPickupMode,
+          loading: detectingLocation,
+          onGps: onUseGps,
+          onManual: onClearGps,
+        ),
+        const SizedBox(height: 12),
+
+        if (gpsPickupMode && detectedCity != null) ...[
+          _GpsDetectedBadge(
+            cityName: detectedCity!,
+            accuracyKm: detectedAccuracyKm,
+            onClear: onClearGps,
+          ),
+          const SizedBox(height: 14),
+        ],
+
+        // ── City dropdown (always shown, pre-filled in GPS mode) ─────────
         Text('City', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
           value: city,
-          hint: Text('Select city', style: GoogleFonts.inter(color: kTextMuted)),
+          hint: Text('location.select_city'.tr(), style: GoogleFonts.inter(color: kTextMuted)),
           isExpanded: true,
           decoration: _deco(prefix: Icon(Icons.location_city_outlined, color: kGreen, size: 20)),
           items: cities.map((c) => DropdownMenuItem(
                 value: c, child: Text(c, style: GoogleFonts.inter(fontSize: 14)))).toList(),
           onChanged: (v) { if (v != null) onCity(v); },
         ),
+
+        // ── Pickup area ──────────────────────────────────────────────────
         const SizedBox(height: 20),
         Text('Pickup Area / Neighborhood',
             style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
@@ -1206,11 +1534,53 @@ class _IntraStep1 extends StatelessWidget {
         TextField(
           controller: pickupCtrl,
           decoration: _deco(
-            hint: 'e.g. Bole, Piazza, Kazanchis',
+            hint: gpsPickupMode
+                ? 'Add a landmark (e.g. Near Piassa)'
+                : 'e.g. Bole, Piazza, Kazanchis',
             prefix: Icon(Icons.trip_origin, color: kGreen, size: 20),
           ),
           style: GoogleFonts.inter(fontSize: 14),
         ),
+
+        // ── Small map preview when GPS mode active ───────────────────────
+        if (gpsPickupMode && gpsLat != null && gpsLng != null) ...[
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: SizedBox(
+              height: 150,
+              child: FlutterMap(
+                options: MapOptions(
+                  initialCenter: LatLng(gpsLat!, gpsLng!),
+                  initialZoom: 14.0,
+                  interactionOptions: const InteractionOptions(
+                    flags: InteractiveFlag.none,
+                  ),
+                ),
+                children: [
+                  TileLayer(
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.ethioloadai.app',
+                  ),
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: LatLng(gpsLat!, gpsLng!),
+                        width: 40,
+                        height: 40,
+                        child: const Icon(Icons.location_pin,
+                            color: Color(0xFF059669), size: 40),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+
+        // ── Dropoff area ─────────────────────────────────────────────────
         const SizedBox(height: 20),
         Text('Dropoff Area / Neighborhood',
             style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),

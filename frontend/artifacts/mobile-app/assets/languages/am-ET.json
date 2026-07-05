@@ -262,6 +262,18 @@
     "updates_every_25": "በ25 ደቂቃ ይዘምናል · ለዘመነ ዳታ አድስ"
   },
 
+  "location": {
+    "use_my_location": "የአሁን ቦታዬን ተጠቀም",
+    "detecting": "ቦታዎን በማወቅ ላይ...",
+    "detected": "ቦታ ተገኝቷል",
+    "change": "ቀይር",
+    "select_city": "ከተማ ምረጥ",
+    "type_address": "አድራሻ ይጻፉ",
+    "denied": "ቦታ ፈቃድ ተከልክሏል። በእጅ ይምረጡ።",
+    "unavailable": "ቦታ አልተገኘም። ከተማ በእጅ ይምረጡ።",
+    "accuracy_km": "{km} ኪ.ሜ ከከተማ ማዕከል"
+  },
+
   "chat": {
     "messages": "መልዕክቶች",
     "send": "ላክ",

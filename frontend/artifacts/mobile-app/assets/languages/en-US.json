@@ -262,6 +262,18 @@
     "updates_every_25": "Updates every 25 minutes · Tap refresh for latest"
   },
 
+  "location": {
+    "use_my_location": "Use my current location",
+    "detecting": "Detecting your location...",
+    "detected": "Location detected",
+    "change": "Change",
+    "select_city": "Select city",
+    "type_address": "Type address",
+    "denied": "Location access denied. Please select manually.",
+    "unavailable": "Location not available. Please select city manually.",
+    "accuracy_km": "{km} km from city center"
+  },
+
   "chat": {
     "messages": "Messages",
     "send": "Send",

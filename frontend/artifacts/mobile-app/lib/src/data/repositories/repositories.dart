@@ -114,6 +114,8 @@ class CargoRepository {
     double? budget,
     String priceType = 'negotiable',
     DateTime? bidDeadline,
+    double? pickupLat,
+    double? pickupLng,
   }) async =>
       _api.post<CargoRequest>(
         '/cargo/create',
@@ -126,6 +128,8 @@ class CargoRepository {
           if (budget != null) 'budget': budget,
           'price_type': priceType,
           if (bidDeadline != null) 'bid_deadline': bidDeadline.toIso8601String(),
+          if (pickupLat != null && pickupLng != null) 'pickup_lat': pickupLat,
+          if (pickupLat != null && pickupLng != null) 'pickup_lng': pickupLng,
         },
         fromJson: (json) =>
             CargoRequest.fromJson(json as Map<String, dynamic>),
@@ -216,6 +220,8 @@ class CargoRepository {
     String priceType = 'negotiable',
     double? budget,
     DateTime? bidDeadline,
+    double? pickupLat,
+    double? pickupLng,
   }) async =>
       _api.post<CargoRequest>(
         '/cargo/create',
@@ -231,10 +237,32 @@ class CargoRepository {
           'price_type': priceType,
           if (budget != null) 'budget': budget,
           if (bidDeadline != null) 'bid_deadline': bidDeadline.toIso8601String(),
+          if (pickupLat != null && pickupLng != null) 'pickup_lat': pickupLat,
+          if (pickupLat != null && pickupLng != null) 'pickup_lng': pickupLng,
         },
         fromJson: (json) =>
             CargoRequest.fromJson(json as Map<String, dynamic>),
       );
+
+  // POST /geocode/nearest-city — reverse-geocode GPS coords to nearest city
+  Future<({String city, double distanceKm, double lat, double lng})>
+      nearestCity(double lat, double lng) async {
+    final response = await _api.dio.post(
+      '/geocode/nearest-city',
+      data: {'lat': lat, 'lng': lng},
+    );
+    if (response.statusCode == 200) {
+      final d = response.data as Map<String, dynamic>;
+      return (
+        city: d['city'] as String,
+        distanceKm: (d['distance_km'] as num).toDouble(),
+        lat: (d['lat'] as num).toDouble(),
+        lng: (d['lng'] as num).toDouble(),
+      );
+    }
+    throw ApiException(
+        message: 'Geocoding failed', statusCode: response.statusCode);
+  }
 
   // GET /cargo-requests with meta (location_unset flag for drivers)
   Future<({bool locationUnset, List<CargoRequest> cargo})> listWithMeta() async {
