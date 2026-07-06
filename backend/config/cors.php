@@ -7,7 +7,8 @@ $envOrigins = array_filter(
 );
 
 // In development we also allow any localhost port (Flutter web dev server).
-$devOrigins = app()->isLocal() ? [
+$isLocal = env('APP_ENV') === 'local';
+$devOrigins = $isLocal ? [
     'http://backend.test',
     'http://localhost',
     'http://127.0.0.1',
@@ -35,7 +36,7 @@ return [
     'allowed_origins' => array_values(array_unique([...$envOrigins, ...$devOrigins])),
 
     // Covers any port the Flutter / Vite dev server picks (e.g. localhost:55036).
-    'allowed_origins_patterns' => app()->isLocal() ? [
+    'allowed_origins_patterns' => $isLocal ? [
         '#^http://localhost(:\d+)?$#',
         '#^http://127\.0\.0\.1(:\d+)?$#',
     ] : [],
