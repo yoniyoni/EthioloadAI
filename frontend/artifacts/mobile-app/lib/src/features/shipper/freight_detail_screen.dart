@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../../data/providers/data_providers.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/repositories.dart';
 import '../shared/widgets/shared_widgets.dart';
+import '../shared/widgets/cargo_route_map_widget.dart';
+import '../../utils/ethiopian_cities.dart';
 
 /// Cargo detail screen.
 /// - Drivers see cargo info + "Place Bid" button.
@@ -110,6 +114,19 @@ class _DetailScaffold extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.read(authNotifierProvider).user;
+    final isIntercity = cargo.serviceType != 'intracity';
+
+    // Resolve intercity coords: API-supplied values first, then city-name lookup.
+    LatLng? pickupLatLng;
+    LatLng? destLatLng;
+    if (isIntercity) {
+      pickupLatLng = (cargo.pickupLat != null && cargo.pickupLng != null)
+          ? LatLng(cargo.pickupLat!, cargo.pickupLng!)
+          : cityCoordinates(cargo.pickupLocation);
+      destLatLng = (cargo.destinationLat != null && cargo.destinationLng != null)
+          ? LatLng(cargo.destinationLat!, cargo.destinationLng!)
+          : cityCoordinates(cargo.destination);
+    }
 
     return Scaffold(
       backgroundColor: kBackground,
@@ -118,6 +135,38 @@ class _DetailScaffold extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ── Route map ─────────────────────────────────────────────
+            if (isIntercity && pickupLatLng != null && destLatLng != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: CargoRouteMapWidget(
+                  pickupLat:      pickupLatLng.latitude,
+                  pickupLng:      pickupLatLng.longitude,
+                  destinationLat: destLatLng.latitude,
+                  destinationLng: destLatLng.longitude,
+                  pickupName:     cargo.pickupLocation,
+                  destinationName: cargo.destination,
+                  height: 240,
+                ),
+              )
+            else if (isIntercity)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: RouteUnavailablePlaceholder(height: 200),
+              )
+            else if (!isIntercity &&
+                cargo.pickupLat != null &&
+                cargo.pickupLng != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: _PickupPinMap(
+                  lat:    cargo.pickupLat!,
+                  lng:    cargo.pickupLng!,
+                  label:  cargo.pickupArea ?? cargo.city ?? 'Pickup',
+                  height: 160,
+                ),
+              ),
+
             // ── Header ────────────────────────────────────────────────
             Container(
               width: double.infinity,
@@ -910,6 +959,71 @@ class _LocationCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Intracity single-pin map ──────────────────────────────────────────────
+
+class _PickupPinMap extends StatelessWidget {
+  final double lat;
+  final double lng;
+  final String label;
+  final double height;
+
+  const _PickupPinMap({
+    required this.lat,
+    required this.lng,
+    required this.label,
+    this.height = 160,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final point = LatLng(lat, lng);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            height: height,
+            child: FlutterMap(
+              options: MapOptions(
+                initialCenter: point,
+                initialZoom: 14.0,
+                interactionOptions: const InteractionOptions(
+                  flags: InteractiveFlag.none,
+                ),
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate:
+                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.ethioloadai.app',
+                ),
+                MarkerLayer(markers: [
+                  Marker(
+                    point: point,
+                    width: 40,
+                    height: 40,
+                    child: const Icon(Icons.location_pin,
+                        color: Colors.blue, size: 40),
+                  ),
+                ]),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Pickup: $label',
+          style: GoogleFonts.inter(
+              fontSize: 12,
+              color: kTextMuted,
+              fontWeight: FontWeight.w500),
+        ),
+      ],
     );
   }
 }

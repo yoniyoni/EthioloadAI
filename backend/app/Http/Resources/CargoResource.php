@@ -8,6 +8,45 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class CargoResource extends JsonResource
 {
     /**
+     * Look up [lat, lng] for an Ethiopian city name.
+     * Tries exact match, then strips after "/" or ",", then case-insensitive substring.
+     */
+    private static function cityCoords(string $city): ?array
+    {
+        static $extra = [
+            'Shashemene'  => [7.2000,  38.5833],
+            'Asella'      => [7.9500,  39.1333],
+            'Bale Robe'   => [7.1167,  40.0000],
+            'Bishoftu'    => [8.7500,  38.9833],
+            'Moyale'      => [3.5333,  39.0500],
+            'Kebri Dahar' => [6.7500,  44.2833],
+            'Sodo'        => [6.8500,  37.7500],
+            'Adwa'        => [14.1667, 38.9000],
+        ];
+
+        $all = array_merge(\App\Http\Controllers\Api\VehicleController::CITY_COORDS, $extra);
+
+        $trimmed = trim($city);
+        if ($trimmed === '' || strtolower($trimmed) === 'other') return null;
+
+        if (isset($all[$trimmed])) return $all[$trimmed];
+
+        // Strip after " / " or "," (e.g. "Adama / Nazret" → "Adama")
+        $short = trim(preg_split('/\s*[\/,]\s*/', $trimmed)[0]);
+        if ($short !== $trimmed && isset($all[$short])) return $all[$short];
+
+        // Case-insensitive substring
+        $lc = strtolower($trimmed);
+        foreach ($all as $name => $coords) {
+            if (stripos($name, $lc) !== false || stripos($lc, strtolower($name)) !== false) {
+                return $coords;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Transform the resource into an array.
      *
      * @return array<string, mixed>
@@ -18,15 +57,25 @@ class CargoResource extends JsonResource
         // Hide budget from drivers — sealed-bid: drivers should not anchor to the shipper's price
         $showBudget = true;
 
+        // Resolve pickup coordinates: stored GPS value takes priority, then city-name lookup.
+        $pickupCoords = ($this->pickup_lat && $this->pickup_lng)
+            ? [(float) $this->pickup_lat, (float) $this->pickup_lng]
+            : self::cityCoords($this->pickup_location ?? '');
+
+        // Destination always resolved from city-name lookup (never GPS-stored on cargo record).
+        $destCoords = self::cityCoords($this->destination ?? '');
+
         return [
             'id'                  => $this->id,
             'user_id'             => $this->user_id,
             'service_type'        => $this->service_type ?? 'intercity',
             // intercity fields
             'pickup_location'     => $this->pickup_location,
-            'pickup_lat'          => $this->pickup_lat,
-            'pickup_lng'          => $this->pickup_lng,
+            'pickup_lat'          => $pickupCoords ? $pickupCoords[0] : null,
+            'pickup_lng'          => $pickupCoords ? $pickupCoords[1] : null,
             'destination'         => $this->destination,
+            'destination_lat'     => $destCoords ? $destCoords[0] : null,
+            'destination_lng'     => $destCoords ? $destCoords[1] : null,
             'material_type'       => $this->material_type,
             'weight'              => $this->weight,
             'urgency_level'       => $this->urgency_level,

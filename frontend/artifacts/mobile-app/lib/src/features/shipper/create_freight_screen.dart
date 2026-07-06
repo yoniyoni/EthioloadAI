@@ -8,6 +8,8 @@ import 'package:latlong2/latlong.dart';
 import '../../data/repositories/repositories.dart';
 import '../../services/location_service.dart';
 import '../shared/widgets/shared_widgets.dart';
+import '../shared/widgets/cargo_route_map_widget.dart';
+import '../../utils/ethiopian_cities.dart';
 
 class CreateFreightScreen extends ConsumerStatefulWidget {
   const CreateFreightScreen({super.key});
@@ -449,6 +451,12 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
                       _Step4(
                         pickup: pickupLocation,
                         delivery: deliveryLocation,
+                        pickupLat:      _pickupLat
+                            ?? cityCoordinates(pickupLocation ?? '')?.latitude,
+                        pickupLng:      _pickupLng
+                            ?? cityCoordinates(pickupLocation ?? '')?.longitude,
+                        destinationLat: cityCoordinates(deliveryLocation ?? '')?.latitude,
+                        destinationLng: cityCoordinates(deliveryLocation ?? '')?.longitude,
                         cargo: cargoType,
                         weight: weight,
                         budget: budget,
@@ -1374,6 +1382,10 @@ class _PriceTypeOption extends StatelessWidget {
 class _Step4 extends StatelessWidget {
   final String? pickup;
   final String? delivery;
+  final double? pickupLat;
+  final double? pickupLng;
+  final double? destinationLat;
+  final double? destinationLng;
   final String? cargo;
   final String? weight;
   final String? budget;
@@ -1382,13 +1394,25 @@ class _Step4 extends StatelessWidget {
   final String priceType;
 
   const _Step4({
-    required this.pickup, required this.delivery, required this.cargo,
-    required this.weight, required this.budget, required this.deadline,
-    required this.description, required this.priceType,
+    required this.pickup,
+    required this.delivery,
+    this.pickupLat,
+    this.pickupLng,
+    this.destinationLat,
+    this.destinationLng,
+    required this.cargo,
+    required this.weight,
+    required this.budget,
+    required this.deadline,
+    required this.description,
+    required this.priceType,
   });
 
   @override
   Widget build(BuildContext context) {
+    final hasCoords = pickupLat != null && pickupLng != null &&
+        destinationLat != null && destinationLng != null;
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -1396,6 +1420,60 @@ class _Step4 extends StatelessWidget {
             style: GoogleFonts.inter(
                 fontSize: 16, fontWeight: FontWeight.bold, color: kTextPrimary)),
         const SizedBox(height: 16),
+
+        // ── Route map preview ────────────────────────────────────────
+        if (hasCoords) ...[
+          CargoRouteMapWidget(
+            pickupLat:      pickupLat!,
+            pickupLng:      pickupLng!,
+            destinationLat: destinationLat!,
+            destinationLng: destinationLng!,
+            pickupName:     pickup ?? '',
+            destinationName: delivery ?? '',
+            height: 220,
+          ),
+          const SizedBox(height: 12),
+          // Route header row
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: kGreenTint,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: kGreen.withValues(alpha: 0.2)),
+            ),
+            child: Row(children: [
+              Expanded(
+                child: Text(
+                  pickup ?? '—',
+                  style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w600,
+                      color: kTextPrimary,
+                      fontSize: 13),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Icon(Icons.arrow_forward_rounded,
+                    color: kAmber, size: 18),
+              ),
+              Expanded(
+                child: Text(
+                  delivery ?? '—',
+                  textAlign: TextAlign.end,
+                  style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w600,
+                      color: kTextPrimary,
+                      fontSize: 13),
+                ),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 20),
+        ] else ...[
+          RouteUnavailablePlaceholder(height: 160),
+          const SizedBox(height: 16),
+        ],
+
         _ReviewRow('Pickup', pickup ?? '—'),
         _ReviewRow('Destination', delivery ?? '—'),
         _ReviewRow('Cargo Type', cargo ?? '—'),

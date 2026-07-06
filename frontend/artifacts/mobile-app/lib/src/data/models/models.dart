@@ -155,6 +155,10 @@ class CargoRequest {
   final String? itemsDescription;
   final String? vehicleTypeNeeded;
   final double? distanceKm;
+  final double? pickupLat;
+  final double? pickupLng;
+  final double? destinationLat;
+  final double? destinationLng;
 
   CargoRequest({
     required this.id,
@@ -178,6 +182,10 @@ class CargoRequest {
     this.itemsDescription,
     this.vehicleTypeNeeded,
     this.distanceKm,
+    this.pickupLat,
+    this.pickupLng,
+    this.destinationLat,
+    this.destinationLng,
   });
 
   factory CargoRequest.fromJson(Map<String, dynamic> json) => CargoRequest(
@@ -213,6 +221,18 @@ class CargoRequest {
         vehicleTypeNeeded: json['vehicle_type_needed'] as String?,
         distanceKm: json['distance_km'] != null
             ? double.tryParse(json['distance_km'].toString())
+            : null,
+        pickupLat: json['pickup_lat'] != null
+            ? double.tryParse(json['pickup_lat'].toString())
+            : null,
+        pickupLng: json['pickup_lng'] != null
+            ? double.tryParse(json['pickup_lng'].toString())
+            : null,
+        destinationLat: json['destination_lat'] != null
+            ? double.tryParse(json['destination_lat'].toString())
+            : null,
+        destinationLng: json['destination_lng'] != null
+            ? double.tryParse(json['destination_lng'].toString())
             : null,
       );
 
