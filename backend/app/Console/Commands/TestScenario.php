@@ -144,7 +144,12 @@ class TestScenario extends Command
         $this->line('🧹 Cleaning up previous test data (+25191100* accounts)…');
 
         $phones = array_column($this->accounts, 'phone');
-        $userIds = DB::table('users')->whereIn('phone', $phones)->pluck('id')->toArray();
+        $emails = array_column($this->accounts, 'email');
+        $userIds = DB::table('users')
+            ->whereIn('phone', $phones)
+            ->orWhereIn('email', $emails)
+            ->pluck('id')
+            ->toArray();
 
         if (empty($userIds)) {
             $this->line('   Nothing to clean.');

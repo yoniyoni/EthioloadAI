@@ -23,8 +23,8 @@ use App\Http\Controllers\Api\BackhaulRecommendationController;
 use App\Http\Controllers\Api\GeocodingController;
 use App\Http\Controllers\Api\RoutingController;
 
+Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:30,1');
 Route::middleware('throttle:login')->group(function () {
-    Route::post('/register',    [AuthController::class,      'register']);
     Route::post('/login',       [AuthController::class,      'login']);
     // Admin panel login
     Route::post('/auth/login',  [AdminApiController::class,  'login']);
