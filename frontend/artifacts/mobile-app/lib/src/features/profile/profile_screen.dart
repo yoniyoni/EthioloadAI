@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../../data/providers/data_providers.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/repositories.dart';
@@ -109,8 +110,10 @@ class ProfileScreen extends ConsumerWidget {
                   _SettingTile(
                     icon: Icons.language,
                     label: 'Language',
-                    value: 'English',
-                    onTap: () {},
+                    value: context.locale.languageCode == 'en'
+                        ? 'English'
+                        : 'አማርኛ',
+                    onTap: () => _showLangPicker(context),
                   ),
                   _SettingTile(
                     icon: Icons.notifications_outlined,
@@ -253,6 +256,60 @@ class ProfileScreen extends ConsumerWidget {
               );
             },
           ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showLangPicker(BuildContext context) {
+    final isEn = context.locale.languageCode == 'en';
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text(
+          'Select Language / ቋንቋ ምረጥ',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(vertical: 8),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              dense: true,
+              leading: const Text('🇬🇧',
+                  style: TextStyle(fontSize: 22)),
+              title: const Text('English'),
+              trailing: isEn
+                  ? const Icon(Icons.check_circle,
+                      color: Colors.green)
+                  : null,
+              onTap: () {
+                context.setLocale(const Locale('en', 'US'));
+                Navigator.pop(ctx);
+              },
+            ),
+            ListTile(
+              dense: true,
+              leading: const Text('🇪🇹',
+                  style: TextStyle(fontSize: 22)),
+              title: const Text('አማርኛ'),
+              trailing: !isEn
+                  ? const Icon(Icons.check_circle,
+                      color: Colors.green)
+                  : null,
+              onTap: () {
+                context.setLocale(const Locale('am', 'ET'));
+                Navigator.pop(ctx);
+              },
+            ),
+          ],
         ),
         actions: [
           TextButton(

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../data/providers/data_providers.dart';
-import '../../data/models/models.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});

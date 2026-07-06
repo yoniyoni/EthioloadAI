@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../data/providers/data_providers.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/repositories.dart';
 

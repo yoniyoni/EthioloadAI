@@ -132,6 +132,10 @@ class _Body extends ConsumerWidget {
           ),
           const SizedBox(height: 20),
 
+          // ── Vehicle registration ──────────────────────────────────
+          const _VehicleRegistrationCard(),
+          const SizedBox(height: 20),
+
           // ── Upload tips (shown until all approved) ────────────────
           if (!allApproved) ...[
             const _InfoCard(),
@@ -784,6 +788,389 @@ class _SkeletonBox extends StatelessWidget {
         decoration: BoxDecoration(
           color: Color.fromRGBO(0, 0, 0, opacity * 0.08),
           borderRadius: BorderRadius.circular(radius),
+        ),
+      );
+}
+
+// ── Vehicle Registration Card ─────────────────────────────────────────────
+
+class _VehicleRegistrationCard extends ConsumerStatefulWidget {
+  const _VehicleRegistrationCard();
+
+  @override
+  ConsumerState<_VehicleRegistrationCard> createState() =>
+      _VehicleRegistrationCardState();
+}
+
+class _VehicleRegistrationCardState
+    extends ConsumerState<_VehicleRegistrationCard> {
+  final _plateCtrl    = TextEditingController();
+  final _capacityCtrl = TextEditingController();
+  String? _category; // 'heavy' | 'light'
+  String  _truckType = 'flatbed';
+  String  _city      = 'Addis Ababa';
+  bool    _loading   = false;
+  bool    _expanded  = false;
+
+  static const _typesHeavy = [
+    'flatbed', 'tanker', 'refrigerated', 'container', 'tipper',
+  ];
+  static const _typesLight = ['pickup', 'minivan', 'bajaj'];
+  static const _cities = [
+    'Addis Ababa', 'Adama', 'Hawassa', 'Dire Dawa', 'Bahir Dar',
+    'Gondar', 'Mekele', 'Jimma', 'Jijiga', 'Nekemte', 'Arba Minch',
+    'Shashamane', 'Dessie', 'Kombolcha', 'Woldia', 'Hosaena',
+  ];
+
+  List<String> get _types =>
+      _category == 'light' ? _typesLight : _typesHeavy;
+
+  @override
+  void dispose() {
+    _plateCtrl.dispose();
+    _capacityCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_plateCtrl.text.isEmpty ||
+        _capacityCtrl.text.isEmpty ||
+        _category == null) { return; }
+    setState(() => _loading = true);
+    try {
+      await ref.read(vehicleRepositoryProvider).register(
+        truckType:       _truckType,
+        plateNumber:     _plateCtrl.text.trim().toUpperCase(),
+        capacity:        double.tryParse(_capacityCtrl.text.trim()) ?? 0,
+        currentCity:     _city,
+        vehicleCategory: _category,
+      );
+      if (mounted) {
+        ref.invalidate(vehicleListProvider);
+        setState(() => _expanded = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Vehicle registered / ተሽከርካሪ ተመዝግቧል'),
+          backgroundColor: _success,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: _danger,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final vehiclesAsync = ref.watch(vehicleListProvider);
+    return vehiclesAsync.when(
+      data: (vehicles) => vehicles.isNotEmpty
+          ? _registeredBadge(vehicles.first)
+          : _registrationForm(),
+      loading: () => const SizedBox.shrink(),
+      error:   (_, __) => _registrationForm(),
+    );
+  }
+
+  Widget _registeredBadge(Vehicle v) => Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _success.withAlpha(14),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _success.withAlpha(50), width: 0.5),
+        ),
+        child: Row(children: [
+          const Icon(Icons.check_circle_rounded, color: _success, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Vehicle registered / ተሽከርካሪ ተመዝግቧል',
+                  style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: _success),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${v.truckType[0].toUpperCase()}${v.truckType.substring(1)}'
+                  '  ·  ${v.plateNumber}'
+                  '  ·  ${v.capacity.toStringAsFixed(0)} t'
+                  '  ·  ${v.currentCity}',
+                  style: const TextStyle(fontSize: 11, color: _textSec),
+                ),
+              ],
+            ),
+          ),
+        ]),
+      );
+
+  Widget _registrationForm() => Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _border, width: 0.5),
+        ),
+        child: Column(children: [
+          // ── Collapsible header ──────────────────────────────────────
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(children: [
+                Container(
+                  width: 42, height: 42,
+                  decoration: BoxDecoration(
+                    color: _amber.withAlpha(25),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                      Icons.airport_shuttle_outlined, color: _amber, size: 22),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Register Your Vehicle / ተሽከርካሪ ምዝገባ',
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: _textPri),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Required to receive cargo assignments',
+                        style: TextStyle(fontSize: 11, color: _textSec),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(_expanded ? Icons.expand_less : Icons.expand_more,
+                    color: _textSec),
+              ]),
+            ),
+          ),
+
+          if (_expanded) ...[
+            const Divider(height: 1, color: _border),
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Category selector ──────────────────────────────
+                  const Text(
+                    'Vehicle Category / ተሽከርካሪ ዓይነት',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: _textPri),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(children: [
+                    Expanded(child: _CategoryChip(
+                      icon:     Icons.local_shipping_rounded,
+                      label:    'Heavy / ከባድ',
+                      selected: _category == 'heavy',
+                      onTap: () => setState(() {
+                        _category  = 'heavy';
+                        _truckType = _typesHeavy.first;
+                      }),
+                    )),
+                    const SizedBox(width: 8),
+                    Expanded(child: _CategoryChip(
+                      icon:     Icons.airport_shuttle_rounded,
+                      label:    'Light / ቀላል',
+                      selected: _category == 'light',
+                      onTap: () => setState(() {
+                        _category  = 'light';
+                        _truckType = _typesLight.first;
+                      }),
+                    )),
+                  ]),
+                  if (_category == null) ...[
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Select a category to continue',
+                      style: TextStyle(fontSize: 11, color: _danger),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+
+                  // ── Truck type ─────────────────────────────────────
+                  DropdownButtonFormField<String>(
+                    initialValue: _types.contains(_truckType)
+                        ? _truckType
+                        : _types.first,
+                    decoration: _deco(
+                        'Vehicle Type', Icons.local_shipping_outlined),
+                    items: _types
+                        .map((t) => DropdownMenuItem(
+                            value: t,
+                            child: Text(
+                                t[0].toUpperCase() + t.substring(1),
+                                style: const TextStyle(fontSize: 13))))
+                        .toList(),
+                    onChanged: _category == null
+                        ? null
+                        : (v) =>
+                            setState(() => _truckType = v ?? _truckType),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // ── Plate number ───────────────────────────────────
+                  TextField(
+                    controller: _plateCtrl,
+                    textCapitalization: TextCapitalization.characters,
+                    style: const TextStyle(fontSize: 13),
+                    decoration: _deco(
+                      'Plate Number / ታርጋ ቁጥር',
+                      Icons.confirmation_number_outlined,
+                    ).copyWith(hintText: 'ET-1234-AA'),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // ── Capacity ───────────────────────────────────────
+                  TextField(
+                    controller: _capacityCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true),
+                    style: const TextStyle(fontSize: 13),
+                    decoration: _deco(
+                      'Capacity / አቅም',
+                      Icons.scale_outlined,
+                    ).copyWith(
+                        hintText: 'e.g. 10', suffixText: 'tons / ቶን'),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // ── Current city ───────────────────────────────────
+                  DropdownButtonFormField<String>(
+                    initialValue: _city,
+                    decoration: _deco(
+                        'Current City / አሁን ያለበት ከተማ',
+                        Icons.location_city_outlined),
+                    items: _cities
+                        .map((c) => DropdownMenuItem(
+                            value: c,
+                            child: Text(c,
+                                style: const TextStyle(fontSize: 13))))
+                        .toList(),
+                    onChanged: (v) =>
+                        setState(() => _city = v ?? _city),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ── Submit ─────────────────────────────────────────
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: (_loading ||
+                              _category == null ||
+                              _plateCtrl.text.isEmpty ||
+                              _capacityCtrl.text.isEmpty)
+                          ? null
+                          : _submit,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _green,
+                        foregroundColor: Colors.white,
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                        elevation: 0,
+                      ),
+                      child: _loading
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white))
+                          : const Text(
+                              'Register Vehicle / ምዝገባ',
+                              style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ]),
+      );
+
+  InputDecoration _deco(String label, IconData icon) => InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: _green, size: 20),
+        labelStyle: const TextStyle(fontSize: 13, color: _textSec),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: _border)),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: _border)),
+        focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: _green, width: 1.5)),
+      );
+}
+
+// ── Category chip ─────────────────────────────────────────────────────────
+
+class _CategoryChip extends StatelessWidget {
+  final IconData     icon;
+  final String       label;
+  final bool         selected;
+  final VoidCallback onTap;
+
+  const _CategoryChip({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: selected ? _green : Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: selected ? _green : _border,
+              width: selected ? 1.5 : 0.5,
+            ),
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 22,
+                color: selected ? Colors.white : _textSec),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: selected ? Colors.white : _textSec),
+            ),
+          ]),
         ),
       );
 }

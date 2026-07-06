@@ -1,11 +1,15 @@
 import 'package:dio/dio.dart';
-import '../data/api/api_client.dart';
 import '../data/models/models.dart';
 
 /// Client for the Laravel routing proxy (OSRM + Nominatim).
-/// All mapping API calls go through Laravel — never directly from Flutter.
+/// NOTE: Prefer RoutingRepository (via Riverpod) — this class is kept for
+/// standalone/non-Riverpod contexts only.
 class RoutingService {
-  static final Dio _dio = ApiClient.dio;
+  static final Dio _dio = Dio(BaseOptions(
+    baseUrl: 'http://backend.test/api',
+    connectTimeout: const Duration(seconds: 10),
+    receiveTimeout: const Duration(seconds: 15),
+  ));
 
   /// GET /routing/route — returns OSRM route or haversine fallback.
   static Future<RouteResult?> getRoute({

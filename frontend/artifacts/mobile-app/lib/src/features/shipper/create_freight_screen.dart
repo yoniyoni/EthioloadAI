@@ -5,7 +5,6 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import '../../data/providers/data_providers.dart';
 import '../../data/repositories/repositories.dart';
 import '../../data/models/models.dart' show PlaceResult;
 import '../../services/location_service.dart';
@@ -946,7 +945,7 @@ class _DropdownWithOtherState extends State<_DropdownWithOther> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         DropdownButtonFormField<String>(
-          value: _dropdownValue,
+          initialValue: _dropdownValue,
           hint: Text(widget.hint, style: GoogleFonts.inter(color: kTextMuted)),
           isExpanded: true,
           decoration: _inputDeco.copyWith(
@@ -1531,7 +1530,7 @@ class _IntraStep1 extends StatelessWidget {
         Text('City', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: city,
+          initialValue: city,
           hint: Text('location.select_city'.tr(), style: GoogleFonts.inter(color: kTextMuted)),
           isExpanded: true,
           decoration: _deco(prefix: Icon(Icons.location_city_outlined, color: kGreen, size: 20)),
@@ -1702,7 +1701,7 @@ class _IntraStep2 extends StatelessWidget {
             style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: vehicleType,
+          initialValue: vehicleType,
           hint: Text('Any available vehicle', style: GoogleFonts.inter(color: kTextMuted)),
           isExpanded: true,
           decoration: _deco(prefix: Icon(Icons.airport_shuttle_outlined, color: kGreen, size: 20)),
