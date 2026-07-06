@@ -30,6 +30,33 @@ function notifIcon(type: string) {
   }
 }
 
+function LangToggle() {
+  const [lang, setLang] = useState<'en' | 'am'>(
+    () => (localStorage.getItem('admin_lang') as 'en' | 'am') ?? 'en'
+  );
+  const toggle = (next: 'en' | 'am') => {
+    setLang(next);
+    localStorage.setItem('admin_lang', next);
+  };
+  return (
+    <div className="flex items-center rounded-lg overflow-hidden" style={{ border: '1px solid #E2E8E2' }}>
+      {(['en', 'am'] as const).map((l) => (
+        <button
+          key={l}
+          onClick={() => toggle(l)}
+          className="px-2.5 py-1 text-xs font-bold transition-colors"
+          style={{
+            background: lang === l ? GREEN : 'transparent',
+            color: lang === l ? 'white' : '#6B7F6B',
+          }}
+        >
+          {l === 'en' ? 'EN' : 'አማ'}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function EthioTopbar({ title, subtitle }: Props) {
   const { user, logout } = useAuth();
   const qc = useQueryClient();
@@ -87,6 +114,9 @@ export function EthioTopbar({ title, subtitle }: Props) {
           style={{ color: '#0D1F12' }}
         />
       </div>
+
+      {/* Language toggle */}
+      <LangToggle />
 
       {/* Bell */}
       <div className="relative">
