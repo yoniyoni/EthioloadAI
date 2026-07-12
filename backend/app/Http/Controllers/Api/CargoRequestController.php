@@ -9,13 +9,15 @@ use App\Http\Resources\BidResource;
 use App\Http\Resources\CargoResource;
 use App\Models\Booking;
 use App\Models\CargoRequest;
+use App\Models\PlatformSetting;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Notifications\BidPlacedNotification;
 use App\Notifications\BookingCreatedNotification;
 use App\Notifications\FixedPriceBookedNotification;
 use App\Services\BidService;
-use App\Http\Controllers\Api\VehicleController;
+use App\Services\CityCoordinates;
+use App\Services\DistanceService;
 use Illuminate\Http\Request;
 
 class CargoRequestController extends Controller
@@ -26,9 +28,22 @@ class CargoRequestController extends Controller
      * Display a listing of the resource.
      *
      * For drivers:
-     *  - heavy vehicle → show only intercity cargo
-     *  - light vehicle → show only intracity cargo, filtered to driver's current_city
-     *    (if current_city is null, show all intracity and flag location_unset: true)
+     *  - heavy vehicle → intercity cargo only. Requires the vehicle to have a
+     *    GPS position (no GPS → empty list), limited to a PlatformSetting-
+     *    configurable radius (spatial.cargo_search_radius_km), PostGIS-sorted
+     *    nearest first.
+     *  - light vehicle → intracity cargo only, exact-matched to the driver's
+     *    current_city (LOWER(city) = LOWER(current_city)) — a hard boundary
+     *    that GPS never relaxes or widens. If current_city is set, the full
+     *    city-matched list is returned even without GPS (never empty just
+     *    because GPS is missing). If GPS is also available, that same
+     *    city-filtered list is additionally sorted by distance (PostGIS
+     *    ST_Distance / KNN `<->`) — GPS is a sort enhancement only, it never
+     *    adds or removes rows. location_unset is purely informational
+     *    (true unless both current_city and GPS are known) and is never a
+     *    gate — except the one deliberate exception: if neither current_city
+     *    nor GPS is known at all, there is nothing to scope the list to, so
+     *    an empty list is returned.
      * For shippers: show only their own cargo.
      */
     public function index(Request $request)
@@ -42,41 +57,113 @@ class CargoRequestController extends Controller
         }
 
         if ($user && in_array($user->role, ['driver', 'fleet_owner'])) {
-            $vehicle  = Vehicle::where('user_id', $user->id)->latest()->first();
-            $category = $vehicle?->vehicle_category ?? 'heavy';
-            $driverLat = $vehicle?->latitude;
-            $driverLng = $vehicle?->longitude;
+            $vehicle   = Vehicle::where('user_id', $user->id)->latest()->first();
+            $category  = $vehicle?->vehicle_category ?? 'heavy';
+            $driverLat = $vehicle?->latitude !== null ? (float) $vehicle->latitude : null;
+            $driverLng = $vehicle?->longitude !== null ? (float) $vehicle->longitude : null;
 
             if ($category === 'light') {
                 $query->where('service_type', 'intracity');
-                $currentCity   = $vehicle?->current_city;
-                $locationUnset = false;
+
+                $currentCity = $vehicle?->current_city;
+                $hasGps      = $driverLat !== null && $driverLng !== null;
 
                 if ($currentCity) {
-                    $query->whereRaw('LOWER(city) = ?', [strtolower($currentCity)]);
-                } else {
-                    $locationUnset = true;
+                    // Exact-city hard boundary — never relaxed or widened by
+                    // GPS proximity, regardless of whether GPS is available.
+                    $query->whereRaw('LOWER(city) = LOWER(?)', [$currentCity]);
                 }
 
-                $cargoList = $query->latest()->get();
+                // Purely informational: true unless BOTH current_city and GPS
+                // are known. Never gates the response except in the one case
+                // below where neither is known at all.
+                $locationUnset = !$currentCity || !$hasGps;
 
-                // Sort by distance from driver if GPS is available
-                if ($driverLat && $driverLng) {
-                    $cargoList = $cargoList->map(function ($c) use ($driverLat, $driverLng) {
-                        if ($c->pickup_lat && $c->pickup_lng) {
-                            $pLat = (float) $c->pickup_lat;
-                            $pLng = (float) $c->pickup_lng;
-                        } else {
-                            $coords = VehicleController::CITY_COORDS[$c->city] ?? null;
-                            if (!$coords) { $c->distance_km = null; return $c; }
-                            [$pLat, $pLng] = $coords;
+                // Case 3 (deliberate product decision, diverging from the
+                // literal original behavior which would have returned an
+                // unfiltered nationwide intracity dump here instead): with
+                // neither a known city nor GPS there is nothing to scope the
+                // list to, so return empty rather than everything.
+                if (!$currentCity && !$hasGps) {
+                    return response()->json([
+                        'data'           => [],
+                        'location_unset' => true,
+                        'current_city'   => $currentCity,
+                    ]);
+                }
+
+                if (!$hasGps) {
+                    // Case 1: exact-city-filtered list, no GPS to sort by
+                    // distance. The full matched list is returned — never
+                    // empty just because GPS is missing.
+                    $cargoList = $query->latest()->get();
+
+                    return response()->json([
+                        'data'           => CargoResource::collection($cargoList),
+                        'location_unset' => $locationUnset,
+                        'current_city'   => $currentCity,
+                    ]);
+                }
+
+                // Case 2 / implicit case (current_city unset but GPS
+                // available): GPS-based PostGIS distance sort layered on top
+                // of whatever the (optional) city filter above already
+                // produced. The city filter, when present, is a hard
+                // boundary already baked into $query — this step only ranks
+                // the resulting rows, it never pulls in cargo from a
+                // different city. Same Tier A (PostGIS)/Tier B (PHP
+                // Haversine fallback) split as the heavy-vehicle branch
+                // below, minus the ST_DWithin radius filter (light vehicles
+                // are never radius-limited, only city-limited).
+                $tierA = (clone $query)
+                    ->whereNotNull('pickup_point')
+                    ->orderByRaw(
+                        'pickup_point <-> ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography',
+                        [$driverLng, $driverLat]
+                    )
+                    ->orderBy('cargo_requests.created_at', 'desc')
+                    ->selectRaw(
+                        'cargo_requests.*, ST_Distance(pickup_point, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography) / 1000 AS distance_km_pg',
+                        [$driverLng, $driverLat]
+                    )
+                    ->get()
+                    ->each(function ($c) {
+                        $c->distance_km = round((float) $c->distance_km_pg, 1);
+                    });
+
+                // Tier B: rows without a stored pickup_point. Fallback is an
+                // EXACT lookup of CityCoordinates::COORDS keyed on the
+                // cargo's own `city` column (not a substring search over
+                // pickup_location — that distinction only applies to the
+                // intercity/heavy fallback), matching the original
+                // algorithm's fallback shape.
+                $tierB = (clone $query)
+                    ->whereNull('pickup_point')
+                    ->latest()
+                    ->get()
+                    ->map(function ($c) use ($driverLat, $driverLng) {
+                        $coords = CityCoordinates::COORDS[$c->city] ?? null;
+                        if (!$coords) {
+                            $c->distance_km = null;
+                            return $c;
                         }
-                        $c->distance_km = round(
-                            self::haversineKm($driverLat, $driverLng, $pLat, $pLng), 1
-                        );
+                        [$pLat, $pLng] = $coords;
+                        $c->distance_km = round(DistanceService::haversineKm($driverLat, $driverLng, $pLat, $pLng), 1);
                         return $c;
-                    })->sortBy('distance_km')->values();
-                }
+                    });
+
+                // Unlike the heavy-vehicle branch, tierB is not filtered by
+                // radius here (light vehicles have no radius concept), so
+                // rows with an unresolvable distance can reach the final
+                // sort. NULLS LAST, deliberately: the original code's plain
+                // sortBy('distance_km') let PHP's null-comparison quirk
+                // (null <=> N behaves like 0 <=> N) sort unresolvable rows
+                // to the FRONT, as if they were 0 km away. That is worse
+                // than putting them last, so we deviate from the literal
+                // original here on this narrow point.
+                $cargoList = $tierA->concat($tierB)
+                    ->sortBy(fn ($c) => $c->distance_km ?? PHP_FLOAT_MAX)
+                    ->values();
 
                 return response()->json([
                     'data'           => CargoResource::collection($cargoList),
@@ -85,60 +172,92 @@ class CargoRequestController extends Controller
                 ]);
             }
 
-            // heavy → intercity only, sort by distance if GPS available
             $query->where(function ($q) {
                 $q->where('service_type', 'intercity')
                   ->orWhereNull('service_type');
             });
 
-            $cargoList = $query->latest()->get();
-
-            if ($driverLat && $driverLng) {
-                $cargoList = $cargoList->map(function ($c) use ($driverLat, $driverLng) {
-                    if ($c->pickup_lat && $c->pickup_lng) {
-                        $pLat = (float) $c->pickup_lat;
-                        $pLng = (float) $c->pickup_lng;
-                    } else {
-                        // Fall back to city-centre coordinates from pickup_location name
-                        $cityKey = null;
-                        $loc     = $c->pickup_location ?? '';
-                        foreach (array_keys(VehicleController::CITY_COORDS) as $city) {
-                            if (stripos($loc, $city) !== false) { $cityKey = $city; break; }
-                        }
-                        if (!$cityKey) { $c->distance_km = null; return $c; }
-                        [$pLat, $pLng] = VehicleController::CITY_COORDS[$cityKey];
-                    }
-                    $c->distance_km = round(
-                        self::haversineKm($driverLat, $driverLng, $pLat, $pLng), 1
-                    );
-                    return $c;
-                })->sortBy(fn ($c) => $c->distance_km ?? PHP_INT_MAX)->values();
-
+            // No known GPS position — cannot confirm which cargo is nearby,
+            // so show none rather than everything (nearby-only visibility).
+            if ($driverLat === null || $driverLng === null) {
                 return response()->json([
-                    'data'           => CargoResource::collection($cargoList),
-                    'location_unset' => false,
+                    'data'           => [],
+                    'location_unset' => true,
                     'current_city'   => $vehicle?->current_city,
                 ]);
             }
 
+            // Radius (km) is admin-editable via PlatformSetting (Phase 2 Step 3,
+            // key distinct from the drivers-search radius keys); read fresh on
+            // every request so changes apply without a deploy.
+            $radiusKm = (float) PlatformSetting::get('spatial.cargo_search_radius_km', 50);
+            $radiusMeters = $radiusKm * 1000;
+
+            // Tier A: cargo rows that already have a real stored pickup_point —
+            // the common case (CargoRequestController::store()'s city-centroid
+            // fallback means almost every row has one). PostGIS-accelerated:
+            // ST_DWithin does the radius filter using the
+            // cargo_requests_pickup_point_gist index; the KNN `<->` operator
+            // does the index-accelerated distance sort. created_at DESC is a
+            // second ORDER BY key (tie-breaker) that reproduces what the prior
+            // latest()->get()->sortBy('distance_km') (PHP's sort is stable)
+            // used to do for rows with equal distance — very plausible here
+            // since many cargo rows share the exact same city-centroid
+            // fallback coordinates.
+            $tierA = (clone $query)
+                ->whereNotNull('pickup_point')
+                ->whereRaw(
+                    'ST_DWithin(pickup_point, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ?)',
+                    [$driverLng, $driverLat, $radiusMeters]
+                )
+                ->orderByRaw(
+                    'pickup_point <-> ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography',
+                    [$driverLng, $driverLat]
+                )
+                ->orderBy('cargo_requests.created_at', 'desc')
+                ->selectRaw(
+                    'cargo_requests.*, ST_Distance(pickup_point, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography) / 1000 AS distance_km_pg',
+                    [$driverLng, $driverLat]
+                )
+                ->get()
+                ->each(function ($c) {
+                    $c->distance_km = round((float) $c->distance_km_pg, 1);
+                });
+
+            // Tier B: cargo rows without a stored pickup_point (rare/legacy —
+            // currently 0 of 3 pending rows, but preserved as a safety net for
+            // any row that slipped through without one). Same city-name-match
+            // fallback logic as before, just isolated to this smaller subset
+            // since Tier A now handles the rest via SQL.
+            $tierB = (clone $query)
+                ->whereNull('pickup_point')
+                ->latest()
+                ->get()
+                ->map(function ($c) use ($driverLat, $driverLng) {
+                    $cityKey = null;
+                    $loc = $c->service_type === 'intracity' ? ($c->city ?? '') : ($c->pickup_location ?? '');
+                    foreach (array_keys(CityCoordinates::COORDS) as $city) {
+                        if (stripos($loc, $city) !== false) { $cityKey = $city; break; }
+                    }
+                    if (!$cityKey) { $c->distance_km = null; return $c; }
+                    [$pLat, $pLng] = CityCoordinates::COORDS[$cityKey];
+                    $c->distance_km = round(DistanceService::haversineKm($driverLat, $driverLng, $pLat, $pLng), 1);
+                    return $c;
+                })
+                ->filter(fn ($c) => $c->distance_km !== null && $c->distance_km <= $radiusKm);
+
+            $cargoList = $tierA->concat($tierB)
+                ->sortBy('distance_km')
+                ->values();
+
             return response()->json([
                 'data'           => CargoResource::collection($cargoList),
-                'location_unset' => true,
-                'current_city'   => null,
+                'location_unset' => false,
+                'current_city'   => $vehicle?->current_city,
             ]);
         }
 
         return CargoResource::collection($query->latest()->get());
-    }
-
-    private static function haversineKm(float $lat1, float $lon1, float $lat2, float $lon2): float
-    {
-        $R    = 6371.0;
-        $phi1 = deg2rad($lat1); $phi2 = deg2rad($lat2);
-        $dphi = deg2rad($lat2 - $lat1);
-        $dlam = deg2rad($lon2 - $lon1);
-        $a    = sin($dphi / 2) ** 2 + cos($phi1) * cos($phi2) * sin($dlam / 2) ** 2;
-        return 2 * $R * asin(sqrt($a));
     }
 
     // GET /freight — list for React frontend (camelCase shape)
@@ -282,23 +401,30 @@ class CargoRequestController extends Controller
             return response()->json(['message' => 'Fixed-price cargo must have a budget set.'], 422);
         }
 
-        // Use the driver's first available vehicle
-        $vehicle = \App\Models\Vehicle::where('user_id', $user->id)
+        // Use the bidder's first available vehicle — fleet owners' vehicles
+        // are linked via fleet_owner_id, not user_id.
+        $vehicleColumn = $user->role === 'fleet_owner' ? 'fleet_owner_id' : 'user_id';
+        $vehicle = \App\Models\Vehicle::where($vehicleColumn, $user->id)
             ->where('availability_status', 'available')
             ->first();
 
         if (!$vehicle) {
-            $vehicle = \App\Models\Vehicle::where('user_id', $user->id)->first();
+            $vehicle = \App\Models\Vehicle::where($vehicleColumn, $user->id)->first();
         }
 
         if (!$vehicle) {
             return response()->json(['message' => 'You have no registered vehicle. Please register a vehicle first.'], 422);
         }
 
+        // For a fleet owner, the vehicle's assigned driver executes the trip,
+        // not the fleet owner themself (vehicle->user_id falls back to the
+        // owner's own id when the vehicle has no driver assigned yet).
+        $driverId = $user->role === 'fleet_owner' ? $vehicle->user_id : $user->id;
+
         $booking = \App\Models\Booking::create([
             'cargo_id'         => $cargo->id,
             'vehicle_id'       => $vehicle->id,
-            'driver_id'        => $user->id,
+            'driver_id'        => $driverId,
             'booking_status'   => 'confirmed',
             'estimated_price'  => $cargo->budget,
             'commission_fee'   => $cargo->budget * 0.10,
@@ -352,17 +478,23 @@ class CargoRequestController extends Controller
             return response()->json(['message' => 'No price is set for this cargo.'], 422);
         }
 
-        $vehicle = Vehicle::where('user_id', $user->id)
+        $vehicleColumn = $user->role === 'fleet_owner' ? 'fleet_owner_id' : 'user_id';
+        $vehicle = Vehicle::where($vehicleColumn, $user->id)
             ->where('availability_status', 'available')
             ->first()
-            ?? Vehicle::where('user_id', $user->id)->first();
+            ?? Vehicle::where($vehicleColumn, $user->id)->first();
 
         if (!$vehicle) {
             return response()->json(['message' => 'You have no registered vehicle.'], 422);
         }
 
+        // For a fleet owner, the bid is recorded against the vehicle's
+        // assigned driver, not the fleet owner themself — same reasoning
+        // as bookDirect() above.
+        $bidder = $user->role === 'fleet_owner' ? ($vehicle->user ?? $user) : $user;
+
         try {
-            $bid = $this->bidService->acceptFixedPrice($cargo, $user, $vehicle);
+            $bid = $this->bidService->acceptFixedPrice($cargo, $bidder, $vehicle);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -389,16 +521,35 @@ class CargoRequestController extends Controller
             if ($cargoRequest->service_type === 'intracity') {
                 $cityName = $cargoRequest->city;
             } elseif ($cargoRequest->pickup_location) {
-                foreach (array_keys(VehicleController::CITY_COORDS) as $city) {
+                foreach (array_keys(CityCoordinates::COORDS) as $city) {
                     if (stripos($cargoRequest->pickup_location, $city) !== false) {
                         $cityName = $city;
                         break;
                     }
                 }
             }
-            if ($cityName && isset(VehicleController::CITY_COORDS[$cityName])) {
-                [$lat, $lng] = VehicleController::CITY_COORDS[$cityName];
+            if ($cityName && isset(CityCoordinates::COORDS[$cityName])) {
+                [$lat, $lng] = CityCoordinates::COORDS[$cityName];
                 $cargoRequest->update(['pickup_lat' => $lat, 'pickup_lng' => $lng]);
+            }
+        }
+
+        // Use GPS coords from client if supplied; otherwise fall back to city-centre lookup.
+        if (!$cargoRequest->destination_lat || !$cargoRequest->destination_lng) {
+            $destCityName = null;
+            if ($cargoRequest->service_type === 'intracity') {
+                $destCityName = $cargoRequest->city;
+            } elseif ($cargoRequest->destination) {
+                foreach (array_keys(CityCoordinates::COORDS) as $city) {
+                    if (stripos($cargoRequest->destination, $city) !== false) {
+                        $destCityName = $city;
+                        break;
+                    }
+                }
+            }
+            if ($destCityName && isset(CityCoordinates::COORDS[$destCityName])) {
+                [$dlat, $dlng] = CityCoordinates::COORDS[$destCityName];
+                $cargoRequest->update(['destination_lat' => $dlat, 'destination_lng' => $dlng]);
             }
         }
 
@@ -406,7 +557,99 @@ class CargoRequestController extends Controller
     }
 
     /**
-     * GET /cargo-requests/{id}/nearby-drivers
+     * GET /nearby-drivers/by-location?lat=X&lng=Y&serviceType=intercity|intracity
+     * Query nearby available drivers by pickup coordinates.
+     * Used by shippers during cargo creation to preview available drivers.
+     * Returns empty array if coordinates are invalid or no drivers are available.
+     */
+    public function nearbyDriversByLocation(Request $request)
+    {
+        $lat = $request->query('lat');
+        $lng = $request->query('lng');
+        $serviceType = $request->query('serviceType', 'intercity');
+
+        if (!$lat || !$lng) {
+            return response()->json(['drivers' => []]);
+        }
+
+        $pickupLat = (float) $lat;
+        $pickupLng = (float) $lng;
+
+        // Validate coordinates
+        if ($pickupLat < -90 || $pickupLat > 90 || $pickupLng < -180 || $pickupLng > 180) {
+            return response()->json(['drivers' => []]);
+        }
+
+        $requiredCategory = $serviceType === 'intracity' ? 'light' : 'heavy';
+        $cutoff = now()->subHours(24);
+
+        // Radius (km) is admin-editable via PlatformSetting (Phase 2 Step 2);
+        // read fresh on every request so changes apply without a deploy.
+        $radiusKm = (float) PlatformSetting::get('spatial.nearby_drivers_radius_km', 50);
+        $radiusMeters = $radiusKm * 1000;
+
+        // PostGIS-accelerated spatial query (pilot for Phase 1 of the PostGIS
+        // migration). Non-spatial filters (category, availability, freshness,
+        // driver verification) are unchanged from the prior Haversine-in-PHP
+        // implementation. ST_DWithin does the radius filter using the
+        // vehicles_position_gist index; the KNN `<->` operator does the
+        // index-accelerated distance sort. Floats are bound via parameter
+        // binding (whereRaw/orderByRaw/selectRaw placeholders), not string
+        // interpolation.
+        $vehicles = Vehicle::with('user')
+            ->where('vehicle_category', $requiredCategory)
+            ->where('availability_status', 'available')
+            ->whereNotNull('position')
+            ->where('last_location_at', '>=', $cutoff)
+            ->whereRaw(
+                'ST_DWithin(position, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ?)',
+                [$pickupLng, $pickupLat, $radiusMeters]
+            )
+            ->orderByRaw(
+                'position <-> ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography',
+                [$pickupLng, $pickupLat]
+            )
+            ->selectRaw(
+                'vehicles.*, ST_Distance(position, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography) / 1000 AS distance_km_pg',
+                [$pickupLng, $pickupLat]
+            )
+            ->get();
+
+        $drivers = $vehicles->map(function ($v) {
+            $driver = $v->user;
+            if (!$driver || !$driver->verification_status) return null;
+
+            $dist = (float) $v->distance_km_pg;
+            $minutesAgo = (int) now()->diffInMinutes($v->last_location_at);
+
+            if ($minutesAgo < 60) {
+                $lastSeen = "{$minutesAgo} min ago";
+            } elseif ($minutesAgo < 1440) {
+                $hours = (int) ($minutesAgo / 60);
+                $lastSeen = "{$hours} hour" . ($hours > 1 ? 's' : '') . " ago";
+            } else {
+                $lastSeen = "> 24 hours ago";
+            }
+
+            return [
+                'driver_id'     => $driver->id,
+                'driver_name'   => $driver->full_name,
+                'vehicle_type'  => $v->truck_type,
+                'vehicle_plate' => $v->plate_number,
+                'rating'        => round((float) $v->rating, 1),
+                'distance_km'   => round($dist, 1),
+                'last_seen'     => $lastSeen,
+                'current_city'  => $v->current_city,
+                'latitude'      => $v->latitude !== null ? (float) $v->latitude : null,
+                'longitude'     => $v->longitude !== null ? (float) $v->longitude : null,
+                'trip_count'    => $driver->trip_count ?? 0,
+            ];
+        })->filter()->sortBy('distance_km')->values();
+
+        return response()->json(['drivers' => $drivers]);
+    }
+
+    /**
      * Returns nearby available drivers for the cargo's pickup location.
      * Accessible only to the shipper who owns the cargo.
      */
@@ -429,7 +672,7 @@ class CargoRequestController extends Controller
             $cityName = $cargo->service_type === 'intracity' ? $cargo->city : $cargo->pickup_location;
             $coords   = null;
             if ($cityName) {
-                foreach (VehicleController::CITY_COORDS as $city => $c) {
+                foreach (CityCoordinates::COORDS as $city => $c) {
                     if (stripos($cityName, $city) !== false) {
                         $coords = $c;
                         break;
@@ -444,19 +687,35 @@ class CargoRequestController extends Controller
 
         $cutoff = now()->subHours(24);
 
+        // Radius (km) is admin-editable via PlatformSetting (Phase 2 Step 2);
+        // read fresh on every request so changes apply without a deploy.
+        $radiusKm = (float) PlatformSetting::get('spatial.nearby_drivers_radius_km', 50);
+        $radiusMeters = $radiusKm * 1000;
+
         $vehicles = Vehicle::with('user')
             ->where('vehicle_category', $requiredCategory)
             ->where('availability_status', 'available')
-            ->whereNotNull('latitude')
-            ->whereNotNull('longitude')
+            ->whereNotNull('position')
             ->where('last_location_at', '>=', $cutoff)
+            ->whereRaw(
+                'ST_DWithin(position, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ?)',
+                [$pickupLng, $pickupLat, $radiusMeters]
+            )
+            ->orderByRaw(
+                'position <-> ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography',
+                [$pickupLng, $pickupLat]
+            )
+            ->selectRaw(
+                'vehicles.*, ST_Distance(position, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography) / 1000 AS distance_km_pg',
+                [$pickupLng, $pickupLat]
+            )
             ->get();
 
-        $drivers = $vehicles->map(function ($v) use ($pickupLat, $pickupLng) {
+        $drivers = $vehicles->map(function ($v) {
             $driver = $v->user;
             if (!$driver || !$driver->verification_status) return null;
 
-            $dist = self::haversineKm($pickupLat, $pickupLng, (float) $v->latitude, (float) $v->longitude);
+            $dist = (float) $v->distance_km_pg;
             $minutesAgo = (int) now()->diffInMinutes($v->last_location_at);
 
             if ($minutesAgo < 60) {
