@@ -1,0 +1,111 @@
+spring:
+  application:
+    name: ethioloadai-backend
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    open-in-view: false
+  
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+  
+  task:
+    execution:
+      pool:
+        core-size: 5
+        max-size: 10
+        queue-capacity: 100
+
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    context-path: /api
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION:900000} # 15 minutes in milliseconds
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000} # 7 days in milliseconds
+  header: Authorization
+  prefix: Bearer
+
+# AI Engine Configuration
+ai-engine:
+  url: ${AI_ENGINE_URL:http://localhost:8000}
+  timeout: 5000
+  enabled: ${AI_ENGINE_ENABLED:true}
+
+# External Service Configuration
+osrm:
+  base-url: http://router.project-osrm.org
+  timeout: 5000
+  route-cache-ttl: 3600
+  nearest-cache-ttl: 1800
+
+nominatim:
+  base-url: https://nominatim.openstreetmap.org
+  user-agent: EthioLoadAI/1.0
+  timeout: 5000
+  country-code: et
+  search-cache-ttl: 86400
+  reverse-cache-ttl: 21600
+
+# Management / Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    tags:
+      application: ethioloadai-backend
+    export:
+      prometheus:
+        enabled: true
+
+# OpenAPI / SpringDoc
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+  show-actuator: true
+
+# Rate Limiting
+rate-limit:
+  login:
+    capacity: 5
+    refill-tokens: 5
+    refill-duration-seconds: 60
+  registration:
+    capacity: 10
+    refill-tokens: 10
+    refill-duration-seconds: 3600
+  api:
+    capacity: 100
+    refill-tokens: 100
+    refill-duration-seconds: 60
+
+# Logging
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  level:
+    com.ethioloadai: DEBUG
+    org.springframework.security: INFO
+    org.hibernate.SQL: DEBUG
