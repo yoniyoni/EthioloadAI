@@ -17,7 +17,7 @@ class DocumentUploadRequest extends FormRequest
             'document_type' => [
                 'required',
                 'string',
-                'in:license,national_id,vehicle_registration,insurance,tin',
+                'in:license,national_id,vehicle_registration,insurance,tin,professional_permit',
             ],
             // Accept images or PDFs, max 5 MB
             'file' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',

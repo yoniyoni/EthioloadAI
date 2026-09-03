@@ -28,6 +28,9 @@ class User extends Authenticatable
         'location',
         'verification_status',
         'is_active',
+        'payout_bank_code',
+        'payout_account_number',
+        'payout_account_name',
     ];
 
     /**

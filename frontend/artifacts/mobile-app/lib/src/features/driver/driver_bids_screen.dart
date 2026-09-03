@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../../data/models/models.dart';
+import '../../utils/weight_format.dart';
 import '../../data/providers/data_providers.dart';
 import '../../data/repositories/repositories.dart';
 
@@ -372,7 +373,7 @@ class _DriverBidCardState extends ConsumerState<_DriverBidCard> {
                   if (b.cargoMaterial != null)
                     Text(
                       '${b.cargoMaterial}'
-                      '${b.cargoWeight != null ? '  ·  ${b.cargoWeight!.toStringAsFixed(0)} t' : ''}',
+                      '${b.cargoWeight != null ? '  ·  ${WeightFormat.display(b.cargoWeight!)}' : ''}',
                       style: const TextStyle(
                           fontSize: 11, color: _textSecondary),
                     ),
@@ -413,7 +414,10 @@ class _DriverBidCardState extends ConsumerState<_DriverBidCard> {
           ],
         ]),
 
-        // ── Accepted: shipper contact ───────────────────────────────
+        // ── Accepted: price agreed, waiting on shipper payment ──────
+        // No shipper contact shown here anymore — payment now flows
+        // through the platform (upfront escrow), so there's nothing to
+        // arrange directly, and the trip can't start until it clears.
         if (b.status == 'accepted') ...[
           const SizedBox(height: 10),
           Container(
@@ -423,48 +427,17 @@ class _DriverBidCardState extends ConsumerState<_DriverBidCard> {
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: _green.withAlpha(60), width: 0.5),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
-                  const Icon(Icons.check_circle_rounded, size: 13, color: _green),
-                  const SizedBox(width: 6),
-                  Text('bid.price_agreed_shipper'.tr(),
-                      style: const TextStyle(
-                          fontSize: 11,
-                          color: _green,
-                          fontWeight: FontWeight.w600)),
-                ]),
-                const SizedBox(height: 8),
-                if (b.shipperName != null) ...[
-                  Row(children: [
-                    const Icon(Icons.person_outline,
-                        size: 14, color: _textSecondary),
-                    const SizedBox(width: 6),
-                    Text(b.shipperName!,
-                        style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: _textPrimary)),
-                  ]),
-                  const SizedBox(height: 4),
-                ],
-                if (b.shipperPhone != null)
-                  Row(children: [
-                    const Icon(Icons.phone_outlined, size: 14, color: _green),
-                    const SizedBox(width: 6),
-                    Text(b.shipperPhone!,
-                        style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: _green)),
-                  ])
-                else
-                  Text('bid.shipper_contact_na'.tr(),
-                      style:
-                          const TextStyle(fontSize: 12, color: _textSecondary)),
-              ],
-            ),
+            child: Row(children: [
+              const Icon(Icons.hourglass_top_rounded, size: 13, color: _green),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text('bid.price_agreed_shipper'.tr(),
+                    style: const TextStyle(
+                        fontSize: 11,
+                        color: _green,
+                        fontWeight: FontWeight.w600)),
+              ),
+            ]),
           ),
         ],
 
@@ -586,23 +559,25 @@ class _StatusBadge extends StatelessWidget {
     switch (status) {
       case 'countered':
         color = counterBy == 'shipper' ? _purple : _amber;
-        label = counterBy == 'shipper' ? 'Countered' : 'You Countered';
+        label = counterBy == 'shipper'
+            ? 'bid.status_countered'.tr()
+            : 'bid.status_you_countered'.tr();
         break;
       case 'accepted':
         color = _green;
-        label = 'Accepted';
+        label = 'bid.status_accepted'.tr();
         break;
       case 'rejected':
         color = _danger;
-        label = 'Rejected';
+        label = 'bid.status_rejected'.tr();
         break;
       case 'expired':
         color = _textSecondary;
-        label = 'Expired';
+        label = 'bid.status_expired'.tr();
         break;
       default:
         color = _amber;
-        label = 'Pending';
+        label = 'bid.status_pending'.tr();
     }
 
     return Container(

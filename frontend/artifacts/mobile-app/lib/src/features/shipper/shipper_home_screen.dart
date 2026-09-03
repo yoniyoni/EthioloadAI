@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../data/models/models.dart';
 import '../../data/providers/data_providers.dart';
 import '../shared/widgets/shared_widgets.dart';
+import '../../utils/weight_format.dart';
 
 class ShipperHomeScreen extends ConsumerWidget {
   const ShipperHomeScreen({super.key});
@@ -77,6 +78,16 @@ class ShipperHomeScreen extends ConsumerWidget {
                   icon: Icons.psychology_outlined,
                   label: 'shipper.ai_tools'.tr(),
                   onTap: () => context.go('/ai-tools'),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(
+                child: _ActionTile(
+                  icon: Icons.travel_explore_outlined,
+                  label: 'tracking.nearby_trucks'.tr(),
+                  onTap: () => context.go('/nearby-trucks'),
                 ),
               ),
             ]),
@@ -462,7 +473,7 @@ class _CargoListItem extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${cargo.materialType} · ${cargo.weight.toStringAsFixed(0)} t',
+                      '${cargo.materialType} · ${WeightFormat.display(cargo.weight)}',
                       style: GoogleFonts.inter(fontSize: 11, color: kTextMuted),
                     ),
                   ],

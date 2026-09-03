@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/repositories.dart';
+import '../../utils/weight_format.dart';
 
 /// AiToolsScreen — exposes all 5 AI engine endpoints in one UI.
 class AiToolsScreen extends ConsumerStatefulWidget {
@@ -96,7 +97,8 @@ class _RecommendTabState extends ConsumerState<_RecommendTab> {
           await ref.read(aiRepositoryProvider).recommendTruck(
                 pickupLocation: _pickupCtrl.text.trim(),
                 destination: _destCtrl.text.trim(),
-                weight: double.parse(_weightCtrl.text.trim()),
+                weight: WeightFormat.kuntalToTons(
+                    double.parse(_weightCtrl.text.trim())),
                 materialType: _material,
                 urgencyLevel: _urgency,
               );
@@ -135,7 +137,7 @@ class _RecommendTabState extends ConsumerState<_RecommendTab> {
           TextField(
             controller: _weightCtrl,
             keyboardType: TextInputType.number,
-            decoration: _dec('Weight (tons)', Icons.scale),
+            decoration: _dec('Weight (kuntal)', Icons.scale),
           ),
           const SizedBox(height: 12),
           _DropdownRow(
@@ -224,7 +226,8 @@ class _PriceTabState extends ConsumerState<_PriceTab> {
           await ref.read(aiRepositoryProvider).predictPrice(
                 pickupLocation: _pickupCtrl.text.trim(),
                 destination: _destCtrl.text.trim(),
-                weight: double.parse(_weightCtrl.text.trim()),
+                weight: WeightFormat.kuntalToTons(
+                    double.parse(_weightCtrl.text.trim())),
                 materialType: _material,
               );
       setState(() {
@@ -260,7 +263,7 @@ class _PriceTabState extends ConsumerState<_PriceTab> {
           TextField(
             controller: _weightCtrl,
             keyboardType: TextInputType.number,
-            decoration: _dec('Weight (tons)', Icons.scale),
+            decoration: _dec('Weight (kuntal)', Icons.scale),
           ),
           const SizedBox(height: 12),
           _DropdownRow(
@@ -532,7 +535,7 @@ class _TruckCard extends StatelessWidget {
                 Text(truck.driverName,
                     style: const TextStyle(
                         fontSize: 14, fontWeight: FontWeight.bold)),
-                Text('${truck.plateNumber} • ${truck.capacity}t capacity',
+                Text('${truck.plateNumber} • ${WeightFormat.display(truck.capacity)} capacity',
                     style: const TextStyle(
                         fontSize: 12, color: Colors.black54)),
                 Text('${truck.distanceKm} km away',

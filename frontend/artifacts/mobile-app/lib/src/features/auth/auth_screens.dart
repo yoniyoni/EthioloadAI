@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +6,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../data/providers/data_providers.dart';
 import '../shared/widgets/shared_widgets.dart';
+import '../shared/widgets/server_url_dialog.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
@@ -24,15 +26,18 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     await Future.delayed(const Duration(seconds: 3));
     if (!mounted) return;
     final authNotifier = ref.read(authNotifierProvider.notifier);
-    await authNotifier.checkAuthStatus();
+    // Never gate this screen's navigation on checkAuthStatus() completing —
+    // a Dart-level .timeout() only protects against a hung *network* call;
+    // it can't preempt a stuck native platform-channel call (e.g. known
+    // flutter_secure_storage keystore-read hangs on some Android versions),
+    // since that blocks below Dart's event loop entirely. Always leave the
+    // splash screen after the brand delay; restore the session in the
+    // background. The router listens for auth-state changes (see
+    // _RouterNotifier) and will seamlessly upgrade from /landing to the
+    // real home screen the moment — if ever — the check resolves.
+    unawaited(authNotifier.checkAuthStatus());
     if (!mounted) return;
-    final authState = ref.read(authNotifierProvider);
-    if (authState.isAuthenticated) {
-      final role = authState.user?.role ?? '';
-      context.go(role == 'driver' ? '/driver' : role == 'fleet_owner' ? '/fleet' : '/shipper');
-    } else {
-      context.go('/landing');
-    }
+    context.go('/landing');
   }
 
   @override
@@ -106,12 +111,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   late TextEditingController emailController;
   late TextEditingController passwordController;
   bool obscurePassword = true;
+  String? _validationError;
 
   @override
   void initState() {
     super.initState();
     emailController = TextEditingController();
     passwordController = TextEditingController();
+  }
+
+  String? _validate() {
+    if (emailController.text.trim().isEmpty) {
+      return '${'auth.identifier'.tr()} is required.';
+    }
+    if (passwordController.text.isEmpty) {
+      return '${'auth.password'.tr()} is required.';
+    }
+    return null;
+  }
+
+  void _submit() {
+    final error = _validate();
+    setState(() => _validationError = error);
+    if (error != null) return;
+    ref.read(authNotifierProvider.notifier).login(
+          identifier: emailController.text.trim(),
+          password: passwordController.text,
+        );
   }
 
   @override
@@ -161,7 +187,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     return Scaffold(
       backgroundColor: kBackground,
-      appBar: EthioAppBar(title: 'auth.login'.tr()),
+      appBar: EthioAppBar(
+        title: 'auth.login'.tr(),
+        actions: [
+          // Reachable without logging in on purpose — this is the only way
+          // to fix an unreachable local/test server address, since login
+          // itself needs a working server to succeed in the first place.
+          IconButton(
+            icon: const Icon(Icons.settings_outlined, color: Colors.white),
+            tooltip: 'Server URL',
+            onPressed: () => showDialog(
+              context: context,
+              builder: (_) => const ServerUrlDialog(),
+            ),
+          ),
+        ],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -212,7 +253,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            if (authState.error != null) ...[
+            if ((authState.error ?? _validationError) != null) ...[
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -226,7 +267,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         color: kDanger, size: 16),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(authState.error!,
+                      child: Text(authState.error ?? _validationError!,
                           style: GoogleFonts.inter(
                               color: kDanger, fontSize: 13)),
                     ),
@@ -236,12 +277,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               const SizedBox(height: 16),
             ],
             ElevatedButton(
-              onPressed: authState.isLoading
-                  ? null
-                  : () => ref.read(authNotifierProvider.notifier).login(
-                        identifier: emailController.text,
-                        password: passwordController.text,
-                      ),
+              onPressed: authState.isLoading ? null : _submit,
               style: ElevatedButton.styleFrom(
                 backgroundColor: kGreen,
                 foregroundColor: Colors.white,
@@ -261,6 +297,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   : Text('auth.login'.tr(),
                       style: GoogleFonts.inter(
                           fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+            const SizedBox(height: 14),
+            Center(
+              child: GestureDetector(
+                onTap: () => context.go('/forgot-password'),
+                child: Text(
+                  'auth.forgot_password'.tr(),
+                  style: GoogleFonts.inter(
+                      color: kTextMuted,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13),
+                ),
+              ),
             ),
             const SizedBox(height: 20),
             Row(
@@ -295,6 +344,24 @@ class RegisterScreen extends ConsumerStatefulWidget {
   ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
 }
 
+/// Mirrors backend App\Support\PhoneNumber::normalize() so the register
+/// screen gives immediate feedback instead of waiting on a round trip to
+/// discover the phone didn't match the server's expected shape.
+String _normalizePhone(String raw) {
+  final digits = raw.replaceAll(RegExp(r'\D+'), '');
+  if (digits.isEmpty) return raw;
+  if (digits.startsWith('251') && digits.length == 12) {
+    return '0${digits.substring(3)}';
+  }
+  if (digits.length == 9) {
+    return '0$digits';
+  }
+  return digits;
+}
+
+final RegExp _phoneRegex = RegExp(r'^0\d{9}$');
+final RegExp _emailRegex = RegExp(r'^\S+@\S+\.\S+$');
+
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   late TextEditingController nameController;
   late TextEditingController emailController;
@@ -302,6 +369,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   late TextEditingController passwordController;
   String selectedRole = 'shipper';
   bool obscurePassword = true;
+  String? _validationError;
 
   @override
   void initState() {
@@ -319,6 +387,35 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     phoneController.dispose();
     passwordController.dispose();
     super.dispose();
+  }
+
+  String? _validate() {
+    if (nameController.text.trim().isEmpty) {
+      return '${'auth.full_name'.tr()} is required.';
+    }
+    if (!_emailRegex.hasMatch(emailController.text.trim())) {
+      return 'Enter a valid email address.';
+    }
+    if (!_phoneRegex.hasMatch(_normalizePhone(phoneController.text.trim()))) {
+      return 'Enter a valid phone number, e.g. 0911234567.';
+    }
+    if (passwordController.text.length < 6) {
+      return 'Password must be at least 6 characters.';
+    }
+    return null;
+  }
+
+  void _submit() {
+    final error = _validate();
+    setState(() => _validationError = error);
+    if (error != null) return;
+    ref.read(authNotifierProvider.notifier).register(
+          fullName: nameController.text.trim(),
+          email: emailController.text.trim(),
+          phone: phoneController.text.trim(),
+          password: passwordController.text,
+          role: selectedRole,
+        );
   }
 
   static InputDecoration _field({
@@ -471,7 +568,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            if (authState.error != null) ...[
+            if ((authState.error ?? _validationError) != null) ...[
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -485,7 +582,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         color: kDanger, size: 16),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(authState.error!,
+                      child: Text(authState.error ?? _validationError!,
                           style: GoogleFonts.inter(
                               color: kDanger, fontSize: 13)),
                     ),
@@ -495,17 +592,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               const SizedBox(height: 16),
             ],
             ElevatedButton(
-              onPressed: authState.isLoading
-                  ? null
-                  : () => ref
-                      .read(authNotifierProvider.notifier)
-                      .register(
-                        fullName: nameController.text,
-                        email: emailController.text,
-                        phone: phoneController.text,
-                        password: passwordController.text,
-                        role: selectedRole,
-                      ),
+              onPressed: authState.isLoading ? null : _submit,
               style: ElevatedButton.styleFrom(
                 backgroundColor: kGreen,
                 foregroundColor: Colors.white,

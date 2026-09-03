@@ -7,8 +7,12 @@ use App\Http\Requests\VehicleLocationUpdateRequest;
 use App\Http\Requests\VehicleRegisterRequest;
 use App\Http\Requests\VehicleUpdateRequest;
 use App\Http\Resources\VehicleResource;
+use App\Models\Booking;
+use App\Models\PlatformSetting;
 use App\Models\Trip;
 use App\Models\Vehicle;
+use App\Services\CityCoordinates;
+use App\Services\DistanceService;
 use Illuminate\Http\Request;
 
 class VehicleController extends Controller
@@ -89,7 +93,7 @@ class VehicleController extends Controller
         $vehicle = Vehicle::findOrFail($id);
         $user = auth()->user();
 
-        if (!$user->is_admin && $vehicle->user_id !== $user->id) {
+        if (!$user->is_admin && $vehicle->user_id !== $user->id && $vehicle->fleet_owner_id !== $user->id) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
@@ -181,7 +185,7 @@ class VehicleController extends Controller
     {
         $validated = $request->validate([
             'city' => ['required', 'string', 'max:100', function ($attr, $value, $fail) {
-                if (!array_key_exists($value, self::CITY_COORDS)) {
+                if (!array_key_exists($value, CityCoordinates::COORDS)) {
                     $fail("'{$value}' is not a recognised Ethiopian city. Use the list from the app.");
                 }
             }],
@@ -204,78 +208,12 @@ class VehicleController extends Controller
     }
 
     // ── City lookup helpers ──────────────────────────────────────────────────
-
-    const CITY_COORDS = [
-        'Addis Ababa'    => [9.0320,  38.7469],
-        'Gondar'         => [12.6030, 37.4521],
-        'Bahir Dar'      => [11.5931, 37.3911],
-        'Mekele'         => [13.4967, 39.4697],
-        'Hawassa'        => [7.0504,  38.4955],
-        'Dire Dawa'      => [9.5931,  41.8661],
-        'Jimma'          => [7.6731,  36.8346],
-        'Adama'          => [8.5400,  39.2700],
-        'Dessie'         => [11.1333, 39.6333],
-        'Debre Birhan'   => [9.6833,  39.5333],
-        'Debre Markos'   => [10.3333, 37.7167],
-        'Debre Tabor'    => [11.8500, 38.0167],
-        'Humera'         => [14.3000, 36.6000],
-        'Metema'         => [12.8500, 36.2000],
-        'Shire'          => [14.1000, 38.2833],
-        'Axum'           => [14.1200, 38.7200],
-        'Adwa'           => [14.1667, 38.9000],
-        'Adigrat'        => [14.2667, 39.4500],
-        'Lalibela'       => [12.0333, 39.0500],
-        'Woldia'         => [11.8333, 39.6000],
-        'Kombolcha'      => [11.0833, 39.7333],
-        'Addis Zemen'    => [12.1333, 37.7833],
-        'Woreta'         => [11.9167, 37.7000],
-        'Injibara'       => [10.9833, 36.9833],
-        'Motta'          => [11.0833, 37.8667],
-        'Bure'           => [10.7000, 37.0667],
-        'Finote Selam'   => [10.7000, 37.2667],
-        'Arba Minch'     => [6.0333,  37.5500],
-        'Assosa'         => [10.0667, 34.5333],
-        'Gambela'        => [8.2500,  34.5833],
-        'Hosaena'        => [7.5500,  37.8500],
-        'Shashamane'     => [7.2000,  38.5833],
-        'Dilla'          => [6.4167,  38.3167],
-        'Yirgalem'       => [6.7500,  38.4000],
-        'Asela'          => [7.9500,  39.1333],
-        'Robe'           => [7.1167,  40.0000],
-        'Goba'           => [7.0000,  39.9833],
-        'Jijiga'         => [9.3500,  42.8000],
-        'Harar'          => [9.3167,  42.1333],
-        'Nekemte'        => [9.0833,  36.5500],
-        'Gimbi'          => [9.1667,  35.8167],
-        'Ambo'           => [8.9833,  37.8500],
-        'Welkite'        => [8.2833,  37.7833],
-        'Butajira'       => [8.1167,  38.3667],
-    ];
+    // City coordinate table and nearest-city lookup now live in CityCoordinates
+    // (single canonical source, replacing this class's former CITY_COORDS const).
 
     public static function nearestCity(float $lat, float $lng): string
     {
-        $best     = null;
-        $bestDist = PHP_FLOAT_MAX;
-
-        foreach (self::CITY_COORDS as $city => [$clat, $clng]) {
-            $dist = self::haversineKm($lat, $lng, $clat, $clng);
-            if ($dist < $bestDist) {
-                $bestDist = $dist;
-                $best     = $city;
-            }
-        }
-
-        return $best ?? 'Addis Ababa';
-    }
-
-    private static function haversineKm(float $lat1, float $lon1, float $lat2, float $lon2): float
-    {
-        $R    = 6371.0;
-        $phi1 = deg2rad($lat1); $phi2 = deg2rad($lat2);
-        $dphi = deg2rad($lat2 - $lat1);
-        $dlam = deg2rad($lon2 - $lon1);
-        $a    = sin($dphi / 2) ** 2 + cos($phi1) * cos($phi2) * sin($dlam / 2) ** 2;
-        return 2 * $R * asin(sqrt($a));
+        return CityCoordinates::nearestCity($lat, $lng);
     }
 
     /**
@@ -320,28 +258,49 @@ class VehicleController extends Controller
 
         $lat      = (float) $validated['lat'];
         $lng      = (float) $validated['lng'];
-        $radius   = (float) ($validated['radius_km'] ?? 100);
+        // Caller-supplied radius_km wins (Flutter's nearby-trucks screen
+        // always sends one); otherwise fall back to the admin-configurable
+        // default instead of a hardcoded value.
+        $radius   = (float) ($validated['radius_km'] ?? PlatformSetting::get('spatial.nearby_trucks_radius_km', 50));
         $category = $validated['category'] ?? null;
+        $radiusMeters = $radius * 1000;
 
-        $latDelta = $radius / 110;
-        $lngDelta = $radius / (111 * max(cos(deg2rad($lat)), 0.0001));
+        $cutoff = now()->subHours(48);
 
+        // PostGIS-accelerated: ST_DWithin does the radius filter using the
+        // vehicles_position_gist index (replacing the old rectangular
+        // whereBetween bounding-box pre-filter); the KNN `<->` operator does
+        // the index-accelerated distance sort.
+        // Shows both free and busy trucks (see Vehicle::busyVehicleIds) —
+        // availability_status isn't trusted here, it goes stale for the
+        // normal bid-accept flow (see that helper's docblock).
         $query = Vehicle::with('user')
-            ->where('availability_status', 'available')
-            ->whereNotNull('latitude')
-            ->whereNotNull('longitude')
-            ->whereBetween('latitude',  [$lat - $latDelta, $lat + $latDelta])
-            ->whereBetween('longitude', [$lng - $lngDelta, $lng + $lngDelta])
-            ->where('last_location_at', '>=', now()->subHours(48));
+            ->whereNotNull('position')
+            ->where('last_location_at', '>=', $cutoff)
+            ->whereHas('user', fn ($q) => $q->where('verification_status', true))
+            ->whereRaw(
+                'ST_DWithin(position, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ?)',
+                [$lng, $lat, $radiusMeters]
+            )
+            ->orderByRaw(
+                'position <-> ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography',
+                [$lng, $lat]
+            )
+            ->selectRaw(
+                'vehicles.*, ST_Distance(position, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography) / 1000 AS distance_km_pg',
+                [$lng, $lat]
+            );
 
         if ($category) {
             $query->where('vehicle_category', $category);
         }
 
-        $cutoff = now()->subHours(48);
-        $trucks = $query->get()->map(function ($v) use ($lat, $lng, $cutoff) {
+        $candidates = $query->get();
+        $busyIds    = Vehicle::busyVehicleIds($candidates->pluck('id'));
+
+        $trucks = $candidates->map(function ($v) use ($busyIds) {
             $driver = $v->user;
-            $dist   = self::haversineKm($lat, $lng, (float) $v->latitude, (float) $v->longitude);
+            $dist   = (float) $v->distance_km_pg;
 
             $minsAgo = $v->last_location_at
                 ? (int) now()->diffInMinutes($v->last_location_at)
@@ -365,11 +324,9 @@ class VehicleController extends Controller
                 'rating'          => round((float) $v->rating, 1),
                 'distance_km'     => round($dist, 1),
                 'last_seen'       => $lastSeen,
+                'is_busy'         => $busyIds->contains($v->id),
             ];
-        })
-        ->filter(fn ($t) => $t['distance_km'] <= $radius)
-        ->sortBy('distance_km')
-        ->values();
+        })->values();
 
         return response()->json(['trucks' => $trucks]);
     }
@@ -382,8 +339,14 @@ class VehicleController extends Controller
         $vehicle = Vehicle::findOrFail($id);
         $user = auth()->user();
 
-        if (!$user->is_admin && $vehicle->user_id !== $user->id) {
+        if (!$user->is_admin && $vehicle->user_id !== $user->id && $vehicle->fleet_owner_id !== $user->id) {
             return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        if (Booking::where('vehicle_id', $vehicle->id)->exists()) {
+            return response()->json([
+                'message' => 'This vehicle has booking or trip history and cannot be deleted.',
+            ], 422);
         }
 
         $vehicle->delete();

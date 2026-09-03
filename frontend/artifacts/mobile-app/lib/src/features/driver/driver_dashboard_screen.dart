@@ -1,12 +1,17 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../data/api/api_client.dart';
 import '../../data/providers/data_providers.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/repositories.dart';
 import '../../services/location_service.dart';
+import '../../utils/ethiopian_cities.dart';
+import '../../utils/weight_format.dart';
+import '../../utils/ethiopian_date.dart';
 import '../shared/widgets/shared_widgets.dart';
 
 // ── Palette ───────────────────────────────────────────────────────────────
@@ -27,6 +32,8 @@ class DriverDashboardScreen extends ConsumerStatefulWidget {
 
 class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
   bool _trackingCalibrated = false;
+  double _radiusKm = 50; // matches the backend's own default on first load
+  static const _radiusOptions = <double>[25, 50, 100, 200];
 
   @override
   void initState() {
@@ -38,7 +45,8 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
   }
 
   /// Reads the driver's active booking once bookings have loaded.
-  /// If the active trip is intracity, restarts the location timer at 5 min.
+  /// If a trip is ongoing, switches to live tracking so the shipper's
+  /// tracking screen sees a smoothly moving truck.
   Future<void> _calibrateTrackingInterval() async {
     if (_trackingCalibrated) return;
     try {
@@ -48,16 +56,19 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
       try {
         active = bookings.firstWhere((b) => b.isTripOngoing);
       } catch (_) {}
-      final serviceType = active?.serviceType ?? 'intercity';
-      if (serviceType == 'intracity') {
-        await LocationService.startTracking(ref, serviceType: 'intracity');
+      if (active != null) {
+        await LocationService.startTracking(
+          ref,
+          serviceType: active.serviceType,
+          tripOngoing: true,
+        );
         if (LocationService.consumeBatteryWarning() && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                'Location updates every 5 min for this city job. '
-                'This uses more battery. / '
-                'ለዚህ የከተማ ስራ ቦታ በ5 ደቂቃ ይዘምናል። ይህ ባትሪ ይጠቀማል።',
+                'Live tracking is on for this trip — your location updates '
+                'as you drive. This uses more battery. / '
+                'ለዚህ ጉዞ ቀጥታ ክትትል በርቷል — በሚነዱበት ጊዜ ቦታዎ ይዘምናል። ይህ ባትሪ ይጠቀማል።',
               ),
               duration: Duration(seconds: 6),
             ),
@@ -65,9 +76,87 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
         }
       }
     } catch (_) {
-      // Bookings unavailable — keep the default intercity interval.
+      // Bookings unavailable — keep the default idle interval.
     } finally {
       if (mounted) _trackingCalibrated = true;
+    }
+  }
+
+  Future<void> _updateLocationViaGps() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (!context.mounted) return;
+      final openSettings = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Location is turned off / ቦታ ጠፍቷል'),
+          content: const Text(
+            "Your phone's location service is off. Turn it on "
+            'so shippers can find you. / '
+            'የስልክዎ ቦታ አገልግሎት ጠፍቷል። አብርተው ይቀጥሉ።',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Open Settings'),
+            ),
+          ],
+        ),
+      );
+      if (openSettings == true) {
+        await Geolocator.openLocationSettings();
+      }
+      return;
+    }
+
+    if (!context.mounted) return;
+    final granted = await LocationService.showPermissionDialog(context);
+    if (!granted) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+            'Location permission is needed to share your position with shippers.',
+          ),
+          backgroundColor: Colors.red,
+        ));
+      }
+      return;
+    }
+
+    _trackingCalibrated = false;
+    final pushed = await LocationService.startTracking(ref);
+    unawaited(_calibrateTrackingInterval());
+    ref.invalidate(cargoListWithMetaProvider);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(pushed
+            ? 'Location enabled — sharing your position now.'
+            : "Couldn't get a GPS fix yet — this will retry automatically."),
+        backgroundColor: pushed ? Colors.green : Colors.orange,
+      ));
+    }
+  }
+
+  Future<void> _updateLocationManually(String city) async {
+    final coords = kEthiopianCities[city];
+    if (coords == null) return;
+    final pushed = await LocationService.pushManualLocation(
+      ref,
+      lat: coords.latitude,
+      lng: coords.longitude,
+    );
+    ref.invalidate(cargoListWithMetaProvider);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(pushed
+            ? 'Location set to $city.'
+            : 'Could not update location. Try again.'),
+        backgroundColor: pushed ? Colors.green : Colors.red,
+      ));
     }
   }
 
@@ -80,7 +169,7 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final driver = ref.read(authNotifierProvider).user;
-    final cargoWithMetaAsync = ref.watch(cargoListWithMetaProvider);
+    final cargoWithMetaAsync = ref.watch(cargoListWithMetaProvider(_radiusKm));
     final bookingsAsync = ref.watch(bookingListProvider);
     final myBids = ref.watch(myBidsProvider).valueOrNull;
 
@@ -90,12 +179,14 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
         backgroundColor: _green,
         elevation: 0,
         title: Text('driver.dashboard'.tr(),
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w600)),
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           const NotificationBell(),
           IconButton(
-            icon: const Icon(Icons.account_circle_outlined, color: Colors.white),
+            icon:
+                const Icon(Icons.account_circle_outlined, color: Colors.white),
             onPressed: () => context.go('/profile'),
           ),
         ],
@@ -154,22 +245,69 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
               error: (_, __) => const SizedBox.shrink(),
             ),
 
-            // ── GPS / location unset banner ───────────────────────────
-            cargoWithMetaAsync.whenData((meta) {
-              if (!meta.locationUnset) return const SizedBox.shrink();
-              return _GpsUnsetBanner(
-                onEnableGps: () async {
-                  final granted =
-                      await LocationService.showPermissionDialog(context);
-                  if (granted) {
-                    _trackingCalibrated = false;
-                    LocationService.startTracking(ref);
-                    _calibrateTrackingInterval();
-                  }
-                },
-                onSetCity: () => context.go('/profile'),
-              );
-            }).valueOrNull ?? const SizedBox.shrink(),
+            // ── Location control — GPS or manual city, driver's choice ──
+            cargoWithMetaAsync.when(
+              data: (meta) => _LocationCard(
+                currentCity: meta.currentCity,
+                locationUnset: meta.locationUnset,
+                onUseGps: () => _updateLocationViaGps(),
+                onSelectCity: (city) => _updateLocationManually(city),
+              ),
+              loading: () => const SizedBox.shrink(),
+              error: (_, __) => const SizedBox.shrink(),
+            ),
+
+            // ── Search radius — only meaningful for heavy/intercity
+            // drivers; light/intracity drivers are matched by exact city,
+            // so the backend never returns a radius_km for them and this
+            // stays hidden rather than showing a control that does nothing.
+            cargoWithMetaAsync.maybeWhen(
+              data: (meta) => meta.radiusKm == null
+                  ? const SizedBox.shrink()
+                  : Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Search radius',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: _textSecondary)),
+                          const SizedBox(height: 6),
+                          SizedBox(
+                            height: 32,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: _radiusOptions.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(width: 8),
+                              itemBuilder: (_, i) {
+                                final r = _radiusOptions[i];
+                                final selected = r == _radiusKm;
+                                return ChoiceChip(
+                                  label: Text('${r.toInt()} km',
+                                      style: const TextStyle(fontSize: 12)),
+                                  selected: selected,
+                                  selectedColor: _green,
+                                  labelStyle: TextStyle(
+                                    color: selected
+                                        ? Colors.white
+                                        : const Color(0xFF374151),
+                                  ),
+                                  backgroundColor: const Color(0xFFF3F4F6),
+                                  onSelected: (_) =>
+                                      setState(() => _radiusKm = r),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+              orElse: () => const SizedBox.shrink(),
+            ),
+            const SizedBox(height: 12),
 
             // ── Available cargo ───────────────────────────────────────
             const SizedBox(height: 4),
@@ -255,8 +393,7 @@ class _GreetingCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'driver.hello'.tr(
-                    namedArgs: {'name': driver?.fullName ?? ''}),
+                'driver.hello'.tr(namedArgs: {'name': driver?.fullName ?? ''}),
                 style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
@@ -288,11 +425,73 @@ class _GreetingCard extends StatelessWidget {
 
 // ── GPS / location unset banner ───────────────────────────────────────────
 
-class _GpsUnsetBanner extends StatelessWidget {
-  final VoidCallback onEnableGps;
-  final VoidCallback onSetCity;
-  const _GpsUnsetBanner(
-      {required this.onEnableGps, required this.onSetCity});
+// Always-visible location control — the driver can push their current
+// position via live GPS or by picking a city from a list, whichever they
+// prefer at that moment. Neither is "the" mode: each tap is a one-off
+// update via the same backend endpoint, so switching back and forth is
+// free and instant.
+class _LocationCard extends StatelessWidget {
+  final String? currentCity;
+  final bool locationUnset;
+  final VoidCallback onUseGps;
+  final ValueChanged<String> onSelectCity;
+  const _LocationCard({
+    required this.currentCity,
+    required this.locationUnset,
+    required this.onUseGps,
+    required this.onSelectCity,
+  });
+
+  Future<void> _openCityPicker(BuildContext context) async {
+    final cities = kEthiopianCities.keys.toList()..sort();
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (_, scrollController) => Column(
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: _border,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text('Select your current city',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: ListView.builder(
+                controller: scrollController,
+                itemCount: cities.length,
+                itemBuilder: (_, i) => ListTile(
+                  title: Text(cities[i]),
+                  trailing: cities[i] == currentCity
+                      ? const Icon(Icons.check_circle_rounded,
+                          color: _green, size: 20)
+                      : null,
+                  onTap: () => Navigator.pop(ctx, cities[i]),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (selected != null) onSelectCity(selected);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -300,44 +499,62 @@ class _GpsUnsetBanner extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF7ED),
+        color: locationUnset ? const Color(0xFFFFF7ED) : Colors.white,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFF59E0B).withAlpha(100)),
+        border: Border.all(
+          color:
+              locationUnset ? const Color(0xFFF59E0B).withAlpha(100) : _border,
+        ),
       ),
       child: Row(children: [
-        const Icon(Icons.gps_off_rounded,
-            color: Color(0xFFF59E0B), size: 20),
+        Icon(
+          locationUnset ? Icons.gps_off_rounded : Icons.my_location_rounded,
+          color: locationUnset ? const Color(0xFFF59E0B) : _green,
+          size: 20,
+        ),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('driver.enable_gps_title'.tr(),
-                  style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF92400E))),
+              Text(
+                currentCity ?? 'driver.enable_gps_title'.tr(),
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: locationUnset
+                        ? const Color(0xFF92400E)
+                        : _textSecondary.withAlpha(230)),
+              ),
               const SizedBox(height: 2),
-              Text('driver.enable_gps_sub'.tr(),
-                  style:
-                      const TextStyle(fontSize: 11, color: Color(0xFFB45309))),
+              Text(
+                locationUnset
+                    ? 'driver.enable_gps_sub'.tr()
+                    : 'Update anytime — GPS or pick a city',
+                style: TextStyle(
+                    fontSize: 11,
+                    color: locationUnset
+                        ? const Color(0xFFB45309)
+                        : _textSecondary),
+              ),
             ],
           ),
         ),
         const SizedBox(width: 8),
         Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             GestureDetector(
-              onTap: onEnableGps,
+              onTap: onUseGps,
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 5),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: _amber,
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Text('driver.enable_gps_title'.tr().split(' ').first,
-                    style: const TextStyle(
+                child: const Text('Use GPS',
+                    style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                         color: Colors.white)),
@@ -345,12 +562,13 @@ class _GpsUnsetBanner extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             GestureDetector(
-              onTap: onSetCity,
-              child: Text(
-                'driver.city_unset_title'.tr().split(' ').first,
-                style: const TextStyle(
+              onTap: () => _openCityPicker(context),
+              child: const Text(
+                'Select City',
+                style: TextStyle(
                     fontSize: 10,
-                    color: Color(0xFFB45309),
+                    color: _green,
+                    fontWeight: FontWeight.w600,
                     decoration: TextDecoration.underline),
               ),
             ),
@@ -370,8 +588,7 @@ class _StatsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final total = bookings.length;
-    final active =
-        bookings.where((b) => b.bookingStatus == 'confirmed').length;
+    final active = bookings.where((b) => b.bookingStatus == 'confirmed').length;
     final completed =
         bookings.where((b) => b.bookingStatus == 'completed').length;
 
@@ -426,9 +643,7 @@ class _StatCard extends StatelessWidget {
         const SizedBox(height: 6),
         Text(value,
             style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w500,
-                color: color)),
+                fontSize: 22, fontWeight: FontWeight.w500, color: color)),
         const SizedBox(height: 2),
         Text(label,
             textAlign: TextAlign.center,
@@ -499,14 +714,14 @@ class _BackhaulBanner extends StatelessWidget {
           style: ElevatedButton.styleFrom(
             backgroundColor: _amber,
             foregroundColor: const Color(0xFF111827),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             elevation: 0,
           ),
           child: Text('common.open'.tr(),
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              style:
+                  const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
         ),
       ]),
     );
@@ -522,9 +737,12 @@ class _MyBidsBanner extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final bidsAsync = ref.watch(myBidsProvider);
-    final pendingCount = bidsAsync.whenData(
-      (bids) => bids.where((b) => b.needsDriverAction).length,
-    ).valueOrNull ?? 0;
+    final pendingCount = bidsAsync
+            .whenData(
+              (bids) => bids.where((b) => b.needsDriverAction).length,
+            )
+            .valueOrNull ??
+        0;
 
     return GestureDetector(
       onTap: onTap,
@@ -553,9 +771,7 @@ class _MyBidsBanner extends ConsumerWidget {
             child: Icon(
               Icons.gavel_rounded,
               size: 20,
-              color: pendingCount > 0
-                  ? const Color(0xFF7C3AED)
-                  : _green,
+              color: pendingCount > 0 ? const Color(0xFF7C3AED) : _green,
             ),
           ),
           const SizedBox(width: 12),
@@ -583,8 +799,7 @@ class _MyBidsBanner extends ConsumerWidget {
                   pendingCount > 0
                       ? 'driver.tap_to_review'.tr()
                       : 'driver.track_bids'.tr(),
-                  style: const TextStyle(
-                      fontSize: 11, color: _textSecondary),
+                  style: const TextStyle(fontSize: 11, color: _textSecondary),
                 ),
               ],
             ),
@@ -629,8 +844,7 @@ class _Section extends StatelessWidget {
               TextButton(
                 onPressed: onAction,
                 style: TextButton.styleFrom(foregroundColor: _green),
-                child: Text(actionLabel!,
-                    style: const TextStyle(fontSize: 13)),
+                child: Text(actionLabel!, style: const TextStyle(fontSize: 13)),
               ),
           ],
         ),
@@ -647,8 +861,7 @@ class _PendingJobCard extends ConsumerStatefulWidget {
   final Booking booking;
   final VoidCallback onAccepted;
 
-  const _PendingJobCard(
-      {required this.booking, required this.onAccepted});
+  const _PendingJobCard({required this.booking, required this.onAccepted});
 
   @override
   ConsumerState<_PendingJobCard> createState() => _PendingJobCardState();
@@ -661,9 +874,9 @@ class _PendingJobCardState extends ConsumerState<_PendingJobCard> {
     setState(() => _loading = true);
     try {
       await ref.read(apiClientProvider).patch<void>(
-            '/bookings/${widget.booking.id}',
-            data: {'booking_status': 'accepted'},
-          );
+        '/bookings/${widget.booking.id}',
+        data: {'booking_status': 'accepted'},
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('driver.job_accepted'.tr()),
@@ -674,8 +887,8 @@ class _PendingJobCardState extends ConsumerState<_PendingJobCard> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('common.error_prefix'
-              .tr(namedArgs: {'msg': e.toString()})),
+          content:
+              Text('common.error_prefix'.tr(namedArgs: {'msg': e.toString()})),
           backgroundColor: Colors.red,
         ));
       }
@@ -703,16 +916,15 @@ class _PendingJobCardState extends ConsumerState<_PendingJobCard> {
             color: _amber.withAlpha(20),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: const Icon(Icons.hourglass_top_rounded,
-              color: _amber, size: 22),
+          child:
+              const Icon(Icons.hourglass_top_rounded, color: _amber, size: 22),
         ),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                  'driver.booking_label'.tr(namedArgs: {'id': '${b.id}'}),
+              Text('driver.booking_label'.tr(namedArgs: {'id': '${b.id}'}),
                   style: const TextStyle(
                       fontWeight: FontWeight.w600, fontSize: 13)),
               const SizedBox(height: 2),
@@ -723,9 +935,8 @@ class _PendingJobCardState extends ConsumerState<_PendingJobCard> {
                       fontWeight: FontWeight.w500)),
               Text(
                   'ETB ${_fmt(b.estimatedPrice)}'
-                  '${b.weight != null ? "  ·  ${b.weight!.toStringAsFixed(0)}t" : ""}',
-                  style:
-                      const TextStyle(fontSize: 11, color: _textSecondary)),
+                  '${b.weight != null ? "  ·  ${WeightFormat.display(b.weight!)}" : ""}',
+                  style: const TextStyle(fontSize: 11, color: _textSecondary)),
             ],
           ),
         ),
@@ -733,15 +944,14 @@ class _PendingJobCardState extends ConsumerState<_PendingJobCard> {
             ? const SizedBox(
                 width: 22,
                 height: 22,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: _green))
+                child: CircularProgressIndicator(strokeWidth: 2, color: _green))
             : ElevatedButton(
                 onPressed: _accept,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _green,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8)),
                   elevation: 0,
@@ -757,25 +967,66 @@ class _PendingJobCardState extends ConsumerState<_PendingJobCard> {
 
 // ── Cargo card with Place Bid ─────────────────────────────────────────────
 
-class _CargoCard extends StatelessWidget {
+class _CargoCard extends ConsumerStatefulWidget {
   final CargoRequest cargo;
   final int driverId;
   final List<Bid>? myBids;
   const _CargoCard({required this.cargo, required this.driverId, this.myBids});
 
+  @override
+  ConsumerState<_CargoCard> createState() => _CargoCardState();
+}
+
+class _CargoCardState extends ConsumerState<_CargoCard> {
+  bool _accepting = false;
+
+  CargoRequest get cargo => widget.cargo;
+  List<Bid>? get myBids => widget.myBids;
+
   Bid? get _existingBid {
     if (myBids == null) return null;
     final matches = myBids!.where(
-      (b) => b.cargoRequestId == cargo.id &&
-             (b.status == 'pending' || b.status == 'countered'),
+      (b) =>
+          b.cargoRequestId == cargo.id &&
+          (b.status == 'pending' || b.status == 'countered'),
     );
     return matches.isEmpty ? null : matches.first;
   }
 
+  // Accepts a fixed-price cargo directly from the dashboard card. Deliberately
+  // does NOT navigate to '/freight/${cargo.id}' — that route is nested under
+  // the shipper's '/freight' list route, so go_router builds the shipper's
+  // (isDriver: false) list screen underneath it in the stack; popping after
+  // accept then surfaced the shipper's cargo list to the driver instead of
+  // returning to their own dashboard.
+  Future<void> _acceptFixed() async {
+    setState(() => _accepting = true);
+    try {
+      await ref.read(cargoRepositoryProvider).acceptFixedPrice(cargo.id);
+      ref.invalidate(cargoListWithMetaProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+            'Offer accepted! The shipper will review and confirm a driver.',
+          ),
+          backgroundColor: _green,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed: $e'),
+          backgroundColor: Colors.red,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _accepting = false);
+    }
+  }
+
   bool get _isIntracity => cargo.serviceType == 'intracity';
 
-  String _fmtDate(DateTime d) =>
-      '${d.day}/${d.month}/${d.year}';
+  String _fmtDate(DateTime d) => EthiopianDate.display(d);
 
   @override
   Widget build(BuildContext context) {
@@ -811,9 +1062,7 @@ class _CargoCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: (isClosed
                           ? Colors.grey
-                          : (_isIntracity
-                              ? const Color(0xFF1E40AF)
-                              : _green))
+                          : (_isIntracity ? const Color(0xFF1E40AF) : _green))
                       .withAlpha(15),
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -848,8 +1097,7 @@ class _CargoCard extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 1),
                           decoration: BoxDecoration(
-                            color:
-                                const Color(0xFF1E40AF).withAlpha(18),
+                            color: const Color(0xFF1E40AF).withAlpha(18),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
@@ -881,12 +1129,11 @@ class _CargoCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${cargo.materialType}  ·  ${cargo.weight.toStringAsFixed(0)} t',
+                        '${cargo.materialType}  ·  ${WeightFormat.display(cargo.weight)}',
                         style: TextStyle(
                             fontSize: 12,
-                            color: isClosed
-                                ? Colors.grey[400]
-                                : _textSecondary),
+                            color:
+                                isClosed ? Colors.grey[400] : _textSecondary),
                       ),
                     ],
                   ],
@@ -895,11 +1142,10 @@ class _CargoCard extends StatelessWidget {
               // Badge: intracity shows vehicle type; intercity shows urgency
               if (_isIntracity && cargo.vehicleTypeNeeded != null)
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 3),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color:
-                        const Color(0xFF1E40AF).withAlpha(18),
+                    color: const Color(0xFF1E40AF).withAlpha(18),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
@@ -912,8 +1158,8 @@ class _CargoCard extends StatelessWidget {
                 )
               else if (!_isIntracity)
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 3),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: (isClosed
                             ? Colors.grey
@@ -945,11 +1191,9 @@ class _CargoCard extends StatelessWidget {
                     size: 13, color: _textSecondary),
                 const SizedBox(width: 4),
                 Text(
-                  'driver.distance_km'.tr(namedArgs: {
-                    'km': cargo.distanceKm!.toStringAsFixed(1)
-                  }),
-                  style: const TextStyle(
-                      fontSize: 11, color: _textSecondary),
+                  'driver.distance_km'.tr(
+                      namedArgs: {'km': cargo.distanceKm!.toStringAsFixed(1)}),
+                  style: const TextStyle(fontSize: 11, color: _textSecondary),
                 ),
               ]),
             ],
@@ -972,9 +1216,7 @@ class _CargoCard extends StatelessWidget {
                             fontSize: 12, color: _textSecondary)),
                 if (isFixed && !_isIntracity)
                   ElevatedButton(
-                    onPressed: isClosed
-                        ? null
-                        : () => context.go('/freight/${cargo.id}'),
+                    onPressed: (isClosed || _accepting) ? null : _acceptFixed,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _green,
                       foregroundColor: Colors.white,
@@ -984,9 +1226,15 @@ class _CargoCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(8)),
                       elevation: 0,
                     ),
-                    child: const Text('Accept Offer',
-                        style: TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.w600)),
+                    child: _accepting
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : const Text('Accept Offer',
+                            style: TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.w600)),
                   )
                 else
                   _BidActionButton(
@@ -1005,7 +1253,8 @@ class _CargoCard extends StatelessWidget {
     );
   }
 
-  void _showBidSheet(BuildContext context, CargoRequest cargo, {Bid? existingBid}) {
+  void _showBidSheet(BuildContext context, CargoRequest cargo,
+      {Bid? existingBid}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1072,9 +1321,7 @@ class _BidActionButton extends StatelessWidget {
         ),
         child: const Text('Closed',
             style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey)),
+                fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey)),
       );
     }
     if (existingBid != null) {
@@ -1201,8 +1448,8 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 60)),
       builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-            colorScheme: const ColorScheme.light(primary: _green)),
+        data: Theme.of(ctx)
+            .copyWith(colorScheme: const ColorScheme.light(primary: _green)),
         child: child!,
       ),
     );
@@ -1229,7 +1476,9 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
       ));
       return;
     }
-    if (_isIntracity && _availableDatetime == null && widget.existingBid == null) {
+    if (_isIntracity &&
+        _availableDatetime == null &&
+        widget.existingBid == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Please select your available date & time'),
         backgroundColor: Colors.red,
@@ -1243,33 +1492,59 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
         await ref.read(bidRepositoryProvider).update(
               widget.existingBid!.id,
               amount: amount,
-              note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+              note:
+                  _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
             );
       } else {
         final vehicles = await ref.read(vehicleListProvider.future);
         if (!mounted) return;
         if (vehicles.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('common.failed'.tr()),
+            content: const Text(
+                'You need to register a vehicle before placing a bid.'),
+            backgroundColor: Colors.red,
+            action: SnackBarAction(
+              label: 'Register',
+              textColor: Colors.white,
+              onPressed: () => context.push('/driver-documents'),
+            ),
+          ));
+          setState(() => _submitting = false);
+          return;
+        }
+        final requiredCategory = _isIntracity ? 'light' : 'heavy';
+        final matching = vehicles
+            .where((v) => v.vehicleCategory == requiredCategory)
+            .toList();
+        if (matching.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(_isIntracity
+                ? 'None of your registered vehicles are set up for intracity jobs (need a light vehicle).'
+                : 'None of your registered vehicles are set up for intercity jobs (need a heavy vehicle).'),
             backgroundColor: Colors.red,
           ));
           setState(() => _submitting = false);
           return;
         }
+        final vehicleToUse = matching.first;
         if (_isIntracity) {
           await ref.read(bidRepositoryProvider).placeWithDatetime(
                 cargoId: widget.cargo.id,
-                vehicleId: vehicles.first.id,
+                vehicleId: vehicleToUse.id,
                 amount: amount,
-                note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+                note: _noteCtrl.text.trim().isEmpty
+                    ? null
+                    : _noteCtrl.text.trim(),
                 availableDatetime: _availableDatetime,
               );
         } else {
           await ref.read(bidRepositoryProvider).place(
                 cargoId: widget.cargo.id,
-                vehicleId: vehicles.first.id,
+                vehicleId: vehicleToUse.id,
                 amount: amount,
-                note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+                note: _noteCtrl.text.trim().isEmpty
+                    ? null
+                    : _noteCtrl.text.trim(),
               );
         }
       }
@@ -1284,8 +1559,8 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('common.error_prefix'
-              .tr(namedArgs: {'msg': e.toString()})),
+          content:
+              Text('common.error_prefix'.tr(namedArgs: {'msg': e.toString()})),
           backgroundColor: Colors.red,
         ));
       }
@@ -1294,12 +1569,7 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
     }
   }
 
-  String _fmtDatetime(DateTime dt) {
-    final months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    final h = dt.hour.toString().padLeft(2, '0');
-    final m = dt.minute.toString().padLeft(2, '0');
-    return '${dt.day} ${months[dt.month - 1]} · $h:$m';
-  }
+  String _fmtDatetime(DateTime dt) => EthiopianDate.displayWithTime(dt);
 
   @override
   Widget build(BuildContext context) {
@@ -1324,7 +1594,10 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
           ),
           const SizedBox(height: 16),
 
-          Text(widget.existingBid != null ? 'bid.edit_title'.tr() : 'bid.place_title'.tr(),
+          Text(
+              widget.existingBid != null
+                  ? 'bid.edit_title'.tr()
+                  : 'bid.place_title'.tr(),
               style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -1338,9 +1611,41 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
             )
           else
             Text(
-              '${c.pickupLocation} → ${c.destination}  ·  ${c.weight.toStringAsFixed(0)} t  ·  ${c.materialType}',
+              '${c.pickupLocation} → ${c.destination}  ·  ${WeightFormat.display(c.weight)}  ·  ${c.materialType}',
               style: const TextStyle(fontSize: 13, color: _textSecondary),
             ),
+          if (c.pickupLat != null && c.pickupLng != null) ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: () async {
+                // NavigationScreen falls back to a hardcoded Addis Ababa
+                // origin when none is supplied — always pass the driver's
+                // real live position so pre-trip navigation isn't routed
+                // from the wrong city.
+                final pos = await LocationService.getCurrentPosition();
+                if (!context.mounted) return;
+                final destName = Uri.encodeComponent(_isIntracity
+                    ? (c.pickupArea ?? c.city ?? 'Pickup')
+                    : c.pickupLocation);
+                var url =
+                    '/navigate?dest_lat=${c.pickupLat}&dest_lng=${c.pickupLng}&dest_name=$destName';
+                if (pos != null) {
+                  url += '&orig_lat=${pos.latitude}&orig_lng=${pos.longitude}';
+                }
+                context.push(url);
+              },
+              icon: const Icon(Icons.directions, size: 18),
+              label: Text('bid.navigate_to_pickup'.tr()),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _green,
+                side: const BorderSide(color: _green),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
 
           Text('bid.amount_label'.tr(),
@@ -1351,13 +1656,12 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
           const SizedBox(height: 6),
           TextField(
             controller: _amountCtrl,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: InputDecoration(
               hintText: 'e.g. 15,000',
               prefixText: 'ETB  ',
-              prefixStyle: const TextStyle(
-                  color: _amber, fontWeight: FontWeight.w600),
+              prefixStyle:
+                  const TextStyle(color: _amber, fontWeight: FontWeight.w600),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide: const BorderSide(color: _border),
@@ -1381,7 +1685,8 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
             GestureDetector(
               onTap: _pickDatetime,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                 decoration: BoxDecoration(
                   border: Border.all(
                     color: _availableDatetime != null ? _green : _border,
@@ -1391,7 +1696,8 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
                 ),
                 child: Row(children: [
                   Icon(Icons.event_available_outlined,
-                      color: _availableDatetime != null ? _green : _textSecondary,
+                      color:
+                          _availableDatetime != null ? _green : _textSecondary,
                       size: 18),
                   const SizedBox(width: 10),
                   Text(
@@ -1451,7 +1757,10 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
                       height: 20,
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white))
-                  : Text(widget.existingBid != null ? 'bid.edit'.tr() : 'bid.place'.tr(),
+                  : Text(
+                      widget.existingBid != null
+                          ? 'bid.edit'.tr()
+                          : 'bid.place'.tr(),
                       style: const TextStyle(
                           fontSize: 15, fontWeight: FontWeight.w600)),
             ),
@@ -1464,6 +1773,5 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
-String _fmt(double v) =>
-    v.toStringAsFixed(0).replaceAllMapped(
-        RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');
+String _fmt(double v) => v.toStringAsFixed(0).replaceAllMapped(
+    RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},');

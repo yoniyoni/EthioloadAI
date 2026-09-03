@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\DB;
 
 class BidService
 {
+    public function __construct(private RoutingService $routing) {}
+
     /**
      * Driver or fleet owner places a bid on a cargo request.
      *
@@ -62,18 +64,18 @@ class BidService
             throw new \Exception('A bid has already been placed for this vehicle on this cargo request.');
         }
 
-        // Haversine distance: vehicle current location → cargo pickup (informational, intercity only)
+        // Vehicle current location → cargo pickup (informational, intercity only)
         $distanceKm = null;
         if (
             $serviceType === 'intercity' &&
-            $cargo->pickup_latitude !== null && $cargo->pickup_longitude !== null &&
+            $cargo->pickup_lat !== null && $cargo->pickup_lng !== null &&
             $vehicle->latitude !== null && $vehicle->longitude !== null
         ) {
-            $distanceKm = $this->haversine(
+            $distanceKm = $this->resolveDistanceKm(
                 (float) $vehicle->latitude,
                 (float) $vehicle->longitude,
-                (float) $cargo->pickup_latitude,
-                (float) $cargo->pickup_longitude,
+                (float) $cargo->pickup_lat,
+                (float) $cargo->pickup_lng,
             );
         }
 
@@ -108,12 +110,12 @@ class BidService
 
         $distanceKm = null;
         if (
-            $cargo->pickup_latitude !== null && $cargo->pickup_longitude !== null &&
+            $cargo->pickup_lat !== null && $cargo->pickup_lng !== null &&
             $vehicle->latitude !== null && $vehicle->longitude !== null
         ) {
-            $distanceKm = $this->haversine(
+            $distanceKm = $this->resolveDistanceKm(
                 (float) $vehicle->latitude, (float) $vehicle->longitude,
-                (float) $cargo->pickup_latitude, (float) $cargo->pickup_longitude,
+                (float) $cargo->pickup_lat, (float) $cargo->pickup_lng,
             );
         }
 
@@ -126,6 +128,24 @@ class BidService
             'status'           => 'pending',
             'distance_km'      => $distanceKm,
         ]);
+    }
+
+    /**
+     * Vehicle → pickup distance shown to the shipper on a bid. Prefers real
+     * OSRM road distance; falls back to haversine×1.4 if OSRM is unreachable
+     * — same convention as RoutingController's and AiController's fallbacks.
+     */
+    private function resolveDistanceKm(float $vehLat, float $vehLng, float $pickupLat, float $pickupLng): float
+    {
+        $route = $this->routing->getRoute($vehLat, $vehLng, $pickupLat, $pickupLng);
+        if ($route !== null) {
+            return round((float) $route['distance_km'], 1);
+        }
+
+        return round(
+            DistanceService::haversineKm($vehLat, $vehLng, $pickupLat, $pickupLng) * DistanceService::ROAD_DISTANCE_INFLATION_FACTOR,
+            1
+        );
     }
 
     /**
@@ -216,37 +236,47 @@ class BidService
             throw new \Exception('Forbidden.');
         }
 
-        if ($bid->status !== 'countered') {
-            throw new \Exception('No active counter-offer to accept.');
-        }
+        // Identity checks above are safe pre-transaction (actor/driver_id never change).
+        // Status checks must happen again under lock below — another accept may land
+        // between this line and the transaction starting.
+        return DB::transaction(function () use ($bid, $isShipper, $isDriver) {
+            // Lock cargo first, then bid — same order as acceptBid() to avoid deadlocks.
+            $cargo = CargoRequest::whereKey($bid->cargo_request_id)->lockForUpdate()->firstOrFail();
+            if ($cargo->status !== 'pending') {
+                throw new \Exception('This cargo request is no longer available — it may have just been booked.');
+            }
 
-        if ($isShipper && $bid->counter_by !== 'driver') {
-            throw new \Exception('No driver counter-offer to accept.');
-        }
+            $lockedBid = Bid::whereKey($bid->id)->lockForUpdate()->firstOrFail();
+            if ($lockedBid->status !== 'countered') {
+                throw new \Exception('No active counter-offer to accept.');
+            }
+            if ($isShipper && $lockedBid->counter_by !== 'driver') {
+                throw new \Exception('No driver counter-offer to accept.');
+            }
+            if ($isDriver && $lockedBid->counter_by !== 'shipper') {
+                throw new \Exception('No shipper counter-offer to accept.');
+            }
 
-        if ($isDriver && $bid->counter_by !== 'shipper') {
-            throw new \Exception('No shipper counter-offer to accept.');
-        }
+            $this->assertVehicleFree($lockedBid->vehicle_id);
 
-        return DB::transaction(function () use ($bid) {
-            $bid->update(['status' => 'accepted', 'amount' => $bid->counter_amount]);
+            $lockedBid->update(['status' => 'accepted', 'amount' => $lockedBid->counter_amount]);
 
-            Bid::where('cargo_request_id', $bid->cargo_request_id)
-                ->where('id', '!=', $bid->id)
+            Bid::where('cargo_request_id', $cargo->id)
+                ->where('id', '!=', $lockedBid->id)
                 ->whereIn('status', ['pending', 'countered'])
                 ->update(['status' => 'rejected']);
 
-            $bid->cargoRequest()->update(['status' => 'matched']);
+            $cargo->update(['status' => 'matched']);
 
-            $commission = round((float) $bid->counter_amount * 0.10, 2);
+            $commission = round((float) $lockedBid->counter_amount * config('services.commission_rate'), 2);
 
             return Booking::create([
-                'cargo_id'        => $bid->cargo_request_id,
-                'vehicle_id'      => $bid->vehicle_id,
-                'driver_id'       => $bid->driver_id,
-                'bid_id'          => $bid->id,
+                'cargo_id'        => $cargo->id,
+                'vehicle_id'      => $lockedBid->vehicle_id,
+                'driver_id'       => $lockedBid->driver_id,
+                'bid_id'          => $lockedBid->id,
                 'booking_status'  => 'accepted',
-                'estimated_price' => $bid->counter_amount,
+                'estimated_price' => $lockedBid->counter_amount,
                 'commission_fee'  => $commission,
             ]);
         });
@@ -254,45 +284,70 @@ class BidService
 
     /**
      * Shipper directly accepts a bid — auto-rejects all other pending bids.
+     *
+     * @throws \Exception if the cargo/bid is no longer pending — re-checked under
+     *                     lock so two near-simultaneous accepts on the same cargo
+     *                     can't both create a Booking.
      */
     public function acceptBid(Bid $bid): Booking
     {
         return DB::transaction(function () use ($bid) {
-            $bid->update(['status' => 'accepted']);
+            // Lock cargo first, then bid — same order as acceptCounter() to avoid deadlocks.
+            $cargo = CargoRequest::whereKey($bid->cargo_request_id)->lockForUpdate()->firstOrFail();
+            if ($cargo->status !== 'pending') {
+                throw new \Exception('This cargo request is no longer available — it may have just been booked.');
+            }
 
-            Bid::where('cargo_request_id', $bid->cargo_request_id)
-                ->where('id', '!=', $bid->id)
+            $lockedBid = Bid::whereKey($bid->id)->lockForUpdate()->firstOrFail();
+            if ($lockedBid->status !== 'pending') {
+                throw new \Exception('This bid is no longer pending.');
+            }
+
+            $this->assertVehicleFree($lockedBid->vehicle_id);
+
+            $lockedBid->update(['status' => 'accepted']);
+
+            Bid::where('cargo_request_id', $cargo->id)
+                ->where('id', '!=', $lockedBid->id)
                 ->whereIn('status', ['pending', 'countered'])
                 ->update(['status' => 'rejected']);
 
-            $bid->cargoRequest()->update(['status' => 'matched']);
+            $cargo->update(['status' => 'matched']);
 
-            $commission = round((float) $bid->amount * 0.10, 2);
+            $commission = round((float) $lockedBid->amount * config('services.commission_rate'), 2);
 
             return Booking::create([
-                'cargo_id'        => $bid->cargo_request_id,
-                'vehicle_id'      => $bid->vehicle_id,
-                'driver_id'       => $bid->driver_id,
-                'bid_id'          => $bid->id,
+                'cargo_id'        => $cargo->id,
+                'vehicle_id'      => $lockedBid->vehicle_id,
+                'driver_id'       => $lockedBid->driver_id,
+                'bid_id'          => $lockedBid->id,
                 'booking_status'  => 'accepted',
-                'estimated_price' => $bid->amount,
+                'estimated_price' => $lockedBid->amount,
                 'commission_fee'  => $commission,
             ]);
         });
     }
 
     /**
-     * Haversine formula — straight-line distance between two coordinates in km.
+     * Locks the vehicle row and throws once it already has two active
+     * bookings — one being driven, one queued up behind it. A driver can
+     * line up their next job while still finishing the current one (see
+     * TripService::startTrip, which is what actually stops a vehicle
+     * driving two loads at once), but can't stack a third. Must be called
+     * from inside the same transaction as the cargo/bid lock above, after
+     * those, to keep lock order (cargo → bid → vehicle) consistent
+     * everywhere this runs and avoid deadlocks.
      */
-    private function haversine(float $lat1, float $lon1, float $lat2, float $lon2): float
+    private function assertVehicleFree(int $vehicleId): void
     {
-        $R  = 6371.0;
-        $φ1 = deg2rad($lat1);
-        $φ2 = deg2rad($lat2);
-        $Δφ = deg2rad($lat2 - $lat1);
-        $Δλ = deg2rad($lon2 - $lon1);
+        Vehicle::whereKey($vehicleId)->lockForUpdate()->firstOrFail();
 
-        $a = sin($Δφ / 2) ** 2 + cos($φ1) * cos($φ2) * sin($Δλ / 2) ** 2;
-        return round(2 * $R * asin(sqrt($a)), 1);
+        $activeCount = Booking::where('vehicle_id', $vehicleId)
+            ->whereNotIn('booking_status', ['cancelled', 'completed', 'delivered'])
+            ->count();
+
+        if ($activeCount >= 2) {
+            throw new \Exception('This vehicle already has an active trip and a queued one — finish or deliver one before taking on another.');
+        }
     }
 }

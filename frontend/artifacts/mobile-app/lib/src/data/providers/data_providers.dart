@@ -80,7 +80,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> login({required String identifier, required String password}) async {
+  Future<void> login(
+      {required String identifier, required String password}) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final res = await _repo.login(identifier: identifier, password: password);
@@ -99,6 +100,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await _repo.logout();
     state = const AuthState();
   }
+
+  /// Updates the in-memory user after a profile-style edit that returned a
+  /// fresh User (e.g. payout details) — avoids a full checkAuthStatus()
+  /// round-trip just to reflect a field the caller already has.
+  void setUser(User user) {
+    state = state.copyWith(user: user);
+  }
 }
 
 // Use ref.read — auth repository should never cause cascading rebuilds
@@ -111,14 +119,24 @@ final authNotifierProvider =
 
 // keepAlive: true prevents the provider from being disposed on navigation,
 // avoiding unnecessary re-fetches and rebuild loops
-final cargoListProvider = FutureProvider.autoDispose<List<CargoRequest>>((ref) async {
+final cargoListProvider =
+    FutureProvider.autoDispose<List<CargoRequest>>((ref) async {
   return ref.read(cargoRepositoryProvider).list();
 });
 
-// cargo list + location_unset flag (for driver dashboard city banner)
-final cargoListWithMetaProvider = FutureProvider.autoDispose<
-    ({bool locationUnset, List<CargoRequest> cargo})>((ref) async {
-  return ref.read(cargoRepositoryProvider).listWithMeta();
+// cargo list + location_unset flag + current_city + applied radius (for
+// driver dashboard location card and radius picker). Keyed by the driver's
+// chosen radius so switching chips re-fetches instead of reusing a stale
+// cached list for a different distance.
+final cargoListWithMetaProvider = FutureProvider.autoDispose.family<
+    ({
+      bool locationUnset,
+      String? currentCity,
+      double? radiusKm,
+      List<CargoRequest> cargo
+    }),
+    double?>((ref, radiusKm) async {
+  return ref.read(cargoRepositoryProvider).listWithMeta(radiusKm: radiusKm);
 });
 
 final singleCargoProvider =
@@ -128,17 +146,20 @@ final singleCargoProvider =
 
 // ── Vehicle providers ─────────────────────────────────────────────────────
 
-final vehicleListProvider = FutureProvider.autoDispose<List<Vehicle>>((ref) async {
+final vehicleListProvider =
+    FutureProvider.autoDispose<List<Vehicle>>((ref) async {
   return ref.read(vehicleRepositoryProvider).list();
 });
 
-final nearbyVehiclesProvider = FutureProvider.autoDispose<List<Vehicle>>((ref) async {
+final nearbyVehiclesProvider =
+    FutureProvider.autoDispose<List<Vehicle>>((ref) async {
   return ref.read(vehicleRepositoryProvider).nearby();
 });
 
 // ── Booking providers ─────────────────────────────────────────────────────
 
-final bookingListProvider = FutureProvider.autoDispose<List<Booking>>((ref) async {
+final bookingListProvider =
+    FutureProvider.autoDispose<List<Booking>>((ref) async {
   return ref.read(bookingRepositoryProvider).list();
 });
 
@@ -149,7 +170,8 @@ final singleBookingProvider =
 
 // ── Trip provider ─────────────────────────────────────────────────────────
 
-final tripProvider = FutureProvider.autoDispose.family<Trip, int>((ref, tripId) async {
+final tripProvider =
+    FutureProvider.autoDispose.family<Trip, int>((ref, tripId) async {
   return ref.read(tripRepositoryProvider).get(tripId);
 });
 
@@ -172,6 +194,11 @@ final driverDocumentsProvider =
   return ref.read(documentRepositoryProvider).list();
 });
 
+final vehicleDocumentsProvider = FutureProvider.autoDispose
+    .family<List<VehicleDocument>, int>((ref, vehicleId) async {
+  return ref.read(documentRepositoryProvider).listForVehicle(vehicleId);
+});
+
 // ── Bid providers ─────────────────────────────────────────────────────────
 
 final bidsForCargoProvider =
@@ -185,9 +212,8 @@ final myBidsProvider = FutureProvider.autoDispose<List<Bid>>((ref) async {
 });
 
 // Backhaul recommendations for an active trip (keyed by tripId)
-final backhaulRecommendationsProvider =
-    FutureProvider.autoDispose.family<List<BackhaulRecommendation>, int>(
-        (ref, tripId) async {
+final backhaulRecommendationsProvider = FutureProvider.autoDispose
+    .family<List<BackhaulRecommendation>, int>((ref, tripId) async {
   return ref.read(tripRepositoryProvider).getBackhaulRecommendations(tripId);
 });
 
@@ -205,9 +231,8 @@ final tripLocationProvider =
 });
 
 // Nearby available drivers for a cargo request (shipper cargo detail)
-final nearbyDriversProvider =
-    FutureProvider.autoDispose.family<List<NearbyDriver>, int>(
-        (ref, cargoId) async {
+final nearbyDriversProvider = FutureProvider.autoDispose
+    .family<List<NearbyDriver>, int>((ref, cargoId) async {
   return ref.read(cargoRepositoryProvider).nearbyDrivers(cargoId);
 });
 
@@ -229,8 +254,8 @@ class TruckRecommendationParams {
   });
 }
 
-final truckRecommendationProvider =
-    FutureProvider.autoDispose.family<List<TruckRecommendation>, TruckRecommendationParams>(
+final truckRecommendationProvider = FutureProvider.autoDispose
+    .family<List<TruckRecommendation>, TruckRecommendationParams>(
         (ref, params) async {
   return ref.read(aiRepositoryProvider).recommendTruck(
         pickupLocation: params.pickup,
@@ -241,9 +266,8 @@ final truckRecommendationProvider =
       );
 });
 
-final emptyReturnRiskProvider =
-    FutureProvider.autoDispose.family<Map<String, dynamic>, String>(
-        (ref, destination) async {
+final emptyReturnRiskProvider = FutureProvider.autoDispose
+    .family<Map<String, dynamic>, String>((ref, destination) async {
   return ref.read(aiRepositoryProvider).predictEmptyReturn(destination);
 });
 

@@ -1,7 +1,10 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../data/models/models.dart';
+import '../../utils/weight_format.dart';
 import '../../data/providers/data_providers.dart';
 import '../../data/repositories/repositories.dart';
 
@@ -455,22 +458,50 @@ class _DocumentCardState extends ConsumerState<_DocumentCard> {
   final _picker = ImagePicker();
 
   Future<void> _pickAndUpload() async {
-    final source = await _showSourceSheet();
-    if (source == null) return;
+    final choice = await _showSourceSheet();
+    if (choice == null) return;
 
-    final XFile? file = await _picker.pickImage(
-      source:       source,
-      imageQuality: 85,
-      maxWidth:     1920,
-    );
-    if (file == null) return;
+    Uint8List? fileBytes;
+    String? fileName;
+
+    if (choice == 'pdf') {
+      final result = await FilePicker.platform.pickFiles(
+        type:              FileType.custom,
+        allowedExtensions: ['pdf'],
+        withData:          true,
+      );
+      if (result == null || result.files.isEmpty) return;
+      final picked = result.files.single;
+      if (picked.bytes == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Could not read the selected PDF file'),
+            backgroundColor: _danger,
+          ));
+        }
+        return;
+      }
+      fileBytes = picked.bytes!;
+      fileName = picked.name;
+    } else {
+      final source =
+          choice == 'camera' ? ImageSource.camera : ImageSource.gallery;
+      final XFile? file = await _picker.pickImage(
+        source:       source,
+        imageQuality: 85,
+        maxWidth:     1920,
+      );
+      if (file == null) return;
+      fileBytes = await file.readAsBytes();
+      fileName = file.name;
+    }
 
     setState(() { _uploading = true; _uploadProgress = 0; });
     try {
       await ref.read(documentRepositoryProvider).upload(
             documentType: widget.documentType,
-            filePath:     file.path,
-            fileName:     file.name,
+            fileBytes:    fileBytes,
+            fileName:     fileName,
           );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -492,8 +523,9 @@ class _DocumentCardState extends ConsumerState<_DocumentCard> {
     }
   }
 
-  Future<ImageSource?> _showSourceSheet() {
-    return showModalBottomSheet<ImageSource>(
+  /// Returns 'camera' | 'gallery' | 'pdf' | null (dismissed).
+  Future<String?> _showSourceSheet() {
+    return showModalBottomSheet<String>(
       context: context,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
@@ -512,12 +544,17 @@ class _DocumentCardState extends ConsumerState<_DocumentCard> {
               ListTile(
                 leading: const Icon(Icons.camera_alt_outlined, color: _green),
                 title: const Text('Take a photo / ፎቶ ያንሱ'),
-                onTap: () => Navigator.pop(context, ImageSource.camera),
+                onTap: () => Navigator.pop(context, 'camera'),
               ),
               ListTile(
                 leading: const Icon(Icons.photo_library_outlined, color: _green),
                 title: const Text('Choose from gallery / ከጋለሪ ይምረጡ'),
-                onTap: () => Navigator.pop(context, ImageSource.gallery),
+                onTap: () => Navigator.pop(context, 'gallery'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.picture_as_pdf_outlined, color: _green),
+                title: const Text('Choose a PDF / ፒዲኤፍ ይምረጡ'),
+                onTap: () => Navigator.pop(context, 'pdf'),
               ),
             ],
           ),
@@ -841,7 +878,8 @@ class _VehicleRegistrationCardState
       await ref.read(vehicleRepositoryProvider).register(
         truckType:       _truckType,
         plateNumber:     _plateCtrl.text.trim().toUpperCase(),
-        capacity:        double.tryParse(_capacityCtrl.text.trim()) ?? 0,
+        capacity:        WeightFormat.kuntalToTons(
+            double.tryParse(_capacityCtrl.text.trim()) ?? 0),
         currentCity:     _city,
         vehicleCategory: _category,
       );
@@ -902,7 +940,7 @@ class _VehicleRegistrationCardState
                 Text(
                   '${v.truckType[0].toUpperCase()}${v.truckType.substring(1)}'
                   '  ·  ${v.plateNumber}'
-                  '  ·  ${v.capacity.toStringAsFixed(0)} t'
+                  '  ·  ${WeightFormat.display(v.capacity)}'
                   '  ·  ${v.currentCity}',
                   style: const TextStyle(fontSize: 11, color: _textSec),
                 ),
@@ -1050,7 +1088,7 @@ class _VehicleRegistrationCardState
                       'Capacity / አቅም',
                       Icons.scale_outlined,
                     ).copyWith(
-                        hintText: 'e.g. 10', suffixText: 'tons / ቶን'),
+                        hintText: 'e.g. 100', suffixText: 'kuntal / ኩንታል'),
                   ),
                   const SizedBox(height: 12),
 

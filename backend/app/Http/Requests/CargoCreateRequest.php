@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\CargoRequest;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -15,6 +16,7 @@ class CargoCreateRequest extends FormRequest
     public function rules(): array
     {
         $serviceType = $this->input('service_type', 'intercity');
+        $urgencyRule = 'required|in:' . implode(',', CargoRequest::ALLOWED_URGENCY_LEVELS);
 
         if ($serviceType === 'intracity') {
             return [
@@ -26,9 +28,10 @@ class CargoCreateRequest extends FormRequest
                 'items_description'   => 'required|string|max:2000',
                 'vehicle_type_needed' => 'nullable|string|max:100',
                 'bid_deadline'        => 'nullable|date|after:now',
-                'budget'              => 'nullable|numeric',
+                'urgency_level'       => $urgencyRule,
+                'budget'              => 'nullable|numeric|min:0',
                 'price_type'          => 'nullable|in:fixed,negotiable',
-                'status'              => 'sometimes|in:pending,matched,completed',
+                'status'              => 'sometimes|in:pending,matched,completed,expired',
                 'pickup_lat'          => 'nullable|numeric|between:-90,90',
                 'pickup_lng'          => 'nullable|numeric|between:-180,180',
             ];
@@ -40,12 +43,12 @@ class CargoCreateRequest extends FormRequest
             'pickup_location' => 'required|string|max:255',
             'destination'     => 'required|string|max:255',
             'material_type'   => 'required|string|max:255',
-            'weight'          => 'required|numeric',
-            'urgency_level'   => 'required|string|max:255',
-            'budget'          => 'nullable|numeric',
+            'weight'          => 'required|numeric|min:0.01',
+            'urgency_level'   => $urgencyRule,
+            'budget'          => 'nullable|numeric|min:0',
             'price_type'      => 'nullable|in:fixed,negotiable',
             'bid_deadline'    => 'nullable|date|after:now',
-            'status'          => 'sometimes|in:pending,matched,completed',
+            'status'          => 'sometimes|in:pending,matched,completed,expired',
             'pickup_lat'      => 'nullable|numeric|between:-90,90',
             'pickup_lng'      => 'nullable|numeric|between:-180,180',
         ];

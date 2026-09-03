@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'src/config/theme/app_theme.dart';
 import 'src/config/routes/app_router.dart';
+import 'src/data/api/api_client.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await EasyLocalization.ensureInitialized();
+  // Must run before runApp() so kBaseUrl already reflects any saved
+  // server-URL override by the time the first request goes out.
+  await ServerConfig.load(const FlutterSecureStorage());
   // Firebase.initializeApp() — uncomment once google-services.json is added
 
   runApp(

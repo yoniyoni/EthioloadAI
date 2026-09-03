@@ -18,7 +18,7 @@ class VehicleUpdateRequest extends FormRequest
         return [
             'truck_type' => 'sometimes|string|max:255',
             'plate_number' => 'sometimes|string|max:255|unique:vehicles,plate_number,' . $vehicleId,
-            'capacity' => 'sometimes|numeric',
+            'capacity' => 'sometimes|numeric|min:0.01',
             'current_city' => 'sometimes|string|max:255',
             'latitude' => 'sometimes|numeric|between:-90,90',
             'longitude' => 'sometimes|numeric|between:-180,180',

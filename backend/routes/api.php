@@ -6,6 +6,8 @@ use App\Http\Controllers\Api\VehicleController;
 use App\Http\Controllers\Api\CargoRequestController;
 use App\Http\Controllers\Api\BookingController;
 use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\ChapaWebhookController;
+use App\Http\Controllers\Api\MockPaymentController;
 use App\Http\Controllers\Api\TripController;
 use App\Http\Controllers\Api\AiController;
 use App\Http\Controllers\Api\UserController;
@@ -14,6 +16,7 @@ use App\Http\Middleware\AdminMiddleware;
 use App\Http\Controllers\Api\BidController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\DocumentController;
+use App\Http\Controllers\Api\VehicleDocumentController;
 use App\Http\Controllers\Api\FleetController;
 use App\Http\Controllers\Api\RatingController;
 use App\Http\Controllers\Api\AdminApiController;
@@ -28,6 +31,29 @@ Route::middleware('throttle:login')->group(function () {
     Route::post('/login',       [AuthController::class,      'login']);
     // Admin panel login
     Route::post('/auth/login',  [AdminApiController::class,  'login']);
+});
+
+// Password reset — public, unauthenticated by nature. Own rate limiter
+// (see AppServiceProvider::boot); the code's own hash/expiry/attempts are
+// the real defense, this just caps request volume.
+Route::middleware('throttle:password-reset')->group(function () {
+    Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
+    Route::post('/reset-password',  [AuthController::class, 'resetPassword']);
+});
+
+// Chapa payment gateway — public, unauthenticated (Chapa's own servers hit
+// these). Never trusted as proof of payment on their own; both re-verify
+// with Chapa before doing anything. See ChapaWebhookController.
+Route::middleware('throttle:60,1')->group(function () {
+    Route::post('/webhooks/chapa', [ChapaWebhookController::class, 'webhook'])->name('chapa.webhook');
+    Route::get('/payments/chapa/return', [ChapaWebhookController::class, 'returnPage'])->name('chapa.return');
+
+    // Mock payment gateway — only reachable in practice while
+    // PAYMENT_GATEWAY_DRIVER=mock (see AppServiceProvider::register()).
+    // Public for the same reason the real checkout page is: it's opened in
+    // a WebView, not an authenticated API call.
+    Route::get('/payments/mock/checkout', [MockPaymentController::class, 'checkout'])->name('mock.checkout');
+    Route::post('/payments/mock/confirm', [MockPaymentController::class, 'confirm'])->name('mock.confirm');
 });
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -47,6 +73,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Profile self-update (all authenticated users can update their own profile)
     Route::patch('/me', [AuthController::class, 'updateProfile']);
     Route::patch('/me/password', [AuthController::class, 'changePassword']);
+    Route::patch('/driver/payout-details', [AuthController::class, 'updatePayoutDetails']);
 
     // Current user's own vehicles
     Route::get('/my-vehicles', [VehicleController::class, 'myVehicles']);
@@ -110,11 +137,14 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // Payments
     Route::post('/payments', [PaymentController::class, 'store']);
+    Route::post('/payments/chapa/initialize', [PaymentController::class, 'initializeChapa']);
+    Route::get('/chapa/banks', [PaymentController::class, 'listBanks']);
     Route::get('/payments/{booking_id}', [PaymentController::class, 'show']);
 
     // Bids
     Route::post('/cargo-requests/{cargo}/book-direct',  [CargoRequestController::class, 'bookDirect']);
     Route::post('/cargo-requests/{cargo}/accept-price', [CargoRequestController::class, 'acceptPrice']);
+    Route::post('/cargo-requests/{cargo}/repost',       [CargoRequestController::class, 'repost']);
     Route::get('/cargo-requests/{cargo}/bids',  [BidController::class, 'index']);
     Route::post('/cargo-requests/{cargo}/bids', [BidController::class, 'store']);
     Route::patch('/bids/{bid}',                [BidController::class, 'update']);
@@ -124,17 +154,20 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/bids/{bid}/counter',        [BidController::class, 'counter']);
     Route::patch('/bids/{bid}/accept-counter', [BidController::class, 'acceptCounter']);
     Route::patch('/bookings/{booking}/cancel', [BookingController::class, 'cancel']);
+    Route::patch('/bookings/{booking}/confirm-arrival', [BookingController::class, 'confirmArrival']);
     Route::get('/driver/bids',                 [BidController::class, 'myBids']);
     Route::get('/driver/return-cargo',         [CargoRequestController::class, 'returnCargo']);
     Route::patch('/driver/current-city',       [VehicleController::class, 'updateCurrentCity']);
     Route::post('/driver/location',            [VehicleController::class, 'driverLocation']);
     Route::get('/trips/{trip}/location',       [TripController::class,   'getLocation']);
+    Route::get('/nearby-drivers/by-location', [CargoRequestController::class, 'nearbyDriversByLocation']);
     Route::get('/cargo-requests/{cargo}/nearby-drivers', [CargoRequestController::class, 'nearbyDrivers']);
 
     // Trips (GET /trips is handled by AdminApiController above; other trip actions below)
     Route::post('/trips', [TripController::class, 'store']);
     Route::get('/trips/{id}', [TripController::class, 'show']);
     Route::patch('/trips/{id}/status', [TripController::class, 'updateStatus']);
+    Route::patch('/trips/{id}/confirm-pickup', [TripController::class, 'confirmPickup']);
     Route::patch('/trips/{id}/location', [TripController::class, 'updateLocation']);
 
     // Backhaul recommendations
@@ -145,6 +178,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('trips/{trip}')->group(function () {
         Route::get('/stops',                          [TripStopController::class, 'index']);
         Route::post('/stops',                         [TripStopController::class, 'store']);
+        Route::get('/consolidation-candidates',       [TripStopController::class, 'candidates']);
         Route::patch('/stops/{stop}/arrive',          [TripStopController::class, 'arrive']);
         Route::patch('/stops/{stop}/load',            [TripStopController::class, 'load']);
         Route::patch('/stops/{stop}/complete',        [TripStopController::class, 'complete']);
@@ -160,9 +194,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/driver-documents', [DocumentController::class, 'adminIndex'])->middleware(AdminMiddleware::class);
     Route::patch('/admin/driver-documents/{document}/review', [DocumentController::class, 'review'])->middleware(AdminMiddleware::class);
 
+    // Vehicle documents
+    Route::get('/vehicles/{vehicle}/documents', [VehicleDocumentController::class, 'index']);
+    Route::post('/vehicles/{vehicle}/documents', [VehicleDocumentController::class, 'upload']);
+    Route::get('/vehicle-documents/{document}/file', [VehicleDocumentController::class, 'download']);
+    Route::get('/admin/vehicle-documents', [VehicleDocumentController::class, 'adminIndex'])->middleware(AdminMiddleware::class);
+    Route::patch('/admin/vehicle-documents/{document}/review', [VehicleDocumentController::class, 'review'])->middleware(AdminMiddleware::class);
+
     // Admin settings
     Route::get('/admin/settings/pricing', [AdminSettingsController::class, 'pricingShow'])->middleware(AdminMiddleware::class);
     Route::patch('/admin/settings/pricing', [AdminSettingsController::class, 'pricingUpdate'])->middleware(AdminMiddleware::class);
+    Route::get('/admin/settings/spatial', [AdminSettingsController::class, 'spatialShow'])->middleware(AdminMiddleware::class);
+    Route::patch('/admin/settings/spatial', [AdminSettingsController::class, 'spatialUpdate'])->middleware(AdminMiddleware::class);
 
     // Ratings
     Route::post('/ratings', [RatingController::class, 'store']);
@@ -175,12 +218,21 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/drivers',                        [FleetController::class, 'drivers']);
         Route::get('/vehicles',                       [FleetController::class, 'vehicles']);
         Route::get('/available-cargo',                [FleetController::class, 'availableCargo']);
+        Route::get('/cargo/{cargo}/candidates',       [FleetController::class, 'cargoCandidates']);
         Route::post('/drivers/add',                   [FleetController::class, 'addDriver']);
+        Route::post('/drivers',                       [FleetController::class, 'createDriver']);
         Route::delete('/drivers/{driverId}',          [FleetController::class, 'removeDriver']);
         Route::post('/vehicles',                      [FleetController::class, 'addVehicle']);
         Route::patch('/vehicles/{vehicleId}/assign',  [FleetController::class, 'assignVehicle']);
         Route::post('/bookings',                      [FleetController::class, 'createBooking']);
         Route::patch('/bookings/{bookingId}/dispatch',[FleetController::class, 'dispatchBooking']);
+        Route::get('/drivers/{driverId}',                    [FleetController::class, 'driverDetail']);
+        Route::patch('/drivers/{driverId}',                  [FleetController::class, 'updateDriver']);
+        Route::delete('/drivers/{driverId}/permanently',     [FleetController::class, 'deleteDriverAccount']);
+        Route::get('/drivers/{driverId}/documents',          [DocumentController::class, 'fleetIndex']);
+        Route::post('/drivers/{driverId}/documents',         [DocumentController::class, 'fleetUpload']);
+        Route::get('/vehicles/{vehicleId}',                  [FleetController::class, 'vehicleDetail']);
+        Route::get('/live-map',                              [FleetController::class, 'liveMap']);
     });
 
     // Notifications

@@ -12,6 +12,7 @@ use App\Models\Vehicle;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use App\Support\PhoneNumber;
 
 /**
  * Admin API endpoints shaped for the React admin panel (freight-link).
@@ -282,12 +283,18 @@ class AdminApiController extends Controller
     // POST /admin/users — create any role (shipper, driver, fleet_owner)
     public function createUser(Request $request)
     {
+        if ($request->has('phone')) {
+            $request->merge(['phone' => PhoneNumber::normalize($request->input('phone'))]);
+        }
+
         $request->validate([
             'name'     => 'required|string',
             'email'    => 'required|email|unique:users,email',
-            'phone'    => 'required|string',
+            'phone'    => ['required', 'string', 'regex:' . PhoneNumber::FORMAT_REGEX, 'unique:users,phone'],
             'password' => 'required|string|min:6',
             'role'     => 'required|in:driver,shipper,fleet_owner',
+        ], [
+            'phone.regex' => 'Enter a valid Ethiopian phone number, e.g. 0912345678.',
         ]);
 
         $user = User::create([
@@ -307,13 +314,19 @@ class AdminApiController extends Controller
     {
         $user = User::findOrFail($id);
 
+        if ($request->has('phone')) {
+            $request->merge(['phone' => PhoneNumber::normalize($request->input('phone'))]);
+        }
+
         $request->validate([
             'name'      => 'sometimes|string',
             'email'     => 'sometimes|email|unique:users,email,' . $id,
-            'phone'     => 'sometimes|string',
+            'phone'     => ['sometimes', 'string', 'regex:' . PhoneNumber::FORMAT_REGEX, 'unique:users,phone,' . $id],
             'password'  => 'sometimes|string|min:6',
             'role'      => 'sometimes|in:driver,shipper,fleet_owner,admin',
             'is_active' => 'sometimes|boolean',
+        ], [
+            'phone.regex' => 'Enter a valid Ethiopian phone number, e.g. 0912345678.',
         ]);
 
         $data = array_filter([
@@ -389,7 +402,8 @@ class AdminApiController extends Controller
     {
         $user   = User::where('role', 'driver')->findOrFail($id);
         $status = $request->input('status', 'active');
-        $user->update(['verification_status' => in_array($status, ['active', 'approved'])]);
+        $isVerified = in_array($status, ['active', 'approved']);
+        $user->update(['verification_status' => $isVerified, 'is_active' => $isVerified]);
 
         return response()->json([
             'id'     => $user->id,
@@ -443,6 +457,9 @@ class AdminApiController extends Controller
 
         $identifier = trim($request->identifier);
         $field = filter_var($identifier, FILTER_VALIDATE_EMAIL) ? 'email' : 'phone';
+        if ($field === 'phone') {
+            $identifier = PhoneNumber::normalize($identifier);
+        }
 
         $user = User::where($field, $identifier)->first();
         if (!$user || !Hash::check($request->password, $user->password)) {

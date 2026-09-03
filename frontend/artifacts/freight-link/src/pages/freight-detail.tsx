@@ -25,6 +25,7 @@ const STATUS_COLORS: Record<string, string> = {
   in_transit: "bg-purple-50 text-purple-700 border-purple-200",
   completed: "bg-emerald-50 text-emerald-700 border-emerald-200",
   cancelled: "bg-red-50 text-red-700 border-red-200",
+  expired: "bg-red-50 text-red-700 border-red-200",
 };
 
 export default function FreightDetail() {

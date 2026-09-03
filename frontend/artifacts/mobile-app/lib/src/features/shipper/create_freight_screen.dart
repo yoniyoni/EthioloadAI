@@ -5,11 +5,36 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import '../../config/map_config.dart';
 import '../../data/repositories/repositories.dart';
 import '../../services/location_service.dart';
 import '../shared/widgets/shared_widgets.dart';
 import '../shared/widgets/cargo_route_map_widget.dart';
+import '../shared/widgets/nearby_drivers_map_widget.dart';
 import '../../utils/ethiopian_cities.dart';
+import '../../utils/weight_format.dart';
+import '../../utils/ethiopian_date.dart';
+
+/// Canonical, UI-facing urgency tiers. Mirrors the backend's
+/// App\Models\CargoRequest::URGENCY_LEVELS and the web app's
+/// freight-new.tsx URGENCY_LEVELS.
+const List<String> kUrgencyLevels = ['low', 'normal', 'high', 'express'];
+
+/// Suggests an urgency tier from how soon the target date is. The shipper
+/// can always override the suggestion via the urgency dropdown.
+String suggestUrgency(String? dateStr) {
+  if (dateStr == null || dateStr.isEmpty) return 'normal';
+  final target = DateTime.tryParse(dateStr);
+  if (target == null) return 'normal';
+  final today = DateTime.now();
+  final todayMidnight = DateTime(today.year, today.month, today.day);
+  final targetMidnight = DateTime(target.year, target.month, target.day);
+  final days = targetMidnight.difference(todayMidnight).inDays;
+  if (days <= 3) return 'express';
+  if (days <= 7) return 'high';
+  if (days <= 14) return 'normal';
+  return 'low';
+}
 
 class CreateFreightScreen extends ConsumerStatefulWidget {
   const CreateFreightScreen({super.key});
@@ -37,6 +62,8 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
   String? deadline;
   String? description;
   String priceType = 'negotiable';
+  String urgency = 'normal';
+  bool _urgencyTouched = false;
 
   int? _priceMin;
   int? _priceMax;
@@ -54,41 +81,121 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
   final _itemsDescCtrl = TextEditingController();
   String? _preferredDate;
   String? _vehicleTypeNeeded;
+  String _intraUrgency = 'normal';
+  bool _intraUrgencyTouched = false;
 
   // ── GPS pickup state (shared for both service types) ─────────────────────
   double? _pickupLat;
   double? _pickupLng;
   bool _gpsPickupMode = false;
   bool _detectingLocation = false;
-  String? _detectedCityName;
-  double? _detectedAccuracyKm;
+  // Real reverse-geocoded place name (e.g. "Dabat") — used for display and
+  // as the actual pickup_location/pickup_area text. Never overwritten with
+  // the nearest known service city.
+  String? _detectedPlaceName;
+  // Nearest known service city (e.g. "Gondar") — an internal-only concept
+  // needed for intracity's exact city-text driver matching. Kept separate
+  // from _detectedPlaceName so it's never shown to the user as if it were
+  // their actual location.
+  String? _detectedServiceCity;
+  double? _detectedServiceCityDistanceKm;
 
   // ── Static data ───────────────────────────────────────────────────────────
 
   static const _cargoTypes = [
-    'agricultural', 'construction', 'electronics', 'fragile', 'fuel',
-    'general', 'livestock', 'machinery', 'medical', 'perishable',
-    'textiles', 'other',
+    'agricultural',
+    'construction',
+    'electronics',
+    'fragile',
+    'fuel',
+    'general',
+    'livestock',
+    'machinery',
+    'medical',
+    'perishable',
+    'textiles',
+    'other',
   ];
 
   static const _cities = [
-    'Addis Ababa', 'Adama / Nazret', 'Arba Minch', 'Asella', 'Assosa',
-    'Axum', 'Adigrat', 'Bale Robe', 'Bahir Dar', 'Bishoftu', 'Debre Birhan',
-    'Debre Markos', 'Dessie', 'Dilla', 'Dire Dawa', 'Gambela', 'Goba',
-    'Gondar', 'Harar', 'Hawassa', 'Jijiga', 'Jimma', 'Kebri Dahar', 'Mekele',
-    'Moyale', 'Nekemte', 'Shire / Endaselassie', 'Shashemene',
-    'Sodo / Wolaita', 'Woldia', 'Other',
+    'Addis Ababa',
+    'Adama / Nazret',
+    'Arba Minch',
+    'Asella',
+    'Assosa',
+    'Axum',
+    'Adigrat',
+    'Bale Robe',
+    'Bahir Dar',
+    'Bishoftu',
+    'Debre Birhan',
+    'Debre Markos',
+    'Dessie',
+    'Dilla',
+    'Dire Dawa',
+    'Gambela',
+    'Goba',
+    'Gondar',
+    'Harar',
+    'Hawassa',
+    'Jijiga',
+    'Jimma',
+    'Kebri Dahar',
+    'Mekele',
+    'Moyale',
+    'Nekemte',
+    'Shire / Endaselassie',
+    'Shashemene',
+    'Sodo / Wolaita',
+    'Woldia',
+    'Other',
   ];
 
   static const _intracityCities = [
-    'Addis Ababa', 'Adama', 'Adigrat', 'Adwa', 'Arba Minch', 'Asela',
-    'Assosa', 'Axum', 'Bahir Dar', 'Bure', 'Butajira', 'Debre Birhan',
-    'Debre Markos', 'Debre Tabor', 'Dessie', 'Dilla', 'Dire Dawa',
-    'Finote Selam', 'Gambela', 'Gimbi', 'Goba', 'Gondar', 'Harar',
-    'Hawassa', 'Hosaena', 'Humera', 'Injibara', 'Jijiga', 'Jimma',
-    'Kombolcha', 'Lalibela', 'Mekele', 'Metema', 'Motta', 'Nekemte',
-    'Robe', 'Shashamane', 'Shire', 'Welkite', 'Woldia', 'Woreta',
-    'Yirgalem', 'Addis Zemen', 'Ambo',
+    'Addis Ababa',
+    'Adama',
+    'Adigrat',
+    'Adwa',
+    'Arba Minch',
+    'Asela',
+    'Assosa',
+    'Axum',
+    'Bahir Dar',
+    'Bure',
+    'Butajira',
+    'Debre Birhan',
+    'Debre Markos',
+    'Debre Tabor',
+    'Dessie',
+    'Dilla',
+    'Dire Dawa',
+    'Finote Selam',
+    'Gambela',
+    'Gimbi',
+    'Goba',
+    'Gondar',
+    'Harar',
+    'Hawassa',
+    'Hosaena',
+    'Humera',
+    'Injibara',
+    'Jijiga',
+    'Jimma',
+    'Kombolcha',
+    'Lalibela',
+    'Mekele',
+    'Metema',
+    'Motta',
+    'Nekemte',
+    'Robe',
+    'Shashamane',
+    'Shire',
+    'Welkite',
+    'Woldia',
+    'Woreta',
+    'Yirgalem',
+    'Addis Zemen',
+    'Ambo',
   ];
 
   static const _vehicleTypesLight = ['pickup', 'minivan', 'bajaj'];
@@ -125,22 +232,58 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
         }
         return;
       }
-      final result = await ref
-          .read(cargoRepositoryProvider)
-          .nearestCity(pos.latitude, pos.longitude);
+
+      // Two independent lookups: reverseGeocode gives the real place name
+      // (e.g. "Dabat"); nearestCity gives the closest known *service* city
+      // (e.g. "Gondar"), needed only for intracity's exact city-text driver
+      // matching. Fetched concurrently; nearestCity is allowed to fail
+      // without aborting (reverse geocoding is the one we actually need).
+      final reverseFuture = ref
+          .read(routingRepositoryProvider)
+          .reverseGeocode(pos.latitude, pos.longitude);
+      final nearestCityFuture = () async {
+        try {
+          return await ref
+              .read(cargoRepositoryProvider)
+              .nearestCity(pos.latitude, pos.longitude);
+        } catch (_) {
+          return null;
+        }
+      }();
+
+      final reverseResult = await reverseFuture;
+      final nearestCityResult = await nearestCityFuture;
       if (!mounted) return;
+
+      final placeName = (reverseResult?['short_address'] as String?)?.trim();
+      final serviceCity = nearestCityResult?.city;
+      // If reverse geocoding also failed, fall back to the service city so
+      // the field isn't left blank — but never silently pass the service
+      // city off as the real place name when reverse geocoding succeeded.
+      final displayName = (placeName != null && placeName.isNotEmpty)
+          ? placeName
+          : serviceCity;
+
+      if (displayName == null) {
+        throw Exception('Could not determine a place name for this location');
+      }
+
       setState(() {
         _pickupLat = pos.latitude;
         _pickupLng = pos.longitude;
-        _detectedCityName = result.city;
-        _detectedAccuracyKm = result.distanceKm;
+        _detectedPlaceName = displayName;
+        _detectedServiceCity = serviceCity;
+        _detectedServiceCityDistanceKm = nearestCityResult?.distanceKm;
         _gpsPickupMode = true;
         _detectingLocation = false;
-        pickupLocation = result.city;
-        _intraCity = result.city;
+        pickupLocation = displayName;
+        // Intracity matching needs a known service city, not the free-text
+        // place name — fall back to the place name only if no known city
+        // could be resolved at all (keeps the field non-null for the form).
+        _intraCity = serviceCity ?? displayName;
         if (_pickupAreaCtrl.text.isEmpty ||
             _pickupAreaCtrl.text.startsWith('Near ')) {
-          _pickupAreaCtrl.text = 'Near ${result.city} (GPS location)';
+          _pickupAreaCtrl.text = 'Near $displayName (GPS location)';
         }
       });
     } catch (_) {
@@ -159,8 +302,25 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
       _pickupLat = null;
       _pickupLng = null;
       _gpsPickupMode = false;
-      _detectedCityName = null;
-      _detectedAccuracyKm = null;
+      _detectedPlaceName = null;
+      _detectedServiceCity = null;
+      _detectedServiceCityDistanceKm = null;
+    });
+  }
+
+  void _selectManualPickupLocation(String value) {
+    setState(() {
+      pickupLocation = value;
+      _pickupLat = null;
+      _pickupLng = null;
+      _gpsPickupMode = false;
+      _detectedPlaceName = null;
+      _detectedServiceCity = null;
+      _detectedServiceCityDistanceKm = null;
+      if (_pickupAreaCtrl.text.isEmpty ||
+          _pickupAreaCtrl.text.startsWith('Near ')) {
+        _pickupAreaCtrl.text = value;
+      }
     });
   }
 
@@ -170,7 +330,8 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
     if (_serviceType == 'intracity') {
       if (_intraStep < 2) {
         _intraPageController.nextPage(
-            duration: const Duration(milliseconds: 250), curve: Curves.easeInOut);
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOut);
       } else {
         _submitIntracity();
       }
@@ -190,7 +351,8 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
     if (_serviceType == 'intracity') {
       if (_intraStep > 0) {
         _intraPageController.previousPage(
-            duration: const Duration(milliseconds: 250), curve: Curves.easeInOut);
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOut);
       } else {
         setState(() => _serviceType = null);
       }
@@ -209,16 +371,24 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
 
   Future<void> _fetchPricePrediction() async {
     if (pickupLocation == null || deliveryLocation == null) return;
-    setState(() { _priceLoading = true; _priceError = null; });
+    setState(() {
+      _priceLoading = true;
+      _priceError = null;
+    });
     try {
       final result = await ref.read(cargoRepositoryProvider).predictPrice(
-            pickup:      pickupLocation!,
+            pickup: pickupLocation!,
             destination: deliveryLocation!,
-            weight:      double.tryParse(weight ?? '') ?? 10,
-            urgencyLevel: 'normal',
+            // weight is entered in kuntal (the unit shippers/drivers think
+            // in) — convert to tons here since that's what the AI pricing
+            // service and the backend generally expect.
+            weight: WeightFormat.kuntalToTons(double.tryParse(weight ?? '') ?? 100),
+            urgencyLevel: urgency,
             materialType: cargoType ?? 'general',
-            toLat:  _deliveryLat,
-            toLng:  _deliveryLng,
+            fromLat: _pickupLat,
+            fromLng: _pickupLng,
+            toLat: _deliveryLat,
+            toLng: _deliveryLng,
           );
       if (mounted) {
         if (result.min != null && result.max != null) {
@@ -231,20 +401,49 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
         } else {
           setState(() {
             _priceLoading = false;
-            _priceError = 'AI price service unavailable. Enter your budget manually.';
+            _priceError =
+                'AI price service unavailable. Enter your budget manually.';
           });
         }
       }
     } catch (_) {
-      if (mounted) setState(() { _priceLoading = false; _priceError = 'Could not fetch price estimate'; });
+      if (mounted)
+        setState(() {
+          _priceLoading = false;
+          _priceError = 'Could not fetch price estimate';
+        });
     }
   }
 
   Future<void> _submit() async {
-    if (pickupLocation == null || deliveryLocation == null ||
-        cargoType == null || weight == null || budget == null) {
+    if (pickupLocation == null ||
+        deliveryLocation == null ||
+        cargoType == null ||
+        weight == null ||
+        budget == null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Please fill in all required fields', style: GoogleFonts.inter()),
+        content: Text('Please fill in all required fields',
+            style: GoogleFonts.inter()),
+        backgroundColor: kDanger,
+      ));
+      return;
+    }
+    final parsedWeightKuntal = double.tryParse(weight!);
+    if (parsedWeightKuntal == null || parsedWeightKuntal <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Enter a valid weight greater than 0',
+            style: GoogleFonts.inter()),
+        backgroundColor: kDanger,
+      ));
+      return;
+    }
+    // The form collects weight in kuntal; the API expects tons.
+    final parsedWeight = WeightFormat.kuntalToTons(parsedWeightKuntal);
+    final parsedBudget = double.tryParse(budget!);
+    if (parsedBudget == null || parsedBudget < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Enter a valid budget',
+            style: GoogleFonts.inter()),
         backgroundColor: kDanger,
       ));
       return;
@@ -254,17 +453,19 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (_) => Center(child: EthioCard(child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: CircularProgressIndicator(color: kGreen)))),
+        builder: (_) => Center(
+            child: EthioCard(
+                child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: CircularProgressIndicator(color: kGreen)))),
       );
       await ref.read(cargoRepositoryProvider).create(
             pickupLocation: pickupLocation!,
             destination: deliveryLocation!,
             materialType: cargoType!,
-            weight: double.tryParse(weight!) ?? 0,
-            urgencyLevel: 'normal',
-            budget: double.tryParse(budget ?? ''),
+            weight: parsedWeight,
+            urgencyLevel: urgency,
+            budget: parsedBudget,
             priceType: priceType,
             bidDeadline: deadline != null ? DateTime.tryParse(deadline!) : null,
             pickupLat: _pickupLat,
@@ -293,11 +494,14 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
   // ── Intracity submit ──────────────────────────────────────────────────────
 
   Future<void> _submitIntracity() async {
-    if (_intraCity == null || _pickupAreaCtrl.text.isEmpty ||
-        _dropoffAreaCtrl.text.isEmpty || _itemsDescCtrl.text.isEmpty ||
+    if (_intraCity == null ||
+        _pickupAreaCtrl.text.isEmpty ||
+        _dropoffAreaCtrl.text.isEmpty ||
+        _itemsDescCtrl.text.isEmpty ||
         _preferredDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Please fill in all required fields', style: GoogleFonts.inter()),
+        content: Text('Please fill in all required fields',
+            style: GoogleFonts.inter()),
         backgroundColor: kDanger,
       ));
       return;
@@ -307,9 +511,11 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (_) => Center(child: EthioCard(child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: CircularProgressIndicator(color: kGreen)))),
+        builder: (_) => Center(
+            child: EthioCard(
+                child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: CircularProgressIndicator(color: kGreen)))),
       );
       await ref.read(cargoRepositoryProvider).createIntracity(
             city: _intraCity!,
@@ -318,6 +524,7 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
             itemsDescription: _itemsDescCtrl.text.trim(),
             preferredDate: DateTime.parse(_preferredDate!),
             vehicleTypeNeeded: _vehicleTypeNeeded,
+            urgencyLevel: _intraUrgency,
             pickupLat: _pickupLat,
             pickupLng: _pickupLng,
           );
@@ -356,7 +563,8 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
       );
     }
 
-    final steps = _serviceType == 'intracity' ? _intracitySteps : _intercitySteps;
+    final steps =
+        _serviceType == 'intracity' ? _intracitySteps : _intercitySteps;
     final currentStep = _serviceType == 'intracity' ? _intraStep : _step;
     final isLast = _serviceType == 'intracity' ? _intraStep == 2 : _step == 3;
 
@@ -383,8 +591,10 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
                         onCity: (v) => setState(() => _intraCity = v),
                         gpsPickupMode: _gpsPickupMode,
                         detectingLocation: _detectingLocation,
-                        detectedCity: _detectedCityName,
-                        detectedAccuracyKm: _detectedAccuracyKm,
+                        detectedPlaceName: _detectedPlaceName,
+                        detectedServiceCity: _detectedServiceCity,
+                        detectedServiceCityDistanceKm:
+                            _detectedServiceCityDistanceKm,
                         gpsLat: _pickupLat,
                         gpsLng: _pickupLng,
                         onUseGps: _detectPickupLocation,
@@ -395,8 +605,19 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
                         preferredDate: _preferredDate,
                         vehicleType: _vehicleTypeNeeded,
                         vehicleTypes: _vehicleTypesLight,
-                        onDate: (v) => setState(() => _preferredDate = v),
-                        onVehicleType: (v) => setState(() => _vehicleTypeNeeded = v),
+                        urgency: _intraUrgency,
+                        onDate: (v) => setState(() {
+                          _preferredDate = v;
+                          if (!_intraUrgencyTouched) {
+                            _intraUrgency = suggestUrgency(v);
+                          }
+                        }),
+                        onVehicleType: (v) =>
+                            setState(() => _vehicleTypeNeeded = v),
+                        onUrgency: (v) => setState(() {
+                          _intraUrgency = v;
+                          _intraUrgencyTouched = true;
+                        }),
                       ),
                       _IntraStep3Review(
                         city: _intraCity,
@@ -405,6 +626,7 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
                         itemsDesc: _itemsDescCtrl.text,
                         preferredDate: _preferredDate,
                         vehicleType: _vehicleTypeNeeded,
+                        urgency: _intraUrgency,
                       ),
                     ],
                   )
@@ -417,12 +639,14 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
                         pickupLocation: pickupLocation,
                         deliveryLocation: deliveryLocation,
                         cities: _cities,
-                        onPickup: (v) => setState(() => pickupLocation = v),
+                        onPickup: _selectManualPickupLocation,
                         onDelivery: (v) => setState(() => deliveryLocation = v),
                         gpsPickupMode: _gpsPickupMode,
                         detectingLocation: _detectingLocation,
-                        detectedCity: _detectedCityName,
-                        detectedAccuracyKm: _detectedAccuracyKm,
+                        detectedPlaceName: _detectedPlaceName,
+                        detectedServiceCity: _detectedServiceCity,
+                        detectedServiceCityDistanceKm:
+                            _detectedServiceCityDistanceKm,
                         onUseGps: _detectPickupLocation,
                         onClearGps: _clearGpsPickup,
                       ),
@@ -444,25 +668,37 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
                         priceDistKm: _priceDistKm,
                         priceLoading: _priceLoading,
                         priceError: _priceError,
+                        urgency: urgency,
                         onBudget: (v) => setState(() => budget = v),
-                        onDeadline: (v) => setState(() => deadline = v),
+                        onDeadline: (v) => setState(() {
+                          deadline = v;
+                          if (!_urgencyTouched) urgency = suggestUrgency(v);
+                        }),
                         onPriceType: (v) => setState(() => priceType = v),
+                        onUrgency: (v) => setState(() {
+                          urgency = v;
+                          _urgencyTouched = true;
+                          _fetchPricePrediction();
+                        }),
                       ),
                       _Step4(
                         pickup: pickupLocation,
                         delivery: deliveryLocation,
-                        pickupLat:      _pickupLat
-                            ?? cityCoordinates(pickupLocation ?? '')?.latitude,
-                        pickupLng:      _pickupLng
-                            ?? cityCoordinates(pickupLocation ?? '')?.longitude,
-                        destinationLat: cityCoordinates(deliveryLocation ?? '')?.latitude,
-                        destinationLng: cityCoordinates(deliveryLocation ?? '')?.longitude,
+                        pickupLat: _pickupLat ??
+                            cityCoordinates(pickupLocation ?? '')?.latitude,
+                        pickupLng: _pickupLng ??
+                            cityCoordinates(pickupLocation ?? '')?.longitude,
+                        destinationLat:
+                            cityCoordinates(deliveryLocation ?? '')?.latitude,
+                        destinationLng:
+                            cityCoordinates(deliveryLocation ?? '')?.longitude,
                         cargo: cargoType,
                         weight: weight,
                         budget: budget,
                         deadline: deadline,
                         description: description,
                         priceType: priceType,
+                        urgency: urgency,
                       ),
                     ],
                   ),
@@ -533,7 +769,9 @@ class _ServiceTypeSelector extends StatelessWidget {
         const SizedBox(height: 8),
         Text('What are you moving?',
             style: GoogleFonts.inter(
-                fontSize: 20, fontWeight: FontWeight.bold, color: kTextPrimary)),
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: kTextPrimary)),
         const SizedBox(height: 8),
         Text('Choose the type of service you need',
             style: GoogleFonts.inter(fontSize: 14, color: kTextSecond)),
@@ -632,7 +870,9 @@ class _ServiceCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(examples,
                     style: GoogleFonts.inter(
-                        fontSize: 11, color: color, fontWeight: FontWeight.w500)),
+                        fontSize: 11,
+                        color: color,
+                        fontWeight: FontWeight.w500)),
               ],
             ),
           ),
@@ -785,8 +1025,7 @@ class _ModeButton extends StatelessWidget {
             SizedBox(
               width: 14,
               height: 14,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2, color: kGreen),
+              child: CircularProgressIndicator(strokeWidth: 2, color: kGreen),
             )
           else if (icon != null)
             Icon(icon, size: 16, color: selected ? kGreen : kTextMuted),
@@ -811,18 +1050,26 @@ class _ModeButton extends StatelessWidget {
 // ── GPS detected city badge ───────────────────────────────────────────────────
 
 class _GpsDetectedBadge extends StatelessWidget {
-  final String cityName;
-  final double? accuracyKm;
+  final String placeName;
+  final String? serviceCity;
+  final double? serviceCityDistanceKm;
   final VoidCallback onClear;
 
   const _GpsDetectedBadge({
-    required this.cityName,
-    required this.accuracyKm,
+    required this.placeName,
+    required this.serviceCity,
+    required this.serviceCityDistanceKm,
     required this.onClear,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Only show the service-hub hint when it's actually informative — i.e.
+    // it resolved to something different from the real place name. Never
+    // implies the service city IS the user's location.
+    final showServiceHub = serviceCity != null &&
+        serviceCity != placeName &&
+        serviceCityDistanceKm != null;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
@@ -834,18 +1081,19 @@ class _GpsDetectedBadge extends StatelessWidget {
         const Icon(Icons.location_pin, color: Color(0xFF059669), size: 18),
         const SizedBox(width: 10),
         Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(
-              cityName,
+              placeName,
               style: GoogleFonts.inter(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                  color: kGreen),
+                  fontWeight: FontWeight.bold, fontSize: 14, color: kGreen),
             ),
-            if (accuracyKm != null)
+            if (showServiceHub)
               Text(
-                'location.accuracy_km'
-                    .tr(namedArgs: {'km': accuracyKm!.toStringAsFixed(1)}),
+                'location.service_hub'.tr(namedArgs: {
+                  'city': serviceCity!,
+                  'km': serviceCityDistanceKm!.toStringAsFixed(1),
+                }),
                 style: GoogleFonts.inter(fontSize: 11, color: kTextSecond),
               ),
           ]),
@@ -999,8 +1247,9 @@ class _Step1 extends StatelessWidget {
   final ValueChanged<String> onDelivery;
   final bool gpsPickupMode;
   final bool detectingLocation;
-  final String? detectedCity;
-  final double? detectedAccuracyKm;
+  final String? detectedPlaceName;
+  final String? detectedServiceCity;
+  final double? detectedServiceCityDistanceKm;
   final VoidCallback onUseGps;
   final VoidCallback onClearGps;
 
@@ -1012,8 +1261,9 @@ class _Step1 extends StatelessWidget {
     required this.onDelivery,
     required this.gpsPickupMode,
     required this.detectingLocation,
-    required this.detectedCity,
-    required this.detectedAccuracyKm,
+    required this.detectedPlaceName,
+    required this.detectedServiceCity,
+    required this.detectedServiceCityDistanceKm,
     required this.onUseGps,
     required this.onClearGps,
   });
@@ -1024,7 +1274,8 @@ class _Step1 extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: [
         Text('Pickup Location',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
 
         // GPS / Manual toggle
@@ -1037,13 +1288,14 @@ class _Step1 extends StatelessWidget {
         const SizedBox(height: 12),
 
         // Show detected badge OR manual dropdown
-        if (gpsPickupMode && detectedCity != null)
+        if (gpsPickupMode && detectedPlaceName != null)
           _GpsDetectedBadge(
-            cityName: detectedCity!,
-            accuracyKm: detectedAccuracyKm,
+            placeName: detectedPlaceName!,
+            serviceCity: detectedServiceCity,
+            serviceCityDistanceKm: detectedServiceCityDistanceKm,
             onClear: onClearGps,
           )
-        else if (!detectingLocation)
+        else if (!detectingLocation) ...[
           _DropdownWithOther(
             selected: pickupLocation,
             options: cities,
@@ -1053,10 +1305,34 @@ class _Step1 extends StatelessWidget {
             labelOf: (c) => c,
             onSelect: onPickup,
           ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: kGreenTint,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: kGreen.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.info_outline, color: kGreen, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Choose the pickup city manually if the cargo is in a different city. Nearby trucks will be matched around that pickup location.',
+                    style: GoogleFonts.inter(fontSize: 12, color: kTextPrimary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
 
         const SizedBox(height: 20),
         Text('Destination',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         _DropdownWithOther(
           selected: deliveryLocation,
@@ -1084,7 +1360,9 @@ class _Step1 extends StatelessWidget {
               Expanded(
                 child: Text('$pickupLocation → $deliveryLocation',
                     style: GoogleFonts.inter(
-                        fontWeight: FontWeight.w600, color: kGreen, fontSize: 13)),
+                        fontWeight: FontWeight.w600,
+                        color: kGreen,
+                        fontSize: 13)),
               ),
             ]),
           ),
@@ -1129,7 +1407,8 @@ class _Step2 extends StatelessWidget {
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
             borderSide: BorderSide(color: kGreen, width: 1.5)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       );
 
   @override
@@ -1138,7 +1417,8 @@ class _Step2 extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: [
         Text('Cargo Type',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         _DropdownWithOther(
           selected: cargoType,
@@ -1150,19 +1430,21 @@ class _Step2 extends StatelessWidget {
           onSelect: (v) => onType(v),
         ),
         const SizedBox(height: 16),
-        Text('Weight (tons)',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
+        Text('Weight (kuntal)',
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         TextFormField(
           initialValue: weight,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           onChanged: onWeight,
-          decoration: _inputDeco(hint: 'e.g. 20', suffix: 'tons'),
+          decoration: _inputDeco(hint: 'e.g. 200', suffix: 'kuntal'),
           style: GoogleFonts.inter(fontSize: 14),
         ),
         const SizedBox(height: 16),
         Text('Notes (optional)',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         TextFormField(
           initialValue: description,
@@ -1187,9 +1469,11 @@ class _Step3 extends StatelessWidget {
   final int? priceDistKm;
   final bool priceLoading;
   final String? priceError;
+  final String urgency;
   final ValueChanged<String> onBudget;
   final ValueChanged<String> onDeadline;
   final ValueChanged<String> onPriceType;
+  final ValueChanged<String> onUrgency;
 
   const _Step3({
     required this.budget,
@@ -1200,12 +1484,15 @@ class _Step3 extends StatelessWidget {
     required this.priceDistKm,
     required this.priceLoading,
     required this.priceError,
+    required this.urgency,
     required this.onBudget,
     required this.onDeadline,
     required this.onPriceType,
+    required this.onUrgency,
   });
 
-  InputDecoration _inputDeco({String? hint, String? prefix, Widget? prefixIcon}) =>
+  InputDecoration _inputDeco(
+          {String? hint, String? prefix, Widget? prefixIcon}) =>
       InputDecoration(
         hintText: hint,
         hintStyle: GoogleFonts.inter(color: kTextMuted),
@@ -1219,7 +1506,8 @@ class _Step3 extends StatelessWidget {
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
             borderSide: BorderSide(color: kGreen, width: 1.5)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       );
 
   String _fmt(int v) {
@@ -1236,25 +1524,35 @@ class _Step3 extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: [
         Text('Pricing Type',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         Row(children: [
-          Expanded(child: _PriceTypeOption(
-            title: 'Negotiable', subtitle: 'Drivers bid on your cargo',
-            icon: Icons.gavel_rounded, selected: priceType == 'negotiable',
+          Expanded(
+              child: _PriceTypeOption(
+            title: 'Negotiable',
+            subtitle: 'Drivers bid on your cargo',
+            icon: Icons.gavel_rounded,
+            selected: priceType == 'negotiable',
             onTap: () => onPriceType('negotiable'),
           )),
           const SizedBox(width: 10),
-          Expanded(child: _PriceTypeOption(
-            title: 'Fixed Price', subtitle: 'Drivers accept or reject',
-            icon: Icons.price_check_rounded, selected: priceType == 'fixed',
+          Expanded(
+              child: _PriceTypeOption(
+            title: 'Fixed Price',
+            subtitle: 'Drivers accept or reject',
+            icon: Icons.price_check_rounded,
+            selected: priceType == 'fixed',
             onTap: () => onPriceType('fixed'),
           )),
         ]),
         const SizedBox(height: 16),
         Text(
-          priceType == 'fixed' ? 'Budget (ETB) — required for fixed price' : 'Budget (ETB)',
-          style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
+            priceType == 'fixed'
+                ? 'Budget (ETB) — required for fixed price'
+                : 'Budget (ETB)',
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         TextFormField(
           initialValue: budget,
@@ -1265,11 +1563,17 @@ class _Step3 extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         Text('Bid Deadline / የጨረታ የመጨረሻ ቀን',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         TextFormField(
           readOnly: true,
-          initialValue: deadline,
+          // The picker still works in Gregorian (no Ethiopian-calendar
+          // picker widget exists yet — see EthiopianDate docs); what the
+          // shipper actually reads back is the Ethiopian date. `deadline`
+          // itself stays a plain ISO string for the API payload.
+          initialValue:
+              deadline != null ? EthiopianDate.display(DateTime.parse(deadline!)) : null,
           onTap: () async {
             final d = await showDatePicker(
               context: context,
@@ -1277,7 +1581,8 @@ class _Step3 extends StatelessWidget {
               firstDate: DateTime.now(),
               lastDate: DateTime.now().add(const Duration(days: 90)),
               builder: (ctx, child) => Theme(
-                data: Theme.of(ctx).copyWith(colorScheme: ColorScheme.light(primary: kGreen)),
+                data: Theme.of(ctx)
+                    .copyWith(colorScheme: ColorScheme.light(primary: kGreen)),
                 child: child!,
               ),
             );
@@ -1285,9 +1590,39 @@ class _Step3 extends StatelessWidget {
           },
           decoration: _inputDeco(
             hint: 'Tap to select date',
-            prefixIcon: Icon(Icons.calendar_today_outlined, color: kGreen, size: 20),
+            prefixIcon:
+                Icon(Icons.calendar_today_outlined, color: kGreen, size: 20),
           ),
           style: GoogleFonts.inter(fontSize: 14),
+        ),
+        const SizedBox(height: 16),
+        Text('Urgency',
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600, color: kTextPrimary)),
+        const SizedBox(height: 4),
+        Text(
+          deadline != null
+              ? 'Suggested from your deadline — change it if needed.'
+              : 'Defaults to Normal until you pick a deadline above.',
+          style: GoogleFonts.inter(fontSize: 12, color: kTextSecond),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: urgency,
+          items: kUrgencyLevels
+              .map((u) => DropdownMenuItem(
+                    value: u,
+                    child: Text(u[0].toUpperCase() + u.substring(1),
+                        style: GoogleFonts.inter(fontSize: 14)),
+                  ))
+              .toList(),
+          onChanged: (v) {
+            if (v != null) onUrgency(v);
+          },
+          decoration: _inputDeco(
+            prefixIcon:
+                Icon(Icons.priority_high_rounded, color: kGreen, size: 20),
+          ),
         ),
         const SizedBox(height: 20),
         Container(
@@ -1296,18 +1631,23 @@ class _Step3 extends StatelessWidget {
               color: kGreenTint,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: kGreen.withValues(alpha: 0.25))),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
               Icon(Icons.psychology_outlined, color: kGreen, size: 18),
               const SizedBox(width: 6),
               Text('AI Price Suggestion',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: kGreen)),
+                  style: GoogleFonts.inter(
+                      fontWeight: FontWeight.bold, color: kGreen)),
             ]),
             const SizedBox(height: 10),
             if (priceLoading)
               Row(children: [
-                SizedBox(width: 18, height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: kGreen)),
+                SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: kGreen)),
                 const SizedBox(width: 10),
                 Text('Calculating route price...',
                     style: GoogleFonts.inter(fontSize: 13, color: kTextSecond)),
@@ -1316,7 +1656,9 @@ class _Step3 extends StatelessWidget {
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text('ETB ${_fmt(priceMin!)} – ${_fmt(priceMax!)}',
                     style: GoogleFonts.inter(
-                        fontSize: 22, fontWeight: FontWeight.bold, color: kGreen)),
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: kGreen)),
                 const SizedBox(height: 4),
                 Text(
                   priceDistKm != null
@@ -1326,9 +1668,11 @@ class _Step3 extends StatelessWidget {
                 ),
               ])
             else if (priceError != null)
-              Text(priceError!, style: GoogleFonts.inter(fontSize: 12, color: kDanger))
+              Text(priceError!,
+                  style: GoogleFonts.inter(fontSize: 12, color: kDanger))
             else
-              Text('Enter cargo details on the previous step to get a price estimate.',
+              Text(
+                  'Enter cargo details on the previous step to get a price estimate.',
                   style: GoogleFonts.inter(fontSize: 12, color: kTextSecond)),
           ]),
         ),
@@ -1347,8 +1691,11 @@ class _PriceTypeOption extends StatelessWidget {
   final VoidCallback onTap;
 
   const _PriceTypeOption({
-    required this.title, required this.subtitle, required this.icon,
-    required this.selected, required this.onTap,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
   });
 
   @override
@@ -1360,17 +1707,20 @@ class _PriceTypeOption extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? kGreen.withValues(alpha: 0.06) : kSurface,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: selected ? kGreen : kBorder, width: selected ? 1.5 : 0.5),
+          border: Border.all(
+              color: selected ? kGreen : kBorder, width: selected ? 1.5 : 0.5),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Icon(icon, color: selected ? kGreen : kTextMuted, size: 20),
           const SizedBox(height: 6),
           Text(title,
               style: GoogleFonts.inter(
-                  fontSize: 13, fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
                   color: selected ? kGreen : kTextPrimary)),
           const SizedBox(height: 2),
-          Text(subtitle, style: GoogleFonts.inter(fontSize: 11, color: kTextMuted)),
+          Text(subtitle,
+              style: GoogleFonts.inter(fontSize: 11, color: kTextMuted)),
         ]),
       ),
     );
@@ -1392,6 +1742,7 @@ class _Step4 extends StatelessWidget {
   final String? deadline;
   final String? description;
   final String priceType;
+  final String urgency;
 
   const _Step4({
     required this.pickup,
@@ -1406,29 +1757,34 @@ class _Step4 extends StatelessWidget {
     required this.deadline,
     required this.description,
     required this.priceType,
+    required this.urgency,
   });
 
   @override
   Widget build(BuildContext context) {
-    final hasCoords = pickupLat != null && pickupLng != null &&
-        destinationLat != null && destinationLng != null;
+    final hasCoords = pickupLat != null &&
+        pickupLng != null &&
+        destinationLat != null &&
+        destinationLng != null;
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         Text('Review & Confirm',
             style: GoogleFonts.inter(
-                fontSize: 16, fontWeight: FontWeight.bold, color: kTextPrimary)),
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: kTextPrimary)),
         const SizedBox(height: 16),
 
         // ── Route map preview ────────────────────────────────────────
         if (hasCoords) ...[
           CargoRouteMapWidget(
-            pickupLat:      pickupLat!,
-            pickupLng:      pickupLng!,
+            pickupLat: pickupLat!,
+            pickupLng: pickupLng!,
             destinationLat: destinationLat!,
             destinationLng: destinationLng!,
-            pickupName:     pickup ?? '',
+            pickupName: pickup ?? '',
             destinationName: delivery ?? '',
             height: 220,
           ),
@@ -1453,8 +1809,8 @@ class _Step4 extends StatelessWidget {
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Icon(Icons.arrow_forward_rounded,
-                    color: kAmber, size: 18),
+                child:
+                    Icon(Icons.arrow_forward_rounded, color: kAmber, size: 18),
               ),
               Expanded(
                 child: Text(
@@ -1469,6 +1825,46 @@ class _Step4 extends StatelessWidget {
             ]),
           ),
           const SizedBox(height: 20),
+
+          // ── Nearby drivers map ───────────────────────────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Available Trucks Nearby',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: kTextPrimary,
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => context.go(Uri(
+                  path: '/nearby-trucks',
+                  queryParameters: {
+                    'lat': pickupLat.toString(),
+                    'lng': pickupLng.toString(),
+                    if (pickup != null) 'name': pickup!,
+                  },
+                ).toString()),
+                icon: const Icon(Icons.travel_explore_outlined, size: 16),
+                label: const Text('Radius search', style: TextStyle(fontSize: 12)),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  foregroundColor: kGreen,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          NearbyDriversMapWidget(
+            pickupLat: pickupLat!,
+            pickupLng: pickupLng!,
+            pickupName: pickup,
+            serviceType: 'intercity',
+            height: 250,
+          ),
+          const SizedBox(height: 20),
         ] else ...[
           RouteUnavailablePlaceholder(height: 160),
           const SizedBox(height: 16),
@@ -1477,11 +1873,18 @@ class _Step4 extends StatelessWidget {
         _ReviewRow('Pickup', pickup ?? '—'),
         _ReviewRow('Destination', delivery ?? '—'),
         _ReviewRow('Cargo Type', cargo ?? '—'),
-        _ReviewRow('Weight', weight != null ? '$weight tons' : '—'),
-        _ReviewRow('Pricing', priceType == 'fixed' ? 'Fixed Price' : 'Negotiable'),
+        _ReviewRow('Weight', weight != null ? '$weight kuntal' : '—'),
+        _ReviewRow(
+            'Pricing', priceType == 'fixed' ? 'Fixed Price' : 'Negotiable'),
         _ReviewRow('Budget', budget != null ? 'ETB $budget' : '—'),
-        _ReviewRow('Bid Deadline', deadline ?? 'Not set'),
-        if (description != null && description!.isNotEmpty) _ReviewRow('Notes', description!),
+        _ReviewRow(
+            'Bid Deadline',
+            deadline != null
+                ? EthiopianDate.display(DateTime.parse(deadline!))
+                : 'Not set'),
+        _ReviewRow('Urgency', urgency[0].toUpperCase() + urgency.substring(1)),
+        if (description != null && description!.isNotEmpty)
+          _ReviewRow('Notes', description!),
         const SizedBox(height: 20),
         Container(
           padding: const EdgeInsets.all(14),
@@ -1494,7 +1897,7 @@ class _Step4 extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'Once submitted, your request will be visible to available drivers. Platform commission: 10%.',
+                'Once submitted, your request will be visible to available drivers. Platform commission: 2%.',
                 style: GoogleFonts.inter(fontSize: 12, color: kTextPrimary),
               ),
             ),
@@ -1515,8 +1918,9 @@ class _IntraStep1 extends StatelessWidget {
   final ValueChanged<String> onCity;
   final bool gpsPickupMode;
   final bool detectingLocation;
-  final String? detectedCity;
-  final double? detectedAccuracyKm;
+  final String? detectedPlaceName;
+  final String? detectedServiceCity;
+  final double? detectedServiceCityDistanceKm;
   final double? gpsLat;
   final double? gpsLng;
   final VoidCallback onUseGps;
@@ -1530,8 +1934,9 @@ class _IntraStep1 extends StatelessWidget {
     required this.onCity,
     required this.gpsPickupMode,
     required this.detectingLocation,
-    required this.detectedCity,
-    required this.detectedAccuracyKm,
+    required this.detectedPlaceName,
+    required this.detectedServiceCity,
+    required this.detectedServiceCityDistanceKm,
     required this.gpsLat,
     required this.gpsLng,
     required this.onUseGps,
@@ -1545,11 +1950,13 @@ class _IntraStep1 extends StatelessWidget {
         filled: true,
         fillColor: kSurface,
         enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: kBorder)),
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: kBorder)),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
             borderSide: BorderSide(color: kGreen, width: 1.5)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       );
 
   @override
@@ -1562,20 +1969,26 @@ class _IntraStep1 extends StatelessWidget {
           decoration: BoxDecoration(
               color: const Color(0xFF1E40AF).withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF1E40AF).withValues(alpha: 0.2))),
+              border: Border.all(
+                  color: const Color(0xFF1E40AF).withValues(alpha: 0.2))),
           child: Row(children: [
-            const Icon(Icons.airport_shuttle_rounded, color: Color(0xFF1E40AF), size: 18),
+            const Icon(Icons.airport_shuttle_rounded,
+                color: Color(0xFF1E40AF), size: 18),
             const SizedBox(width: 8),
-            Expanded(child: Text('Intra-city Moving · light vehicles only',
-                style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF1E40AF),
-                    fontWeight: FontWeight.w600))),
+            Expanded(
+                child: Text('Intra-city Moving · light vehicles only',
+                    style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: const Color(0xFF1E40AF),
+                        fontWeight: FontWeight.w600))),
           ]),
         ),
         const SizedBox(height: 20),
 
         // ── GPS / Manual pickup toggle ───────────────────────────────────
         Text('Pickup Location',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         _PickupModeToggle(
           gpsMode: gpsPickupMode,
@@ -1585,32 +1998,44 @@ class _IntraStep1 extends StatelessWidget {
         ),
         const SizedBox(height: 12),
 
-        if (gpsPickupMode && detectedCity != null) ...[
+        if (gpsPickupMode && detectedPlaceName != null) ...[
           _GpsDetectedBadge(
-            cityName: detectedCity!,
-            accuracyKm: detectedAccuracyKm,
+            placeName: detectedPlaceName!,
+            serviceCity: detectedServiceCity,
+            serviceCityDistanceKm: detectedServiceCityDistanceKm,
             onClear: onClearGps,
           ),
           const SizedBox(height: 14),
         ],
 
         // ── City dropdown (always shown, pre-filled in GPS mode) ─────────
-        Text('City', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
+        Text('City',
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
           initialValue: city,
-          hint: Text('location.select_city'.tr(), style: GoogleFonts.inter(color: kTextMuted)),
+          hint: Text('location.select_city'.tr(),
+              style: GoogleFonts.inter(color: kTextMuted)),
           isExpanded: true,
-          decoration: _deco(prefix: Icon(Icons.location_city_outlined, color: kGreen, size: 20)),
-          items: cities.map((c) => DropdownMenuItem(
-                value: c, child: Text(c, style: GoogleFonts.inter(fontSize: 14)))).toList(),
-          onChanged: (v) { if (v != null) onCity(v); },
+          decoration: _deco(
+              prefix:
+                  Icon(Icons.location_city_outlined, color: kGreen, size: 20)),
+          items: cities
+              .map((c) => DropdownMenuItem(
+                  value: c,
+                  child: Text(c, style: GoogleFonts.inter(fontSize: 14))))
+              .toList(),
+          onChanged: (v) {
+            if (v != null) onCity(v);
+          },
         ),
 
         // ── Pickup area ──────────────────────────────────────────────────
         const SizedBox(height: 20),
         Text('Pickup Area / Neighborhood',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         TextField(
           controller: pickupCtrl,
@@ -1640,8 +2065,7 @@ class _IntraStep1 extends StatelessWidget {
                 ),
                 children: [
                   TileLayer(
-                    urlTemplate:
-                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    urlTemplate: kMapTileUrlTemplate,
                     userAgentPackageName: 'com.ethioloadai.app',
                   ),
                   MarkerLayer(
@@ -1655,6 +2079,7 @@ class _IntraStep1 extends StatelessWidget {
                       ),
                     ],
                   ),
+                  kMapAttribution,
                 ],
               ),
             ),
@@ -1664,7 +2089,8 @@ class _IntraStep1 extends StatelessWidget {
         // ── Dropoff area ─────────────────────────────────────────────────
         const SizedBox(height: 20),
         Text('Dropoff Area / Neighborhood',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         TextField(
           controller: dropoffCtrl,
@@ -1674,7 +2100,9 @@ class _IntraStep1 extends StatelessWidget {
           ),
           style: GoogleFonts.inter(fontSize: 14),
         ),
-        if (city != null && pickupCtrl.text.isNotEmpty && dropoffCtrl.text.isNotEmpty) ...[
+        if (city != null &&
+            pickupCtrl.text.isNotEmpty &&
+            dropoffCtrl.text.isNotEmpty) ...[
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -1685,8 +2113,13 @@ class _IntraStep1 extends StatelessWidget {
             child: Row(children: [
               Icon(Icons.route, color: kGreen, size: 18),
               const SizedBox(width: 8),
-              Expanded(child: Text('$city · ${pickupCtrl.text} → ${dropoffCtrl.text}',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kGreen, fontSize: 13))),
+              Expanded(
+                  child: Text(
+                      '$city · ${pickupCtrl.text} → ${dropoffCtrl.text}',
+                      style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w600,
+                          color: kGreen,
+                          fontSize: 13))),
             ]),
           ),
         ],
@@ -1702,12 +2135,20 @@ class _IntraStep2 extends StatelessWidget {
   final String? preferredDate;
   final String? vehicleType;
   final List<String> vehicleTypes;
+  final String urgency;
   final ValueChanged<String> onDate;
   final ValueChanged<String?> onVehicleType;
+  final ValueChanged<String> onUrgency;
 
   const _IntraStep2({
-    required this.descCtrl, required this.preferredDate, required this.vehicleType,
-    required this.vehicleTypes, required this.onDate, required this.onVehicleType,
+    required this.descCtrl,
+    required this.preferredDate,
+    required this.vehicleType,
+    required this.vehicleTypes,
+    required this.urgency,
+    required this.onDate,
+    required this.onVehicleType,
+    required this.onUrgency,
   });
 
   InputDecoration _deco({String? hint, Widget? prefix}) => InputDecoration(
@@ -1717,11 +2158,13 @@ class _IntraStep2 extends StatelessWidget {
         filled: true,
         fillColor: kSurface,
         enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: kBorder)),
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: kBorder)),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
             borderSide: BorderSide(color: kGreen, width: 1.5)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       );
 
   @override
@@ -1730,17 +2173,20 @@ class _IntraStep2 extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: [
         Text('What are you moving?',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         TextField(
           controller: descCtrl,
           maxLines: 4,
-          decoration: _deco(hint: 'e.g. 2-bedroom furniture, boxes, appliances...'),
+          decoration:
+              _deco(hint: 'e.g. 2-bedroom furniture, boxes, appliances...'),
           style: GoogleFonts.inter(fontSize: 14),
         ),
         const SizedBox(height: 20),
         Text('Preferred Date',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         TextFormField(
           readOnly: true,
@@ -1751,7 +2197,8 @@ class _IntraStep2 extends StatelessWidget {
               firstDate: DateTime.now(),
               lastDate: DateTime.now().add(const Duration(days: 90)),
               builder: (ctx, child) => Theme(
-                data: Theme.of(ctx).copyWith(colorScheme: ColorScheme.light(primary: kGreen)),
+                data: Theme.of(ctx)
+                    .copyWith(colorScheme: ColorScheme.light(primary: kGreen)),
                 child: child!,
               ),
             );
@@ -1759,22 +2206,62 @@ class _IntraStep2 extends StatelessWidget {
           },
           decoration: _deco(
             hint: 'Tap to select moving date',
-            prefix: Icon(Icons.calendar_today_outlined, color: kGreen, size: 20),
+            prefix:
+                Icon(Icons.calendar_today_outlined, color: kGreen, size: 20),
           ),
-          controller: TextEditingController(text: preferredDate ?? ''),
+          // preferredDate stays a plain ISO string for the API payload; the
+          // field shows the Ethiopian-calendar date, which is what the
+          // shipper actually reads.
+          controller: TextEditingController(
+              text: preferredDate != null
+                  ? EthiopianDate.display(DateTime.parse(preferredDate!))
+                  : ''),
           style: GoogleFonts.inter(fontSize: 14),
+        ),
+        const SizedBox(height: 16),
+        Text('Urgency',
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600, color: kTextPrimary)),
+        const SizedBox(height: 4),
+        Text(
+          preferredDate != null
+              ? 'Suggested from your preferred date — change it if needed.'
+              : 'Defaults to Normal until you pick a date above.',
+          style: GoogleFonts.inter(fontSize: 12, color: kTextSecond),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: urgency,
+          items: kUrgencyLevels
+              .map((u) => DropdownMenuItem(
+                    value: u,
+                    child: Text(u[0].toUpperCase() + u.substring(1),
+                        style: GoogleFonts.inter(fontSize: 14)),
+                  ))
+              .toList(),
+          onChanged: (v) {
+            if (v != null) onUrgency(v);
+          },
+          decoration: _deco(
+              prefix:
+                  Icon(Icons.priority_high_rounded, color: kGreen, size: 20)),
         ),
         const SizedBox(height: 20),
         Text('Vehicle Type Needed (optional)',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
+            style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
           initialValue: vehicleType,
-          hint: Text('Any available vehicle', style: GoogleFonts.inter(color: kTextMuted)),
+          hint: Text('Any available vehicle',
+              style: GoogleFonts.inter(color: kTextMuted)),
           isExpanded: true,
-          decoration: _deco(prefix: Icon(Icons.airport_shuttle_outlined, color: kGreen, size: 20)),
+          decoration: _deco(
+              prefix: Icon(Icons.airport_shuttle_outlined,
+                  color: kGreen, size: 20)),
           items: [
-            const DropdownMenuItem<String>(value: null, child: Text('Any available vehicle')),
+            const DropdownMenuItem<String>(
+                value: null, child: Text('Any available vehicle')),
             ...vehicleTypes.map((t) => DropdownMenuItem(
                   value: t,
                   child: Text(t[0].toUpperCase() + t.substring(1),
@@ -1797,10 +2284,16 @@ class _IntraStep3Review extends StatelessWidget {
   final String itemsDesc;
   final String? preferredDate;
   final String? vehicleType;
+  final String urgency;
 
   const _IntraStep3Review({
-    required this.city, required this.pickupArea, required this.dropoffArea,
-    required this.itemsDesc, required this.preferredDate, required this.vehicleType,
+    required this.city,
+    required this.pickupArea,
+    required this.dropoffArea,
+    required this.itemsDesc,
+    required this.preferredDate,
+    required this.vehicleType,
+    required this.urgency,
   });
 
   @override
@@ -1810,7 +2303,9 @@ class _IntraStep3Review extends StatelessWidget {
       children: [
         Text('Review & Confirm',
             style: GoogleFonts.inter(
-                fontSize: 16, fontWeight: FontWeight.bold, color: kTextPrimary)),
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: kTextPrimary)),
         const SizedBox(height: 8),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -1819,7 +2314,8 @@ class _IntraStep3Review extends StatelessWidget {
               borderRadius: BorderRadius.circular(8)),
           child: Text('Intra-city Moving',
               style: GoogleFonts.inter(
-                  fontSize: 12, color: const Color(0xFF1E40AF),
+                  fontSize: 12,
+                  color: const Color(0xFF1E40AF),
                   fontWeight: FontWeight.w600)),
         ),
         const SizedBox(height: 16),
@@ -1827,10 +2323,17 @@ class _IntraStep3Review extends StatelessWidget {
         _ReviewRow('Pickup Area', pickupArea.isEmpty ? '—' : pickupArea),
         _ReviewRow('Dropoff Area', dropoffArea.isEmpty ? '—' : dropoffArea),
         _ReviewRow('Items', itemsDesc.isEmpty ? '—' : itemsDesc),
-        _ReviewRow('Preferred Date', preferredDate ?? 'Not set'),
-        _ReviewRow('Vehicle', vehicleType != null
-            ? vehicleType![0].toUpperCase() + vehicleType!.substring(1)
-            : 'Any available'),
+        _ReviewRow(
+            'Preferred Date',
+            preferredDate != null
+                ? EthiopianDate.display(DateTime.parse(preferredDate!))
+                : 'Not set'),
+        _ReviewRow('Urgency', urgency[0].toUpperCase() + urgency.substring(1)),
+        _ReviewRow(
+            'Vehicle',
+            vehicleType != null
+                ? vehicleType![0].toUpperCase() + vehicleType!.substring(1)
+                : 'Any available'),
         const SizedBox(height: 20),
         Container(
           padding: const EdgeInsets.all(14),
@@ -1841,8 +2344,9 @@ class _IntraStep3Review extends StatelessWidget {
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Icon(Icons.info_outline, color: kAmber, size: 18),
             const SizedBox(width: 10),
-            Expanded(child: Text(
-              'Drivers in your city will bid on this request. No AI price for intra-city moves. Platform commission: 10%.',
+            Expanded(
+                child: Text(
+              'Drivers in your city will bid on this request. No AI price for intra-city moves. Platform commission: 2%.',
               style: GoogleFonts.inter(fontSize: 12, color: kTextPrimary),
             )),
           ]),
@@ -1874,12 +2378,16 @@ class _ReviewRow extends StatelessWidget {
             width: 90,
             child: Text(label,
                 style: GoogleFonts.inter(
-                    fontSize: 12, color: kTextSecond, fontWeight: FontWeight.w500)),
+                    fontSize: 12,
+                    color: kTextSecond,
+                    fontWeight: FontWeight.w500)),
           ),
           Expanded(
             child: Text(value,
                 style: GoogleFonts.inter(
-                    fontSize: 13, fontWeight: FontWeight.w600, color: kTextPrimary)),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: kTextPrimary)),
           ),
         ],
       ),

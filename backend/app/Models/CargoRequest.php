@@ -6,6 +6,23 @@ use Illuminate\Database\Eloquent\Model;
 
 class CargoRequest extends Model
 {
+    /**
+     * Canonical, UI-facing urgency tiers (low -> high). Every new cargo
+     * request should be written with one of these. Matches the tiers
+     * AiController's price multiplier and BackhaulService's scoring
+     * already recognize by name.
+     */
+    public const URGENCY_LEVELS = ['low', 'normal', 'high', 'express'];
+
+    /**
+     * Accepted on write: the canonical set plus 'urgent', an older synonym
+     * for 'express' still produced by TestScenario.php and possibly present
+     * in older data — BackhaulService's scoring already treats the two as
+     * equivalent. Kept separate from URGENCY_LEVELS so new UI never offers
+     * 'urgent' as a choice, but existing callers using it aren't rejected.
+     */
+    public const ALLOWED_URGENCY_LEVELS = ['low', 'normal', 'high', 'express', 'urgent'];
+
     protected $fillable = [
         'user_id',
         'pickup_location',
@@ -14,6 +31,8 @@ class CargoRequest extends Model
         'pickup_latitude',
         'pickup_longitude',
         'destination',
+        'destination_lat',
+        'destination_lng',
         'material_type',
         'weight',
         'urgency_level',

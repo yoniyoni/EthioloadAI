@@ -92,7 +92,11 @@ class BidController extends Controller
             ->with(['driver', 'cargoRequest'])
             ->get();
 
-        $booking = $this->bidService->acceptBid($bid);
+        try {
+            $booking = $this->bidService->acceptBid($bid);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         // Notify the driver (or fleet owner) that their bid was accepted
         $bid->driver?->notify(new BookingCreatedNotification($booking));

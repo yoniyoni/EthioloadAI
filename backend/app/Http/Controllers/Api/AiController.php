@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\PlatformSetting;
+use App\Services\CityCoordinates;
+use App\Services\DistanceService;
 use App\Services\RoutingService;
 use Illuminate\Http\Request;
 
@@ -22,17 +24,45 @@ class AiController extends Controller
     {
         $payload = $request->all();
 
-        // Inject real available vehicles + driver names from DB
-        $payload['truck_fleet'] = \App\Models\Vehicle::with('user')
+        $vehicles  = \App\Models\Vehicle::with('user')
             ->where('availability_status', 'available')
+            ->whereHas('user', fn ($q) => $q->where('verification_status', true))
+            ->get();
+        $driverIds = $vehicles->pluck('user_id')->filter()->unique()->values();
+
+        // Real performance signal, batched (not N+1) — see localTruckRecommend()
+        // / recommendation_service.py for how these feed the ranking. Ratings
+        // are only counted where the SHIPPER was the rater (excludes a driver
+        // rating their own shipper, which shares the same driver_id column).
+        $avgRatings = \App\Models\Rating::whereIn('driver_id', $driverIds)
+            ->whereColumn('rater_id', 'shipper_id')
+            ->selectRaw('driver_id, AVG(rating) as avg_rating')
+            ->groupBy('driver_id')
+            ->pluck('avg_rating', 'driver_id');
+
+        $bidStats = \App\Models\Bid::whereIn('driver_id', $driverIds)
+            ->selectRaw("driver_id, COUNT(*) as total, SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END) as accepted")
+            ->groupBy('driver_id')
             ->get()
-            ->map(fn ($v) => [
-                'truck_id'      => $v->id,
-                'driver_name'   => $v->user?->full_name ?? ('Driver #' . $v->user_id),
-                'plate_number'  => $v->plate_number,
-                'capacity'      => (float) ($v->capacity ?? 20),
-                'base_location' => strtolower($v->current_city ?? 'addis ababa'),
-            ])
+            ->keyBy('driver_id');
+
+        // Inject real available vehicles + driver names from DB
+        $payload['truck_fleet'] = $vehicles
+            ->map(function ($v) use ($avgRatings, $bidStats) {
+                $stats = $bidStats->get($v->user_id);
+                return [
+                    'truck_id'        => $v->id,
+                    'driver_name'     => $v->user?->full_name ?? ('Driver #' . $v->user_id),
+                    'plate_number'    => $v->plate_number,
+                    'capacity'        => (float) ($v->capacity ?? 20),
+                    'base_location'   => strtolower($v->current_city ?? 'addis ababa'),
+                    // null (not 0) when there's no history yet — both engines
+                    // apply a neutral, cold-start-safe default rather than
+                    // penalizing a driver for lacking a track record.
+                    'avg_rating'      => isset($avgRatings[$v->user_id]) ? round((float) $avgRatings[$v->user_id], 2) : null,
+                    'acceptance_rate' => ($stats && $stats->total > 0) ? round($stats->accepted / $stats->total, 2) : null,
+                ];
+            })
             ->toArray();
 
         $result = $this->aiEngine->recommendTruck($payload);
@@ -88,12 +118,26 @@ class AiController extends Controller
             $urgency  = $request->input('urgency_level', 'normal');
             $material = $request->input('material_type', '');
 
-            // Use OSRM real road distance when coordinates are supplied
+            // Use OSRM real road distance whenever at least one side has real
+            // coordinates — resolve the other side from its city name rather
+            // than discarding good GPS data just because the caller only
+            // sent coordinates for one end (e.g. GPS pickup + dropdown-picked
+            // destination, which never carries its own lat/lng client-side).
             $osrmDistKm = null;
             $fromLat = $request->input('from_lat');
             $fromLng = $request->input('from_lng');
             $toLat   = $request->input('to_lat');
             $toLng   = $request->input('to_lng');
+
+            if (!$fromLat || !$fromLng) {
+                $fromCoords = CityCoordinates::resolveFromText($from);
+                if ($fromCoords) [$fromLat, $fromLng] = $fromCoords;
+            }
+            if (!$toLat || !$toLng) {
+                $toCoords = CityCoordinates::resolveFromText($to);
+                if ($toCoords) [$toLat, $toLng] = $toCoords;
+            }
+
             if ($fromLat && $fromLng && $toLat && $toLng) {
                 $route = $this->routing->getRoute(
                     (float) $fromLat, (float) $fromLng,
@@ -137,6 +181,7 @@ class AiController extends Controller
         'Nekemte'              => 331,
         'Shashemene'           => 250,
         'Shire / Endaselassie' => 900,
+        'Shire'                => 900,
         'Axum'                 => 1020,
         'Adigrat'              => 870,
         'Sodo / Wolaita'       => 370,
@@ -153,75 +198,43 @@ class AiController extends Controller
         'Dangila'              => 580,
     ];
 
-    // ── GPS coordinates (lat, lng) for Haversine city-to-city distances ──
-    private static array $cityCoords = [
-        'Addis Ababa'          => [9.0320,  38.7469],
-        'Adama'                => [8.5400,  39.2700],
-        'Adama / Nazret'       => [8.5400,  39.2700],
-        'Asella'               => [8.0000,  39.1333],
-        'Awash'                => [8.9833,  40.1500],
-        'Bahir Dar'            => [11.5942, 37.3892],
-        'Bishoftu'             => [8.7500,  38.9833],
-        'Bale Robe'            => [7.1167,  40.0167],
-        'Debre Birhan'         => [9.6833,  39.5167],
-        'Debre Markos'         => [10.3500, 37.7333],
-        'Dessie'               => [11.1333, 39.6333],
-        'Kombolcha'            => [11.0833, 39.7333],
-        'Dilla'                => [6.4167,  38.3333],
-        'Dire Dawa'            => [9.5931,  41.8571],
-        'Gambela'              => [8.2500,  34.5833],
-        'Goba'                 => [7.0000,  39.9667],
-        'Gondar'               => [12.6030, 37.4670],
-        'Harar'                => [9.3125,  42.1181],
-        'Hawassa'              => [7.0504,  38.4955],
-        'Humera'               => [14.2730, 36.5820],
-        'Jijiga'               => [9.3500,  42.8000],
-        'Jimma'                => [7.6710,  36.8342],
-        'Kebri Dahar'          => [6.7333,  44.2833],
-        'Mekele'               => [13.4967, 39.4764],
-        'Moyale'               => [3.5333,  39.0500],
-        'Nekemte'              => [9.0833,  36.5500],
-        'Shashemene'           => [7.2033,  38.5931],
-        'Shire / Endaselassie' => [14.1002, 37.0668],
-        'Axum'                 => [14.1267, 38.7289],
-        'Adigrat'              => [14.2750, 39.4667],
-        'Sodo / Wolaita'       => [6.8500,  37.7500],
-        'Sodo'                 => [6.8500,  37.7500],
-        'Woldia'               => [11.8167, 39.6000],
-        'Assosa'               => [10.0667, 34.5333],
-        'Arba Minch'           => [6.0333,  37.5500],
-        'Ziway'                => [7.9333,  38.7167],
-        'Butajira'             => [8.1333,  38.3667],
-        'Hosanna'              => [7.5500,  37.8500],
-        'Lalibela'             => [12.0317, 39.0472],
-        'Debre Tabor'          => [11.8500, 38.0167],
-        'Wukro'                => [13.7833, 39.6000],
-        'Dangila'              => [11.2667, 36.8333],
-    ];
+    /** Set by roadDistKm() on its most recent call — did that result come from real OSRM routing? */
+    private bool $lastRoadDistUsedOsrm = false;
 
-    private static function haversineKm(float $lat1, float $lon1, float $lat2, float $lon2): float
+    /**
+     * Road-distance estimate between two (already-normalized) city names,
+     * used only when the caller didn't supply real GPS coordinates (see
+     * predictPrice()'s $osrmDistKm fast path, which bypasses this entirely).
+     * Tiered: real OSRM road route (via CityCoordinates-resolved city-centre
+     * points) > hand-measured Addis-anchored table > haversine×inflation
+     * estimate > coarse table-difference heuristic. Each tier only runs if
+     * the one before it couldn't produce a number — OSRM being unreachable
+     * (or a city not resolving to coordinates) falls through to the
+     * pre-existing chain exactly as it behaved before this migration.
+     */
+    private function roadDistKm(string $nFrom, string $nTo): int
     {
-        $R    = 6371.0;
-        $phi1 = deg2rad($lat1);
-        $phi2 = deg2rad($lat2);
-        $dphi = deg2rad($lat2 - $lat1);
-        $dlam = deg2rad($lon2 - $lon1);
-        $a    = sin($dphi / 2) ** 2 + cos($phi1) * cos($phi2) * sin($dlam / 2) ** 2;
-        return 2 * $R * asin(sqrt($a));
-    }
+        $this->lastRoadDistUsedOsrm = false;
 
-    private static function roadDistKm(string $nFrom, string $nTo): int
-    {
         $aa = 'Addis Ababa';
         if ($nFrom === $aa && $nTo === $aa) return 0;
+
+        $cf = CityCoordinates::get($nFrom);
+        $ct = CityCoordinates::get($nTo);
+        if ($cf && $ct) {
+            $route = $this->routing->getRoute($cf[0], $cf[1], $ct[0], $ct[1]);
+            if ($route !== null) {
+                $this->lastRoadDistUsedOsrm = true;
+                return max(10, (int) round($route['distance_km']));
+            }
+        }
+
         if ($nFrom === $aa || $nFrom === '') return self::$distFromAA[$nTo]  ?? 400;
         if ($nTo   === $aa || $nTo   === '') return self::$distFromAA[$nFrom] ?? 400;
 
-        $cf = self::$cityCoords[$nFrom] ?? null;
-        $ct = self::$cityCoords[$nTo]   ?? null;
         if ($cf && $ct) {
-            $straight = self::haversineKm($cf[0], $cf[1], $ct[0], $ct[1]);
-            return max(10, (int) round($straight * 1.6));
+            $straight = DistanceService::haversineKm($cf[0], $cf[1], $ct[0], $ct[1]);
+            return max(10, (int) round($straight * DistanceService::ROAD_DISTANCE_INFLATION_FACTOR));
         }
 
         $df = self::$distFromAA[$nFrom] ?? null;
@@ -238,13 +251,13 @@ class AiController extends Controller
         // Strip region suffixes (e.g. "Adama, Oromia" → "Adama")
         $s = preg_split('/[,\/]/', $s)[0];
         $s = trim($s);
-        // Known aliases
+        // Known aliases (mapped to CityCoordinates' single-word canonical spellings)
         $aliases = [
-            'addis'   => 'Addis Ababa',
-            'nazret'  => 'Adama / Nazret',
-            'adama'   => 'Adama',
-            'wolaita' => 'Sodo / Wolaita',
-            'endaselassie' => 'Shire / Endaselassie',
+            'addis'        => 'Addis Ababa',
+            'nazret'       => 'Adama',
+            'adama'        => 'Adama',
+            'wolaita'      => 'Sodo',
+            'endaselassie' => 'Shire',
         ];
         $lower = strtolower($s);
         foreach ($aliases as $needle => $canonical) {
@@ -257,8 +270,11 @@ class AiController extends Controller
     {
         $nFrom  = $this->normalizeCity($from);
         $nTo    = $this->normalizeCity($to);
-        // Prefer real OSRM road distance over the haversine×1.6 estimate
-        $distKm = $osrmDistKm ?? self::roadDistKm($nFrom, $nTo);
+        // Prefer real OSRM road distance; roadDistKm() itself now also tries
+        // OSRM (via city-centre coordinates) before falling back to the
+        // hand-measured table / haversine×1.4 estimate / heuristic.
+        $distKm   = $osrmDistKm ?? $this->roadDistKm($nFrom, $nTo);
+        $usedOsrm = $osrmDistKm !== null || $this->lastRoadDistUsedOsrm;
 
         $rateMin = (float) PlatformSetting::get('pricing.rate_min', 18);
         $rateMax = (float) PlatformSetting::get('pricing.rate_max', 28);
@@ -284,8 +300,8 @@ class AiController extends Controller
             'estimated_price' => (int) (($priceMin + $priceMax) / 2),
             'distance_km'     => $distKm,
             'currency'        => 'ETB',
-            'confidence'      => $osrmDistKm !== null ? 0.88 : 0.80,
-            'source'          => $osrmDistKm !== null ? 'local_estimate_osrm' : 'local_estimate',
+            'confidence'      => $usedOsrm ? 0.88 : 0.80,
+            'source'          => $usedOsrm ? 'local_estimate_osrm' : 'local_estimate',
         ];
     }
 
@@ -328,6 +344,27 @@ class AiController extends Controller
         return response()->json($result);
     }
 
+    /**
+     * Cold-start-safe defaults for drivers with no rating/bid history yet —
+     * neutral-good, not zero, so a new driver isn't punished for lacking a
+     * track record. 4.0/5 and 70% acceptance are reasonable "unproven but
+     * assume decent" priors for a pilot-stage marketplace.
+     */
+    private const NEUTRAL_RATING           = 4.0;
+    private const NEUTRAL_ACCEPTANCE_RATE  = 0.7;
+
+    /**
+     * Weighted-score truck ranking, informed by real driver performance
+     * (rating, bid-acceptance rate) alongside trip fit (capacity, proximity,
+     * urgency, material) — not just static trip attributes. Previously
+     * capacity/proximity alone dominated once "big enough" trucks all hit
+     * capacity_fit's 1.0 cap, which meant proximity to pickup was the only
+     * real differentiator — and since most cargo originates near Addis
+     * Ababa, the same Addis-based truck(s) won almost every call. Folding in
+     * rating/acceptance gives the ranking a real, accumulating signal beyond
+     * geography, and #_shuffleTiedScores() below stops equally-scored trucks
+     * from always resolving to the same one via array order.
+     */
     private function localTruckRecommend(string $pickup, string $dest, float $weight, string $material, string $urgency, array $fleet): array
     {
         $routeKm = $this->distBetween($pickup, $dest);
@@ -336,11 +373,22 @@ class AiController extends Controller
         $materialMul = $this->materialMultiplier($material);
 
         $scored = array_map(function ($truck) use ($pickup, $weight, $routeKm, $urgencyMul, $materialMul) {
-            $proximityKm  = $this->distBetween($truck['base_location'] ?? 'addis ababa', $pickup);
-            $capacityFit  = min(($truck['capacity'] ?? 20) / max($weight, 1), 1.0);
-            $proxScore    = 1.0 / (1.0 + $proximityKm / 200.0);
-            $score        = round($capacityFit * 0.40 + $urgencyMul * 0.15 + $proxScore * 0.30 + $materialMul * 0.15, 2);
-            $estPrice     = (int) round($routeKm * $weight * 23 * $materialMul * $urgencyMul);
+            $proximityKm    = $this->distBetween($truck['base_location'] ?? 'addis ababa', $pickup);
+            $capacityFit    = min(($truck['capacity'] ?? 20) / max($weight, 1), 1.0);
+            $proxScore      = 1.0 / (1.0 + $proximityKm / 200.0);
+            $ratingScore    = ($truck['avg_rating'] ?? self::NEUTRAL_RATING) / 5.0;
+            $acceptScore    = $truck['acceptance_rate'] ?? self::NEUTRAL_ACCEPTANCE_RATE;
+
+            $score = round(
+                $capacityFit * 0.20
+                + $urgencyMul * 0.10
+                + $proxScore  * 0.20
+                + $materialMul * 0.10
+                + $ratingScore * 0.20
+                + $acceptScore * 0.20,
+                2
+            );
+            $estPrice = (int) round($routeKm * $weight * 23 * $materialMul * $urgencyMul);
 
             return [
                 'truck_id'        => $truck['truck_id'],
@@ -353,14 +401,39 @@ class AiController extends Controller
             ];
         }, $fleet);
 
-        usort($scored, fn ($a, $b) => $b['score'] <=> $a['score']);
+        return ['recommended_trucks' => $this->shuffleTiedScores($scored)];
+    }
 
-        return ['recommended_trucks' => $scored];
+    /**
+     * Sorts descending by score, but randomizes the order WITHIN each group
+     * of equal scores instead of leaving PHP's stable sort to always resolve
+     * ties to the same array-order winner. Ranking quality is unaffected —
+     * a higher-scored truck never moves below a lower-scored one — but two
+     * genuinely-tied trucks (e.g. same proximity/capacity/rating bracket)
+     * now take turns being #1 across calls rather than one fixed truck
+     * always winning by accident of DB row order.
+     */
+    private function shuffleTiedScores(array $scored): array
+    {
+        $groups = [];
+        foreach ($scored as $item) {
+            $groups[(string) $item['score']][] = $item;
+        }
+
+        krsort($groups, SORT_NUMERIC);
+
+        $result = [];
+        foreach ($groups as $group) {
+            shuffle($group);
+            array_push($result, ...$group);
+        }
+
+        return $result;
     }
 
     private function distBetween(string $cityA, string $cityB): int
     {
-        return self::roadDistKm(
+        return $this->roadDistKm(
             $this->normalizeCity($cityA),
             $this->normalizeCity($cityB),
         );

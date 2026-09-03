@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../data/providers/data_providers.dart';
+import '../../utils/weight_format.dart';
 import '../../data/models/models.dart';
+import '../shared/widgets/shared_widgets.dart' show ExpiredCargoBanner;
 
 /// FreightListScreen - Browse and filter available freight
 class FreightListScreen extends ConsumerStatefulWidget {
@@ -232,6 +234,8 @@ class _CargoCard extends StatelessWidget {
         return Colors.blue;
       case 'completed':
         return Colors.green;
+      case 'expired':
+        return Colors.red;
       default:
         return Colors.orange;
     }
@@ -299,7 +303,7 @@ class _CargoCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    cargo.status.toUpperCase(),
+                    cargo.status == 'expired' ? 'BIDDING CLOSED' : cargo.status.toUpperCase(),
                     style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: _statusColor),
                   ),
                 ),
@@ -315,7 +319,7 @@ class _CargoCard extends StatelessWidget {
                   child: Text(
                     _isIntracity
                         ? (cargo.itemsDescription?.isNotEmpty == true ? cargo.itemsDescription! : 'Intra-city move')
-                        : '${cargo.materialType} • ${cargo.weight.toStringAsFixed(1)} tons',
+                        : '${cargo.materialType} • ${WeightFormat.display(cargo.weight)}',
                     style: const TextStyle(fontSize: 13),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -360,6 +364,10 @@ class _CargoCard extends StatelessWidget {
                   ),
               ],
             ),
+            if (cargo.status == 'expired') ...[
+              const SizedBox(height: 12),
+              ExpiredCargoBanner(cargo: cargo),
+            ],
           ],
         ),
       ),

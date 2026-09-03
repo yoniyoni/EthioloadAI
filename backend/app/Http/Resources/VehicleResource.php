@@ -25,6 +25,10 @@ class VehicleResource extends JsonResource
             'longitude' => $this->longitude,
             'availability_status' => $this->availability_status,
             'rating' => $this->rating,
+            'vehicle_category' => $this->vehicle_category,
+            'verification_status' => (bool) $this->verification_status,
+            'fleet_owner_id' => $this->fleet_owner_id,
+            'last_location_at' => $this->last_location_at?->toISOString(),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

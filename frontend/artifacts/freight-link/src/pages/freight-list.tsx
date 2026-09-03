@@ -21,6 +21,7 @@ const STATUS_COLORS: Record<string, string> = {
   delivered: "bg-emerald-50 text-emerald-700 border-emerald-200",
   completed: "bg-emerald-50 text-emerald-700 border-emerald-200",
   cancelled: "bg-red-50 text-red-700 border-red-200",
+  expired: "bg-red-50 text-red-700 border-red-200",
 };
 
 const CARGO_TYPES = ["grain", "cement", "construction", "perishables", "electronics", "livestock", "fuel", "general", "other"];
@@ -32,6 +33,7 @@ const STATUS_KEYS: Record<string, string> = {
   delivered: "freight.completed",
   completed: "freight.completed",
   cancelled: "freight.cancelled",
+  expired: "freight.expired",
 };
 
 export default function FreightList() {
@@ -101,6 +103,7 @@ export default function FreightList() {
             <SelectItem value="matched">{t("freight.matched")}</SelectItem>
             <SelectItem value="in_transit">{t("freight.inTransit")}</SelectItem>
             <SelectItem value="completed">{t("freight.completed")}</SelectItem>
+            <SelectItem value="expired">{t("freight.expired")}</SelectItem>
           </SelectContent>
         </Select>
         <Select value={cargoFilter} onValueChange={v => { setCargoFilter(v); setPage(0); }}>

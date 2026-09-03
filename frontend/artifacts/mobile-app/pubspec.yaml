@@ -27,9 +27,15 @@ dependencies:
   # Location / GPS
   geolocator: ^10.1.0
 
-  # Map rendering (OpenStreetMap tiles, no API key needed)
+  # Map rendering (MapTiler raster tiles via api.maptiler.com, see map_config.dart)
   flutter_map: ^7.0.2
   latlong2: ^0.9.1
+
+  # Launching external navigation apps (Google Maps / Waze) for turn-by-turn
+  url_launcher: ^6.3.0
+
+  # In-app Chapa checkout (hosted payment page)
+  webview_flutter: ^4.10.0
 
   # Localization
   easy_localization: ^3.0.7
@@ -44,8 +50,14 @@ dependencies:
   # Image picking for document uploads
   image_picker: ^1.0.7
 
+  # File picking (PDF) for document uploads
+  file_picker: ^8.1.4
+
   # Date/time formatting — pinned to match flutter_localizations SDK constraint
   intl: ^0.20.2
+  permission_handler: ^12.0.3
+  # Ethiopian calendar display for shippers/drivers — see lib/src/utils/ethiopian_date.dart
+  ethiopian_datetime: ^1.0.5
 
 dev_dependencies:
   flutter_test:

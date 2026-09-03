@@ -5,8 +5,10 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../data/models/models.dart';
 import '../../data/providers/data_providers.dart';
+import '../../utils/weight_format.dart';
 import '../../data/repositories/repositories.dart';
 import '../shared/widgets/shared_widgets.dart';
+import '../shared/widgets/cargo_route_map_widget.dart';
 
 const _purple = Color(0xFF7C3AED);
 const _fleetBlue = Color(0xFF1E40AF);
@@ -212,7 +214,7 @@ class _CargoHeaderCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '${cargo.materialType}  ·  ${cargo.weight.toStringAsFixed(0)} t',
+                    '${cargo.materialType}  ·  ${WeightFormat.display(cargo.weight)}',
                     style: GoogleFonts.inter(fontSize: 12, color: kTextSecond),
                   ),
                 ],
@@ -287,6 +289,60 @@ class _BidCardState extends ConsumerState<_BidCard> {
   bool _rejecting = false;
   bool _acceptingCounter = false;
 
+  void _showLocationMap() {
+    final bid = widget.bid;
+    final cargo = ref.read(singleCargoProvider(widget.cargoId)).valueOrNull;
+    if (bid.driverLat == null || bid.driverLng == null) return;
+    if (cargo?.pickupLat == null || cargo?.pickupLng == null) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: kBorder,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'bid.driver_location_title'.tr(),
+              style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w600, fontSize: 16, color: kTextPrimary),
+            ),
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: CargoRouteMapWidget(
+                pickupLat: bid.driverLat!,
+                pickupLng: bid.driverLng!,
+                destinationLat: cargo!.pickupLat!,
+                destinationLng: cargo.pickupLng!,
+                pickupName: bid.driverName ?? 'bid.driver_location_title'.tr(),
+                destinationName: cargo.pickupLocation.isNotEmpty
+                    ? cargo.pickupLocation
+                    : (cargo.city ?? 'Pickup'),
+                height: 280,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _accept() async {
     setState(() => _accepting = true);
     try {
@@ -308,6 +364,13 @@ class _BidCardState extends ConsumerState<_BidCard> {
     }
   }
 
+  /// Shown right after a bid is accepted — the price is agreed, so this is
+  /// exactly where phone numbers used to be exchanged. They no longer are:
+  /// payment now flows through the platform (see the upfront-escrow flow),
+  /// so there's nothing for the shipper and driver to arrange directly.
+  /// This just confirms the price and points at the payment step already
+  /// waiting on the booking (in the 'accepted' branch of My Bookings) —
+  /// deliberately not a second, duplicate payment entry point here.
   Future<void> _showDriverContactDialog() async {
     final b = widget.bid;
     await showDialog(
@@ -332,48 +395,28 @@ class _BidCardState extends ConsumerState<_BidCard> {
               'bid.accepted_subtitle'.tr(),
               style: GoogleFonts.inter(fontSize: 13, color: kTextSecond),
             ),
-            const SizedBox(height: 14),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: kBackground,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: kBorder),
+            if (b.driverName != null) ...[
+              const SizedBox(height: 14),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: kBackground,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: kBorder),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.local_shipping_outlined,
+                      size: 18, color: kGreen),
+                  const SizedBox(width: 8),
+                  Text(b.driverName!,
+                      style: GoogleFonts.inter(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: kTextPrimary)),
+                ]),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (b.driverName != null) ...[
-                    Row(children: [
-                      const Icon(Icons.person_outline,
-                          size: 16, color: kTextSecond),
-                      const SizedBox(width: 8),
-                      Text(b.driverName!,
-                          style: GoogleFonts.inter(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 14,
-                              color: kTextPrimary)),
-                    ]),
-                    const SizedBox(height: 8),
-                  ],
-                  if (b.driverPhone != null)
-                    Row(children: [
-                      const Icon(Icons.phone_outlined, size: 16, color: kGreen),
-                      const SizedBox(width: 8),
-                      Text(b.driverPhone!,
-                          style: GoogleFonts.inter(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: kGreen)),
-                    ])
-                  else
-                    Text('bid.driver_phone_na'.tr(),
-                        style:
-                            GoogleFonts.inter(color: kTextSecond, fontSize: 13)),
-                ],
-              ),
-            ),
+            ],
           ],
         ),
         actions: [
@@ -386,7 +429,7 @@ class _BidCardState extends ConsumerState<_BidCard> {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
             ),
-            child: Text('bid.go_to_bookings'.tr()),
+            child: Text('bid.continue_to_payment'.tr()),
           ),
         ],
       ),
@@ -506,6 +549,8 @@ class _BidCardState extends ConsumerState<_BidCard> {
                     _RecommendedBadge(isFixed: isFixed),
                   ],
                 ]),
+                const SizedBox(height: 3),
+                _AvailabilityBadge(busy: b.driverBusy),
                 const SizedBox(height: 2),
                 Row(children: [
                   if (b.driverRating != null) ...[
@@ -625,21 +670,34 @@ class _BidCardState extends ConsumerState<_BidCard> {
                     if (b.truckType != null) b.truckType!,
                     if (b.plateNumber != null) b.plateNumber!,
                     if (b.vehicleCapacity != null)
-                      '${b.vehicleCapacity!.toStringAsFixed(0)} t',
+                      WeightFormat.display(b.vehicleCapacity!),
                   ].join('  ·  '),
                   style: GoogleFonts.inter(fontSize: 12, color: kTextSecond),
                 ),
               ),
               if (b.distanceKm != null) ...[
                 const SizedBox(width: 8),
-                Row(children: [
-                  const Icon(Icons.near_me_outlined,
-                      size: 13, color: kTextSecond),
-                  const SizedBox(width: 2),
-                  Text('${b.distanceKm!.toStringAsFixed(0)} km',
-                      style:
-                          GoogleFonts.inter(fontSize: 11, color: kTextSecond)),
-                ]),
+                GestureDetector(
+                  onTap: (b.driverLat != null && b.driverLng != null)
+                      ? _showLocationMap
+                      : null,
+                  child: Row(children: [
+                    const Icon(Icons.near_me_outlined,
+                        size: 13, color: kTextSecond),
+                    const SizedBox(width: 2),
+                    Text('${b.distanceKm!.toStringAsFixed(0)} km',
+                        style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: kTextSecond,
+                            decoration: (b.driverLat != null && b.driverLng != null)
+                                ? TextDecoration.underline
+                                : null)),
+                    if (b.driverLat != null && b.driverLng != null) ...[
+                      const SizedBox(width: 3),
+                      const Icon(Icons.map_outlined, size: 12, color: kTextSecond),
+                    ],
+                  ]),
+                ),
               ],
             ]),
           ),
@@ -1081,6 +1139,38 @@ class _RecommendedBadge extends StatelessWidget {
                 fontSize: 10,
                 color: kGreen,
                 fontWeight: FontWeight.w700)),
+      ]),
+    );
+  }
+}
+
+/// "Free now" vs "On another trip" — the driver's vehicle currently has
+/// an ongoing trip elsewhere. Lets the shipper factor that into their pick
+/// alongside price, rating, and distance; a busy driver can still be
+/// selected — they'll just start this job once their current one is
+/// delivered.
+class _AvailabilityBadge extends StatelessWidget {
+  final bool busy;
+  const _AvailabilityBadge({required this.busy});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = busy ? kAmber : kGreen;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(busy ? Icons.local_shipping_outlined : Icons.check_circle_outline,
+            size: 10, color: color),
+        const SizedBox(width: 3),
+        Text(
+          busy ? 'On another trip' : 'Free now',
+          style: GoogleFonts.inter(
+              fontSize: 10, color: color, fontWeight: FontWeight.w600),
+        ),
       ]),
     );
   }

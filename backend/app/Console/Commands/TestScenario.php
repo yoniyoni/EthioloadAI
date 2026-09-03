@@ -63,6 +63,7 @@ class TestScenario extends Command
         $this->stepPreVerifyDrivers();   // drivers must be verified before bidding
         $vehicleIds = $this->step2_RegisterVehicles();
         $this->step3_FleetSetup($vehicleIds);
+        $this->stepVerifyFleetVehicle($vehicleIds);
         $this->step4_SeedPastRatings();
         [$cargoAId, $cargoBId] = $this->step5_PostCargo();
         [$bidFleetId, $bidD1Id, $bidD2Id] = $this->step6_PlaceBids($cargoAId, $vehicleIds);
@@ -291,12 +292,18 @@ class TestScenario extends Command
 
     private function stepPreVerifyDrivers(): void
     {
-        $this->step('Pre-verify driver1 + driver2 (DB direct — Phase 2B does this via documents)', function () {
-            $ids = array_filter([$this->uid['driver1'] ?? null, $this->uid['driver2'] ?? null]);
+        $this->step('Pre-verify driver1 + driver2 + driver3 (DB direct — Phase 2B re-does driver3 via real documents)', function () {
+            // driver3 (Biruk) also needs verification_status=true before Phase 1
+            // can dispatch a booking to him (FleetController::dispatchBooking
+            // gates on driver verification, not just vehicle verification).
+            // Phase 2B still exercises the real document upload+approve flow
+            // for Biruk afterward — redundant for the verification flag itself,
+            // but still real coverage of the document endpoints.
+            $ids = array_filter([$this->uid['driver1'] ?? null, $this->uid['driver2'] ?? null, $this->uid['driver3'] ?? null]);
             if (empty($ids)) return [false, 'No driver UIDs available'];
             $updated = DB::table('users')->whereIn('id', $ids)->update(['verification_status' => true]);
             return $updated === count($ids)
-                ? [true, "verification_status=true for driver1 + driver2"]
+                ? [true, "verification_status=true for driver1 + driver2 + driver3"]
                 : [false, "Expected " . count($ids) . " updated, got {$updated}"];
         });
     }
@@ -411,6 +418,64 @@ class TestScenario extends Command
 
             if (!in_array($s, [200, 201])) return [false, $this->fmt($s, $r)];
             return [true, "driver_id={$this->uid['driver3']} linked to fleet"];
+        });
+    }
+
+    // ─── Step 3B — Verify fleet's dispatched vehicle (GL-001-A) via real documents ──
+    // FleetController::dispatchBooking() gates on vehicle.verification_status, so
+    // GL-001-A must be verified before Phase 1's dispatch step (and Phase 3's) can
+    // succeed. Uploads + admin-approves the 4 required vehicle document types via
+    // the real API, mirroring phase2_Documents()'s pattern for driver documents.
+
+    private function stepVerifyFleetVehicle(array $vehicleIds): void
+    {
+        $vehicleId = $vehicleIds['fleet_gl001'] ?? null;
+        $docTypes  = ['registration_certificate', 'insurance_certificate', 'roadworthiness_certificate', 'ownership_document'];
+        $docIds    = [];
+
+        foreach ($docTypes as $type) {
+            $this->step("Fleet uploads GL-001-A document: {$type}", function () use ($type, $vehicleId, &$docIds) {
+                if (!$vehicleId) return [false, 'No vehicle_id for fleet_gl001'];
+
+                $tmpPath = sys_get_temp_dir() . "/vehicle_{$type}_test.pdf";
+                file_put_contents($tmpPath, "%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n");
+
+                $resp = Http::withToken($this->tok['fleet'])
+                    ->withHeaders(['Accept' => 'application/json'])
+                    ->attach('file', fopen($tmpPath, 'r'), "{$type}.pdf")
+                    ->post(self::BASE . "/vehicles/{$vehicleId}/documents", [
+                        'document_type' => $type,
+                    ]);
+
+                @unlink($tmpPath);
+
+                if (!in_array($resp->status(), [200, 201])) {
+                    return [false, "HTTP {$resp->status()}: " . $resp->body()];
+                }
+
+                $id = $resp->json('data.id') ?? $resp->json('id');
+                $docIds[$type] = $id;
+                return [true, "doc_id={$id}, type={$type}"];
+            });
+        }
+
+        foreach ($docTypes as $type) {
+            $this->step("Admin (Selamawit) approves GL-001-A document: {$type}", function () use ($type, &$docIds) {
+                $docId = $docIds[$type] ?? null;
+                if (!$docId) return [false, "No doc_id for type {$type}"];
+                [$s, $r] = $this->patch("/admin/vehicle-documents/{$docId}/review", [
+                    'action' => 'approve',
+                ], $this->tok['admin']);
+                if ($s !== 200) return [false, $this->fmt($s, $r)];
+                return [true, "doc_id={$docId} approved"];
+            });
+        }
+
+        $this->step("GL-001-A's verification_status → true after all 4 documents approved", function () use ($vehicleId) {
+            if (!$vehicleId) return [false, 'No vehicle_id for fleet_gl001'];
+            $verified = DB::table('vehicles')->where('id', $vehicleId)->value('verification_status');
+            if (!$verified) return [false, 'verification_status is still false'];
+            return [true, 'verification_status=true ✓ — vehicle is now verified'];
         });
     }
 
@@ -1262,7 +1327,7 @@ class TestScenario extends Command
             ['Tesfaye Kebede',    '+251911000201', 'Driver',      'Flutter — bids list shows Cargo A bid as auto-rejected'],
             ['Alemu Mekonnen',    '+251911000202', 'Driver',      'Flutter — bids list shows Cargo A bid as auto-rejected'],
             ['Yohannes Girma',    '+251911000301', 'Fleet Owner', 'Flutter — fleet dashboard: 2 vehicles, Biruk as driver, completed booking'],
-            ['Biruk Tadesse',     '+251911000302', 'Driver',      'Flutter — my bookings: completed trip; profile verification status = verified (after Phase 2B)'],
+            ['Biruk Tadesse',     '+251911000302', 'Driver',      'Flutter — my bookings: completed trip; profile verification status = verified'],
         ];
         $this->table(['Name', 'Phone', 'Role', 'What to verify in UI'], $rows);
         $this->line('');

@@ -4,14 +4,16 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:easy_localization/easy_localization.dart';
+import '../../config/map_config.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/repositories.dart';
 import '../../services/location_service.dart';
 
-const _green  = Color(0xFF0F3D1A);
-const _amber  = Color(0xFFF59E0B);
-const _bg     = Color(0xFFF8FBF8);
-const _border = Color(0xFFE5E7EB);
+const _green    = Color(0xFF0F3D1A);
+const _amber    = Color(0xFFF59E0B);
+const _bg       = Color(0xFFF8FBF8);
+const _border   = Color(0xFFE5E7EB);
+const _busyGrey = Color(0xFF9CA3AF);
 
 /// Full-screen map showing available trucks near a location.
 /// - Map with truck pins + radius circle
@@ -164,8 +166,7 @@ class _NearbyTrucksScreenState extends ConsumerState<NearbyTrucksScreen> {
                   ),
                   children: [
                     TileLayer(
-                      urlTemplate:
-                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      urlTemplate: kMapTileUrlTemplate,
                       userAgentPackageName: 'com.ethioloadai.app',
                     ),
 
@@ -203,11 +204,12 @@ class _NearbyTrucksScreenState extends ConsumerState<NearbyTrucksScreen> {
                           height: isSelected ? 56 : 44,
                           child:  GestureDetector(
                             onTap: () => setState(() => _selected = t),
-                            child: _TruckPin(selected: isSelected),
+                            child: _TruckPin(selected: isSelected, busy: t.isBusy),
                           ),
                         );
                       }).toList(),
                     ),
+                    kMapAttribution,
                   ],
                 ),
 
@@ -286,7 +288,7 @@ class _FilterBar extends StatelessWidget {
           underline: const SizedBox.shrink(),
           isDense:   true,
           style:     const TextStyle(fontSize: 12, color: Colors.black87),
-          items:     [50.0, 100.0, 200.0, 500.0].map((r) => DropdownMenuItem(
+          items:     [25.0, 50.0, 100.0, 200.0].map((r) => DropdownMenuItem(
             value: r,
             child: Text('${r.toInt()} km'),
           )).toList(),
@@ -357,6 +359,8 @@ class _TruckList extends StatelessWidget {
                       style: const TextStyle(
                           fontSize: 11, color: Colors.grey),
                     ),
+                    const SizedBox(height: 3),
+                    _AvailabilityPill(busy: t.isBusy),
                   ],
                 ),
               ),
@@ -408,9 +412,16 @@ class _TruckPopup extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(truck.driverName,
-                    style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w700)),
+                Row(children: [
+                  Flexible(
+                    child: Text(truck.driverName,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w700)),
+                  ),
+                  const SizedBox(width: 6),
+                  _AvailabilityPill(busy: truck.isBusy),
+                ]),
                 Text(
                   '${truck.vehicleType} · ${truck.vehiclePlate} · '
                   '${truck.distanceKm.toStringAsFixed(1)} km',
@@ -447,12 +458,13 @@ class _TruckPopup extends StatelessWidget {
 
 class _TruckPin extends StatelessWidget {
   final bool selected;
-  const _TruckPin({required this.selected});
+  final bool busy;
+  const _TruckPin({required this.selected, this.busy = false});
 
   @override
   Widget build(BuildContext context) => Container(
         decoration: BoxDecoration(
-          color:       selected ? _amber : _green,
+          color:       selected ? _amber : (busy ? _busyGrey : _green),
           shape:       BoxShape.circle,
           border:      Border.all(color: Colors.white, width: 2),
           boxShadow: [
@@ -469,6 +481,36 @@ class _TruckPin extends StatelessWidget {
           size:  selected ? 26 : 20,
         ),
       );
+}
+
+/// "Free now" vs "On another trip" — same visual language as the bid
+/// list's availability pill (shipper_bid_selection_screen.dart), reused
+/// here so the two shipper-facing "is this driver busy" signals look
+/// consistent.
+class _AvailabilityPill extends StatelessWidget {
+  final bool busy;
+  const _AvailabilityPill({required this.busy});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = busy ? _amber : _green;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(busy ? Icons.local_shipping_outlined : Icons.check_circle_outline,
+            size: 10, color: color),
+        const SizedBox(width: 3),
+        Text(
+          busy ? 'On another trip' : 'Free now',
+          style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w600),
+        ),
+      ]),
+    );
+  }
 }
 
 class _CenterPin extends StatelessWidget {

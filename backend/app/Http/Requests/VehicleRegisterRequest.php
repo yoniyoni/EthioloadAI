@@ -26,7 +26,7 @@ class VehicleRegisterRequest extends FormRequest
             'truck_type'          => 'required|string|max:255',
             'vehicle_category'    => 'nullable|in:heavy,light',
             'plate_number'        => 'required|string|max:255|unique:vehicles,plate_number',
-            'capacity'            => 'required|numeric',
+            'capacity'            => 'required|numeric|min:0.01',
             'current_city'        => 'nullable|string|max:255',
             'latitude'            => 'nullable|numeric|between:-90,90',
             'longitude'           => 'nullable|numeric|between:-180,180',

@@ -39,6 +39,7 @@ function statusColor(status: string) {
     pending: 'bg-gray-50 text-gray-700 border-gray-200',
     accepted: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     rejected: 'bg-red-50 text-red-700 border-red-200',
+    expired: 'bg-red-50 text-red-700 border-red-200',
   }
   return map[status] ?? 'bg-gray-50 text-gray-700 border-gray-200'
 }

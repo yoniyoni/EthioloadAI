@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import '../../config/map_config.dart';
 import '../../data/providers/data_providers.dart';
+import '../../utils/weight_format.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/repositories.dart';
 import '../shared/widgets/shared_widgets.dart';
@@ -66,8 +68,7 @@ class FreightDetailScreen extends ConsumerWidget {
                 const SizedBox(height: 6),
                 Text(e.toString(),
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(
-                        fontSize: 13, color: kTextMuted)),
+                    style: GoogleFonts.inter(fontSize: 13, color: kTextMuted)),
                 const SizedBox(height: 20),
                 ElevatedButton.icon(
                   icon: const Icon(Icons.refresh_rounded, size: 18),
@@ -106,6 +107,8 @@ class _DetailScaffold extends ConsumerWidget {
         return kGreen;
       case 'completed':
         return kSuccess;
+      case 'expired':
+        return kDanger;
       default:
         return kAmber;
     }
@@ -123,188 +126,218 @@ class _DetailScaffold extends ConsumerWidget {
       pickupLatLng = (cargo.pickupLat != null && cargo.pickupLng != null)
           ? LatLng(cargo.pickupLat!, cargo.pickupLng!)
           : cityCoordinates(cargo.pickupLocation);
-      destLatLng = (cargo.destinationLat != null && cargo.destinationLng != null)
-          ? LatLng(cargo.destinationLat!, cargo.destinationLng!)
-          : cityCoordinates(cargo.destination);
+      destLatLng =
+          (cargo.destinationLat != null && cargo.destinationLng != null)
+              ? LatLng(cargo.destinationLat!, cargo.destinationLng!)
+              : cityCoordinates(cargo.destination);
     }
 
-    return Scaffold(
-      backgroundColor: kBackground,
-      appBar: const EthioAppBar(title: 'Cargo Details'),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Route map ─────────────────────────────────────────────
-            if (isIntercity && pickupLatLng != null && destLatLng != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: CargoRouteMapWidget(
-                  pickupLat:      pickupLatLng.latitude,
-                  pickupLng:      pickupLatLng.longitude,
-                  destinationLat: destLatLng.latitude,
-                  destinationLng: destLatLng.longitude,
-                  pickupName:     cargo.pickupLocation,
-                  destinationName: cargo.destination,
-                  height: 240,
-                ),
-              )
-            else if (isIntercity)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: RouteUnavailablePlaceholder(height: 200),
-              )
-            else if (!isIntercity &&
-                cargo.pickupLat != null &&
-                cargo.pickupLng != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: _PickupPinMap(
-                  lat:    cargo.pickupLat!,
-                  lng:    cargo.pickupLng!,
-                  label:  cargo.pickupArea ?? cargo.city ?? 'Pickup',
-                  height: 160,
-                ),
-              ),
+    final isDriver = user?.isDriver == true;
 
-            // ── Header ────────────────────────────────────────────────
-            Container(
-              width: double.infinity,
-              color: kGreenTint,
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '${cargo.pickupLocation} → ${cargo.destination}',
-                          style: GoogleFonts.inter(
-                              fontSize: 17,
-                              fontWeight: FontWeight.bold,
-                              color: kTextPrimary),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: _statusColor.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          cargo.status.toUpperCase(),
-                          style: GoogleFonts.inter(
-                              fontWeight: FontWeight.bold,
-                              color: _statusColor,
-                              fontSize: 11),
-                        ),
-                      ),
-                    ],
+    // Intercepts the Android hardware/gesture back action too, not just the
+    // in-app Back button — otherwise a driver using system back would still
+    // fall through to the default pop() and hit the shipper's list screen
+    // nested underneath (see the Back button note below).
+    return PopScope(
+      canPop: !isDriver,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && isDriver) context.go('/driver');
+      },
+      child: Scaffold(
+        backgroundColor: kBackground,
+        appBar: const EthioAppBar(title: 'Cargo Details'),
+        body: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Route map ─────────────────────────────────────────────
+              if (isIntercity && pickupLatLng != null && destLatLng != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: CargoRouteMapWidget(
+                    pickupLat: pickupLatLng.latitude,
+                    pickupLng: pickupLatLng.longitude,
+                    destinationLat: destLatLng.latitude,
+                    destinationLng: destLatLng.longitude,
+                    pickupName: cargo.pickupLocation,
+                    destinationName: cargo.destination,
+                    height: 240,
                   ),
-                  const SizedBox(height: 14),
-                  Row(children: [
-                    Expanded(
-                      child: _InfoTile(
-                        label: 'Budget',
-                        value: cargo.budget != null
-                            ? 'ETB ${cargo.budget!.toStringAsFixed(0)}'
-                            : 'Negotiable',
+                )
+              else if (isIntercity)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: RouteUnavailablePlaceholder(height: 200),
+                )
+              else if (!isIntercity &&
+                  cargo.pickupLat != null &&
+                  cargo.pickupLng != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: _PickupPinMap(
+                    lat: cargo.pickupLat!,
+                    lng: cargo.pickupLng!,
+                    label: cargo.pickupArea ?? cargo.city ?? 'Pickup',
+                    height: 160,
+                  ),
+                ),
+
+              // ── Header ────────────────────────────────────────────────
+              Container(
+                width: double.infinity,
+                color: kGreenTint,
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${cargo.pickupLocation} → ${cargo.destination}',
+                            style: GoogleFonts.inter(
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                                color: kTextPrimary),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: _statusColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            cargo.status == 'expired'
+                                ? 'BIDDING CLOSED'
+                                : cargo.status.toUpperCase(),
+                            style: GoogleFonts.inter(
+                                fontWeight: FontWeight.bold,
+                                color: _statusColor,
+                                fontSize: 11),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Row(children: [
+                      Expanded(
+                        child: _InfoTile(
+                          label: 'Budget',
+                          value: cargo.budget != null
+                              ? 'ETB ${cargo.budget!.toStringAsFixed(0)}'
+                              : 'Negotiable',
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _InfoTile(
-                          label: 'Weight',
-                          value: '${cargo.weight} t'),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _InfoTile(
-                          label: 'Urgency',
-                          value: cargo.urgencyLevel),
-                    ),
-                  ]),
-                ],
-              ),
-            ),
-
-            // ── Details ────────────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Cargo Details',
-                      style: GoogleFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: kTextPrimary)),
-                  const SizedBox(height: 10),
-                  _DetailRow('Material', cargo.materialType),
-                  _DetailRow('Weight', '${cargo.weight} tons'),
-                  _DetailRow('Urgency', cargo.urgencyLevel),
-                  _DetailRow('Status', cargo.status),
-                  if (cargo.budget != null)
-                    _DetailRow('Budget',
-                        'ETB ${cargo.budget!.toStringAsFixed(2)}'),
-                  if (cargo.createdAt != null)
-                    _DetailRow('Posted',
-                        cargo.createdAt!.toLocal().toString().split(' ').first),
-
-                  const SizedBox(height: 20),
-                  Text('Locations',
-                      style: GoogleFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: kTextPrimary)),
-                  const SizedBox(height: 10),
-                  _LocationCard(
-                      icon: Icons.trip_origin_rounded,
-                      title: 'Pickup',
-                      address: cargo.pickupLocation,
-                      color: kAmber),
-                  const SizedBox(height: 10),
-                  _LocationCard(
-                      icon: Icons.location_on_rounded,
-                      title: 'Destination',
-                      address: cargo.destination,
-                      color: kGreen),
-
-                  // ── Role-based bid action ──────────────────────────
-                  if (cargo.status == 'pending') ...[
-                    const SizedBox(height: 24),
-                    if (user?.isDriver == true)
-                      _DriverBidAction(cargo: cargo)
-                    else if (user?.isShipper == true)
-                      _ShipperBidLink(cargo: cargo),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _InfoTile(
+                            label: 'Weight',
+                            value: WeightFormat.display(cargo.weight)),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _InfoTile(
+                            label: 'Urgency', value: cargo.urgencyLevel),
+                      ),
+                    ]),
                   ],
-
-                  const SizedBox(height: 32),
-                ],
+                ),
               ),
-            ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        child: OutlinedButton.icon(
-          icon: const Icon(Icons.arrow_back_rounded, size: 16),
-          label: Text('Back',
-              style: GoogleFonts.inter(
-                  fontSize: 14, fontWeight: FontWeight.w600)),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: kGreen,
-            side: const BorderSide(color: kBorder),
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
+
+              // ── Details ────────────────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Cargo Details',
+                        style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: kTextPrimary)),
+                    const SizedBox(height: 10),
+                    _DetailRow('Material', cargo.materialType),
+                    _DetailRow('Weight', WeightFormat.display(cargo.weight)),
+                    _DetailRow('Urgency', cargo.urgencyLevel),
+                    _DetailRow('Status', cargo.status),
+                    if (cargo.budget != null)
+                      _DetailRow(
+                          'Budget', 'ETB ${cargo.budget!.toStringAsFixed(2)}'),
+                    if (cargo.createdAt != null)
+                      _DetailRow(
+                          'Posted',
+                          cargo.createdAt!
+                              .toLocal()
+                              .toString()
+                              .split(' ')
+                              .first),
+
+                    const SizedBox(height: 20),
+                    Text('Locations',
+                        style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: kTextPrimary)),
+                    const SizedBox(height: 10),
+                    _LocationCard(
+                        icon: Icons.trip_origin_rounded,
+                        title: 'Pickup',
+                        address: cargo.pickupLocation,
+                        color: kAmber),
+                    const SizedBox(height: 10),
+                    _LocationCard(
+                        icon: Icons.location_on_rounded,
+                        title: 'Destination',
+                        address: cargo.destination,
+                        color: kGreen),
+
+                    // ── Role-based bid action ──────────────────────────
+                    if (cargo.status == 'pending') ...[
+                      const SizedBox(height: 24),
+                      if (user?.isDriver == true)
+                        _DriverBidAction(cargo: cargo)
+                      else if (user?.isShipper == true)
+                        _ShipperBidLink(cargo: cargo),
+                    ] else if (cargo.status == 'expired' &&
+                        user?.isShipper == true) ...[
+                      const SizedBox(height: 24),
+                      ExpiredCargoBanner(cargo: cargo),
+                    ],
+
+                    const SizedBox(height: 32),
+                  ],
+                ),
+              ),
+            ],
           ),
-          onPressed: () => context.pop(),
+        ),
+        bottomNavigationBar: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.arrow_back_rounded, size: 16),
+            label: Text('Back',
+                style: GoogleFonts.inter(
+                    fontSize: 14, fontWeight: FontWeight.w600)),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: kGreen,
+              side: const BorderSide(color: kBorder),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            // Drivers can reach this shared screen via '/freight/:id', which
+            // go_router nests under the shipper's own '/freight' list route —
+            // context.pop() would surface that shipper-only list screen to a
+            // driver. Send drivers to their own dashboard explicitly instead;
+            // shippers keep pop() since their own '/freight' list is correctly
+            // underneath them in the stack.
+            onPressed: () =>
+                user?.isDriver == true ? context.go('/driver') : context.pop(),
+          ),
         ),
       ),
     );
@@ -328,8 +361,9 @@ class _DriverBidAction extends ConsumerWidget {
     Bid? existingBid;
     if (myBids != null) {
       final matches = myBids.where(
-        (b) => b.cargoRequestId == cargo.id &&
-               (b.status == 'pending' || b.status == 'countered'),
+        (b) =>
+            b.cargoRequestId == cargo.id &&
+            (b.status == 'pending' || b.status == 'countered'),
       );
       existingBid = matches.isEmpty ? null : matches.first;
     }
@@ -436,7 +470,11 @@ class _FixedPriceDriverActionState
           ),
           backgroundColor: kGreen,
         ));
-        context.pop();
+        // See the '/freight/:id' nesting note on the Back button above —
+        // this screen is only reachable by drivers through that route, so
+        // pop() would surface the shipper's cargo list instead of returning
+        // to the driver's own dashboard.
+        context.go('/driver');
       }
     } catch (e) {
       if (mounted) {
@@ -465,7 +503,7 @@ class _FixedPriceDriverActionState
         Text(
           c.budget != null
               ? 'Accept this job at ETB ${c.budget!.toStringAsFixed(0)}. '
-                'The shipper will select a driver from all who accept.'
+                  'The shipper will select a driver from all who accept.'
               : 'Accept this job. The shipper will select a driver from all who accept.',
           style: GoogleFonts.inter(fontSize: 12, color: kTextMuted),
         ),
@@ -484,8 +522,8 @@ class _FixedPriceDriverActionState
               c.budget != null
                   ? 'Accept — ETB ${c.budget!.toStringAsFixed(0)}'
                   : 'Accept Fixed Price',
-              style: GoogleFonts.inter(
-                  fontSize: 14, fontWeight: FontWeight.w600),
+              style:
+                  GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: kGreen,
@@ -513,7 +551,9 @@ class _FixedPriceDriverActionState
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
             ),
-            onPressed: () => context.pop(),
+            // See the '/freight/:id' nesting note near the Back button —
+            // pop() here would surface the shipper's cargo list.
+            onPressed: () => context.go('/driver'),
           ),
         ),
       ],
@@ -551,8 +591,7 @@ class _ShipperBidLinkState extends ConsumerState<_ShipperBidLink> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('Keep it',
-                style: GoogleFonts.inter(color: kTextMuted)),
+            child: Text('Keep it', style: GoogleFonts.inter(color: kTextMuted)),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
@@ -701,7 +740,8 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
         await ref.read(bidRepositoryProvider).update(
               widget.existingBid!.id,
               amount: amount,
-              note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+              note:
+                  _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
             );
       } else {
         final vehicles = await ref.read(vehicleListProvider.future);
@@ -718,7 +758,8 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
               cargoId: widget.cargo.id,
               vehicleId: vehicles.first.id,
               amount: amount,
-              note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+              note:
+                  _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
             );
       }
       if (mounted) {
@@ -750,7 +791,8 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
       InputDecoration(
         hintText: hint,
         prefixText: prefixText,
-        prefixStyle: GoogleFonts.inter(color: kAmber, fontWeight: FontWeight.w600),
+        prefixStyle:
+            GoogleFonts.inter(color: kAmber, fontWeight: FontWeight.w600),
         hintStyle: GoogleFonts.inter(color: kTextMuted, fontSize: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
@@ -795,7 +837,7 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
                   color: kTextPrimary)),
           const SizedBox(height: 4),
           Text(
-            '${c.pickupLocation} → ${c.destination}  ·  ${c.weight.toStringAsFixed(0)} t  ·  ${c.materialType}',
+            '${c.pickupLocation} → ${c.destination}  ·  ${WeightFormat.display(c.weight)}  ·  ${c.materialType}',
             style: GoogleFonts.inter(fontSize: 13, color: kTextSecond),
           ),
           const SizedBox(height: 20),
@@ -807,8 +849,7 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
           const SizedBox(height: 6),
           TextField(
             controller: _amountCtrl,
-            keyboardType:
-                const TextInputType.numberWithOptions(decimal: true),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: _inputDeco(hint: 'e.g. 15,000', prefixText: 'ETB  '),
           ),
           const SizedBox(height: 12),
@@ -843,7 +884,8 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
                       height: 20,
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white))
-                  : Text(widget.existingBid != null ? 'Update Bid' : 'Submit Bid',
+                  : Text(
+                      widget.existingBid != null ? 'Update Bid' : 'Submit Bid',
                       style: GoogleFonts.inter(
                           fontSize: 15, fontWeight: FontWeight.w600)),
             ),
@@ -866,8 +908,7 @@ class _InfoTile extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: GoogleFonts.inter(fontSize: 11, color: kTextMuted)),
+        Text(label, style: GoogleFonts.inter(fontSize: 11, color: kTextMuted)),
         const SizedBox(height: 2),
         Text(value,
             style: GoogleFonts.inter(
@@ -998,8 +1039,7 @@ class _PickupPinMap extends StatelessWidget {
               ),
               children: [
                 TileLayer(
-                  urlTemplate:
-                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  urlTemplate: kMapTileUrlTemplate,
                   userAgentPackageName: 'com.ethioloadai.app',
                 ),
                 MarkerLayer(markers: [
@@ -1011,6 +1051,7 @@ class _PickupPinMap extends StatelessWidget {
                         color: Colors.blue, size: 40),
                   ),
                 ]),
+                kMapAttribution,
               ],
             ),
           ),
@@ -1019,9 +1060,7 @@ class _PickupPinMap extends StatelessWidget {
         Text(
           'Pickup: $label',
           style: GoogleFonts.inter(
-              fontSize: 12,
-              color: kTextMuted,
-              fontWeight: FontWeight.w500),
+              fontSize: 12, color: kTextMuted, fontWeight: FontWeight.w500),
         ),
       ],
     );
