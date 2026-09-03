@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Rating;
+use App\Models\Vehicle;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -12,6 +13,14 @@ class BidResource extends JsonResource
     {
         $driver  = $this->driver;
         $vehicle = $this->vehicle;
+
+        // Is this bid's vehicle currently mid-trip? Lets the shipper factor
+        // "free now" vs "wraps up their current job first" into their pick —
+        // see BidService::assertVehicleFree / TripService::startTrip for the
+        // matching backend rule (one active trip + one queued booking), and
+        // Vehicle::busyVehicleIds for the shared "is busy" definition (also
+        // used by the nearby-trucks endpoint).
+        $driverBusy = $vehicle && Vehicle::busyVehicleIds([$vehicle->id])->isNotEmpty();
 
         // Completed trips = completed bookings where this user was the driver
         $tripCount = $driver
@@ -43,9 +52,8 @@ class BidResource extends JsonResource
             'counter_note'     => $this->counter_note,
             'counter_by'       => $this->counter_by,
             'counter_at'       => $this->counter_at,
-            // Driver info
+            // Driver info — phone deliberately omitted, see BookingResource.
             'driver_name'       => $driver?->full_name,
-            'driver_phone'      => $driver?->phone,
             'driver_rating'     => $avgRating ? round((float) $avgRating, 1) : null,
             'driver_trip_count' => $tripCount,
             // Vehicle info
@@ -53,9 +61,14 @@ class BidResource extends JsonResource
             'vehicle_category' => $vehicle?->vehicle_category,
             'plate_number'     => $vehicle?->plate_number,
             'vehicle_capacity' => $vehicle?->capacity,
-            // Shipper contact (shown to driver when bid is accepted)
+            // Vehicle's current live position (for the shipper's pre-trip
+            // "where is this driver" map) — a live snapshot at query time,
+            // not the position at bid placement.
+            'driver_lat'       => $vehicle?->latitude !== null ? (float) $vehicle->latitude : null,
+            'driver_lng'       => $vehicle?->longitude !== null ? (float) $vehicle->longitude : null,
+            'driver_busy'      => $driverBusy,
+            // Shipper name (phone deliberately omitted, see BookingResource)
             'shipper_name'      => $cargo?->user?->full_name,
-            'shipper_phone'     => $cargo?->user?->phone,
             // Cargo summary (used on driver's "my bids" list)
             'cargo_service_type' => $cargo?->service_type ?? 'intercity',
             'cargo_pickup'       => $cargo?->pickup_location,

@@ -21,9 +21,12 @@ class BidRejectedNotification extends Notification
     {
         $cargo = $this->bid->cargoRequest;
 
-        $message = $this->reason === 'cargo_taken'
-            ? 'Another driver was selected for this cargo. Your bid was not accepted.'
-            : 'Your bid was rejected by the shipper.';
+        $message = match ($this->reason) {
+            'cargo_taken'      => 'Another driver was selected for this cargo. Your bid was not accepted.',
+            'cargo_cancelled'  => 'The shipper cancelled this cargo request.',
+            'deadline_passed'  => 'The bid deadline passed before the shipper accepted an offer. This cargo is no longer open for bidding.',
+            default            => 'Your bid was rejected by the shipper.',
+        };
 
         return [
             'bid_id'    => $this->bid->id,

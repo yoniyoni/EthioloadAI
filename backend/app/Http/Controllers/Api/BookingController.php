@@ -159,6 +159,37 @@ class BookingController extends Controller
     }
 
     /**
+     * PATCH /bookings/{booking}/confirm-arrival
+     * Shipper-only: confirms the cargo has arrived, which is what actually
+     * releases the shipper's already-collected payment to the driver
+     * (BookingService::confirmArrival -> PaymentService::releaseToDriver).
+     * Deliberately narrower than cancel()/update() — this moves real money,
+     * so only the shipper who owns the cargo may call it, not admin/driver/
+     * fleet owner.
+     */
+    public function confirmArrival(Booking $booking)
+    {
+        $user = auth()->user();
+        $isShipper = $booking->cargoRequest && $booking->cargoRequest->user_id === $user->id;
+
+        if (!$isShipper) {
+            return response()->json(['message' => 'Only the shipper can confirm arrival for this booking.'], 403);
+        }
+
+        if ($booking->booking_status !== 'delivered') {
+            return response()->json(['message' => 'This booking is not yet marked as delivered.'], 422);
+        }
+
+        $booking = $this->bookingService->confirmArrival($booking);
+
+        return response()->json([
+            'message' => 'Delivery confirmed.',
+            'data'    => new BookingResource($booking),
+            'payout_status' => $booking->payment?->payout_status,
+        ]);
+    }
+
+    /**
      * Remove the specified resource from storage.
      */
     public function destroy(string $id)

@@ -6,6 +6,8 @@ import '../../data/providers/data_providers.dart';
 import '../../features/landing/landing_screen.dart';
 import '../../features/auth/login_screen.dart';
 import '../../features/auth/register_screen.dart';
+import '../../features/auth/forgot_password_screen.dart';
+import '../../features/auth/reset_password_screen.dart';
 import '../../features/splash/splash_screen.dart';
 import '../../features/shipper/shipper_home_screen.dart';
 import '../../features/shipper/freight_list_screen.dart';
@@ -19,7 +21,10 @@ import '../../features/driver/active_trip_screen.dart';
 // Fleet owner
 import '../../features/fleet/fleet_dashboard_screen.dart';
 import '../../features/fleet/fleet_dispatch_screen.dart';
+import '../../features/fleet/fleet_driver_detail_screen.dart';
+import '../../features/fleet/fleet_live_map_screen.dart';
 import '../../features/driver/driver_documents_screen.dart';
+import '../../features/driver/vehicle_documents_screen.dart';
 import '../../features/driver/navigation_screen.dart';
 import '../../features/bookings/my_bookings_screen.dart';
 import '../../features/profile/profile_screen.dart';
@@ -75,7 +80,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final role = notifier.role;
       final path = state.matchedLocation;
 
-      const publicRoutes = ['/splash', '/landing', '/login', '/register'];
+      const publicRoutes = ['/splash', '/landing', '/login', '/register', '/forgot-password', '/reset-password'];
       final isPublic = publicRoutes.contains(path);
 
       // Unauthenticated on a protected page → landing
@@ -108,6 +113,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/landing', builder: (_, __) => const LandingScreen()),
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
+      GoRoute(path: '/forgot-password', builder: (_, __) => const ForgotPasswordScreen()),
+      GoRoute(
+        path: '/reset-password',
+        builder: (_, state) => ResetPasswordScreen(identifier: state.extra as String?),
+      ),
 
       // ── Shipper ────────────────────────────────────────────────────
       GoRoute(
@@ -214,6 +224,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const FleetDriversScreen(),
       ),
       GoRoute(
+        path: '/fleet/drivers/:driverId',
+        builder: (_, state) {
+          final id = int.parse(state.pathParameters['driverId']!);
+          return FleetDriverDetailScreen(driverId: id);
+        },
+      ),
+      GoRoute(
         path: '/fleet/add-driver',
         builder: (_, __) => const FleetDriversScreen(),
       ),
@@ -232,8 +249,31 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             _wrap(const FleetDispatchScreen(), role: 'fleet_owner'),
       ),
       GoRoute(
+        path: '/fleet/live-map',
+        builder: (_, __) => const FleetLiveMapScreen(),
+      ),
+      GoRoute(
+        path: '/fleet/trip-tracking/:tripId',
+        builder: (_, state) {
+          final id = int.tryParse(state.pathParameters['tripId'] ?? '');
+          if (id == null) {
+            return const Scaffold(body: Center(child: Text('Invalid trip')));
+          }
+          final serviceType = state.uri.queryParameters['serviceType'];
+          return TrackingScreen(tripId: id, serviceType: serviceType);
+        },
+      ),
+      GoRoute(
         path: '/driver-documents',
         builder: (_, __) => const DriverDocumentsScreen(),
+      ),
+      GoRoute(
+        path: '/vehicle-documents/:vehicleId',
+        builder: (_, state) {
+          final id = int.parse(state.pathParameters['vehicleId']!);
+          final plate = state.uri.queryParameters['plate'];
+          return VehicleDocumentsScreen(vehicleId: id, plateNumber: plate);
+        },
       ),
 
       // ── Shared (role determines which nav bar is shown) ────────────

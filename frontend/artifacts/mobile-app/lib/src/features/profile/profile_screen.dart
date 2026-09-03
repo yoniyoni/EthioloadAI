@@ -5,6 +5,9 @@ import 'package:easy_localization/easy_localization.dart';
 import '../../data/providers/data_providers.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/repositories.dart';
+import '../../data/api/api_client.dart';
+import '../shared/widgets/server_url_dialog.dart';
+import '../payments/driver_payout_details_screen.dart';
 
 /// ProfileScreen — user profile and settings.
 class ProfileScreen extends ConsumerWidget {
@@ -134,6 +137,35 @@ class ProfileScreen extends ConsumerWidget {
                       value: 'Update',
                       onTap: () => _showCityPicker(context, ref),
                     ),
+                  if (user?.role == 'driver')
+                    _SettingTile(
+                      icon: Icons.account_balance_outlined,
+                      label: 'Payout Bank Account',
+                      value: user?.hasPayoutDetails == true ? 'Set' : 'Not set',
+                      onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => const DriverPayoutDetailsScreen(),
+                      )),
+                    ),
+                ],
+              ),
+            ),
+
+            // ── Developer ──────────────────────────────────────────────
+            // Lets a local/test server's address be updated without
+            // rebuilding the app — see ServerConfig in api_client.dart.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _SectionTitle('Developer'),
+                  const SizedBox(height: 12),
+                  _SettingTile(
+                    icon: Icons.dns_outlined,
+                    label: 'Server URL',
+                    value: kBaseUrl,
+                    onTap: () => _showServerUrlDialog(context),
+                  ),
                 ],
               ),
             ),
@@ -264,6 +296,13 @@ class ProfileScreen extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+
+  void _showServerUrlDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => const ServerUrlDialog(),
     );
   }
 
@@ -631,3 +670,4 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
     );
   }
 }
+

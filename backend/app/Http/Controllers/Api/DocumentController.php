@@ -62,14 +62,63 @@ class DocumentController extends Controller
     }
 
     /**
+     * GET /fleet/drivers/{driverId}/documents
+     * Fleet owner lists one of their drivers' documents.
+     */
+    public function fleetIndex(string $driverId)
+    {
+        $owner = auth()->user();
+        $driver = User::where('id', $driverId)->where('fleet_owner_id', $owner->id)->firstOrFail();
+        $docs = DriverDocument::where('user_id', $driver->id)->get();
+        return DocumentResource::collection($docs);
+    }
+
+    /**
+     * POST /fleet/drivers/{driverId}/documents
+     * Fleet owner uploads a document on behalf of one of their drivers.
+     */
+    public function fleetUpload(\App\Http\Requests\FleetDriverDocumentUploadRequest $request, string $driverId)
+    {
+        $type = $request->document_type;
+
+        $existing = DriverDocument::where('user_id', $driverId)->where('document_type', $type)->first();
+        if ($existing) {
+            Storage::disk('private')->delete($existing->file_path);
+        }
+
+        $file = $request->file('file');
+        $path = $file->store("driver-documents/{$driverId}", 'private');
+        $origName = $file->getClientOriginalName();
+
+        $doc = DriverDocument::updateOrCreate(
+            ['user_id' => $driverId, 'document_type' => $type],
+            [
+                'file_path' => $path,
+                'original_name' => $origName,
+                'status' => 'pending',
+                'rejection_reason' => null,
+                'reviewed_by' => null,
+                'reviewed_at' => null,
+            ]
+        );
+
+        return (new DocumentResource($doc))->response()->setStatusCode(201);
+    }
+
+    /**
      * GET /driver/documents/{document}/file
-     * Serves the actual file — driver sees own docs, admin sees all.
+     * Serves the actual file — driver sees own docs, admin sees all, fleet owner sees their drivers' docs.
      */
     public function download(DriverDocument $document)
     {
         $user = auth()->user();
+        $document->loadMissing('user');
 
-        if (!$user->is_admin && $document->user_id !== $user->id) {
+        $isOwnFleetDriver = $user->role === 'fleet_owner'
+            && $document->user
+            && $document->user->fleet_owner_id === $user->id;
+
+        if (!$user->is_admin && $document->user_id !== $user->id && !$isOwnFleetDriver) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 

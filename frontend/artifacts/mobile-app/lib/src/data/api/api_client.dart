@@ -1,15 +1,105 @@
+import 'dart:async';
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logger/logger.dart';
 
+// Dio's own connect/receive/send timeouts (set below on BaseOptions) don't
+// reliably fire on every device against a server that accepts a TCP
+// connection but never sends any response — observed in the field: a hung
+// splash-screen auth check and a login request that both sat well past
+// their configured 30s receiveTimeout. _TimeoutHttpClientAdapter enforces
+// an independent, guaranteed backstop (Dart's own event-loop timer, not
+// the HTTP client's internal bookkeeping) at the single point every
+// request — however it's issued, dio.get() or ApiClient's wrappers —
+// actually goes out, so no individual call site needs to opt in.
+const Duration _kRequestTimeout = Duration(seconds: 20);
+
+class _TimeoutHttpClientAdapter implements HttpClientAdapter {
+  final HttpClientAdapter _inner;
+  _TimeoutHttpClientAdapter(this._inner);
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) {
+    return _inner.fetch(options, requestStream, cancelFuture).timeout(
+      _kRequestTimeout,
+      onTimeout: () => throw DioException(
+        requestOptions: options,
+        type: DioExceptionType.receiveTimeout,
+        message:
+            'Request timed out after ${_kRequestTimeout.inSeconds}s — no response from server.',
+      ),
+    );
+  }
+
+  @override
+  void close({bool force = false}) => _inner.close(force: force);
+}
+
 // ── Base URL selection ─────────────────────────────────────────────────────
-// Override at build time with: --dart-define=API_BASE_URL=http://your-server/api
-// Falls back to the Herd local server when no override is provided.
+// Precedence: runtime override (set in-app, Profile → Server URL) > build-time
+// --dart-define=API_BASE_URL=http://your-server/api > default Herd local
+// server. The runtime override exists so a locally-hosted dev/test server's
+// address (e.g. a LAN IP that changes with DHCP) can be updated from inside
+// the already-installed app instead of requiring a full rebuild every time —
+// this was previously the single most common cause of "the app stopped
+// working" during device testing against a local backend.
 const String _kApiBaseUrlOverride = String.fromEnvironment('API_BASE_URL');
 
+class ServerConfig {
+  static const _storageKey = 'server_base_url_override';
+  static String? _runtimeOverride;
+
+  static String? get runtimeOverride => _runtimeOverride;
+
+  /// Call once at app startup, before runApp(), so kBaseUrl already
+  /// reflects the saved override by the time anything makes its first
+  /// request. Times out and falls through to defaults on failure — a
+  /// hung read here must never block app startup.
+  static Future<void> load(FlutterSecureStorage storage) async {
+    try {
+      final saved = await storage
+          .read(key: _storageKey)
+          .timeout(const Duration(seconds: 3), onTimeout: () => null);
+      if (saved != null && saved.isNotEmpty) _runtimeOverride = saved;
+    } catch (_) {
+      // Keep defaults.
+    }
+  }
+
+  /// Persists [url] (or clears the override if null/empty) and applies it
+  /// immediately to this process — callers still need to tell the user to
+  /// restart the app, since the already-constructed Dio instance's
+  /// baseUrl was fixed at creation time and won't pick this up mid-session.
+  static Future<void> save(FlutterSecureStorage storage, String? url) async {
+    final trimmed = url?.trim();
+    _runtimeOverride = (trimmed == null || trimmed.isEmpty) ? null : trimmed;
+    try {
+      if (_runtimeOverride == null) {
+        await storage
+            .delete(key: _storageKey)
+            .timeout(const Duration(seconds: 5), onTimeout: () {});
+      } else {
+        await storage
+            .write(key: _storageKey, value: _runtimeOverride)
+            .timeout(const Duration(seconds: 5), onTimeout: () {});
+      }
+    } catch (_) {
+      // Runtime override above is already applied for this session even
+      // if persisting it failed — worst case it doesn't survive a restart.
+    }
+  }
+}
+
 String get kBaseUrl {
+  final runtime = ServerConfig.runtimeOverride;
+  if (runtime != null && runtime.isNotEmpty) return runtime;
   if (_kApiBaseUrlOverride.isNotEmpty) return _kApiBaseUrlOverride;
   if (kIsWeb) return 'http://backend.test/api';
   return 'http://backend.test/api';
@@ -27,7 +117,17 @@ class ApiInterceptor extends Interceptor {
     RequestInterceptorHandler handler,
   ) async {
     logger.i('→ ${options.method} ${options.path}');
-    final token = await secureStorage.read(key: 'auth_token');
+    // This runs before every single request, including the network-level
+    // timeout backstop on the adapter (_TimeoutHttpClientAdapter) — a hung
+    // secure-storage read here would block every API call indefinitely
+    // with that backstop never even coming into play. flutter_secure_storage
+    // reads are known to hang on some real Android devices/OS versions
+    // (Keystore-backed, unlike the emulator's software implementation).
+    // Timing out and proceeding without a token is the safe failure mode:
+    // the request just goes out unauthenticated instead of never going out.
+    final token = await secureStorage
+        .read(key: 'auth_token')
+        .timeout(const Duration(seconds: 5), onTimeout: () => null);
     if (token != null) {
       options.headers['Authorization'] = 'Bearer $token';
     }
@@ -66,6 +166,8 @@ final dioProvider = Provider<Dio>((ref) {
     ),
   );
 
+  dio.httpClientAdapter = _TimeoutHttpClientAdapter(dio.httpClientAdapter);
+
   const secureStorage = FlutterSecureStorage();
   final logger = Logger();
   dio.interceptors.add(ApiInterceptor(logger: logger, secureStorage: secureStorage));
@@ -90,13 +192,24 @@ class ApiClient {
   });
 
   // ── Token helpers ─────────────────────────────────────────────────────────
+  // Same rationale as the interceptor's read above: flutter_secure_storage
+  // calls are known to hang on some real Android devices. Timing out and
+  // proceeding is always the safer failure mode here than blocking forever
+  // — worst case a save/delete silently doesn't persist (the in-memory
+  // AuthState is set from the API response regardless, not by re-reading
+  // storage, so login/logout still work within the session either way).
 
-  Future<void> saveToken(String token) =>
-      secureStorage.write(key: 'auth_token', value: token);
+  Future<void> saveToken(String token) => secureStorage
+      .write(key: 'auth_token', value: token)
+      .timeout(const Duration(seconds: 5), onTimeout: () {});
 
-  Future<String?> getToken() => secureStorage.read(key: 'auth_token');
+  Future<String?> getToken() => secureStorage
+      .read(key: 'auth_token')
+      .timeout(const Duration(seconds: 5), onTimeout: () => null);
 
-  Future<void> deleteToken() => secureStorage.delete(key: 'auth_token');
+  Future<void> deleteToken() => secureStorage
+      .delete(key: 'auth_token')
+      .timeout(const Duration(seconds: 5), onTimeout: () {});
 
   // ── HTTP helpers ──────────────────────────────────────────────────────────
 

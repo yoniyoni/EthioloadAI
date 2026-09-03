@@ -10,6 +10,7 @@ use App\Jobs\GenerateBackhaulRecommendations;
 use App\Models\Booking;
 use App\Models\Trip;
 use App\Models\Vehicle;
+use App\Services\CityCoordinates;
 use App\Services\TripService;
 use Illuminate\Support\Facades\Log;
 
@@ -66,7 +67,11 @@ class TripController extends Controller
             return response()->json(['message' => 'Trip already exists for this booking'], 400);
         }
 
-        $trip = $this->tripService->startTrip($booking);
+        try {
+            $trip = $this->tripService->startTrip($booking);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
 
         // Generate backhaul recommendations asynchronously (non-blocking)
         GenerateBackhaulRecommendations::dispatch($trip);
@@ -111,6 +116,25 @@ class TripController extends Controller
         ]);
     }
 
+    public function confirmPickup(string $id)
+    {
+        $trip = Trip::findOrFail($id);
+
+        $user = auth()->user();
+        if (!$user->is_admin && $trip->booking->driver_id !== $user->id) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        $trip = $this->tripService->confirmPickup($trip);
+
+        return response()->json([
+            'data' => array_merge($trip->toArray(), [
+                'booking_estimated_price' => $trip->booking?->estimated_price,
+                'booking_commission_fee'  => $trip->booking?->commission_fee,
+            ]),
+        ]);
+    }
+
     public function updateLocation(TripLocationUpdateRequest $request, string $id)
     {
         $trip = Trip::findOrFail($id);
@@ -132,7 +156,8 @@ class TripController extends Controller
         $user = auth()->user();
         $canView = $user->is_admin
             || $trip->booking->driver_id === $user->id
-            || ($trip->booking->cargoRequest && $trip->booking->cargoRequest->user_id === $user->id);
+            || ($trip->booking->cargoRequest && $trip->booking->cargoRequest->user_id === $user->id)
+            || ($trip->booking->driver && $trip->booking->driver->fleet_owner_id === $user->id);
 
         if (!$canView) {
             return response()->json(['message' => 'Forbidden'], 403);
@@ -148,12 +173,13 @@ class TripController extends Controller
      */
     public function getLocation(string $id)
     {
-        $trip = Trip::with(['booking.cargoRequest', 'booking.vehicle'])->findOrFail($id);
+        $trip = Trip::with(['booking.cargoRequest', 'booking.vehicle', 'booking.driver'])->findOrFail($id);
 
         $user = auth()->user();
         $canView = $user->is_admin
             || $trip->booking->driver_id === $user->id
-            || ($trip->booking->cargoRequest && $trip->booking->cargoRequest->user_id === $user->id);
+            || ($trip->booking->cargoRequest && $trip->booking->cargoRequest->user_id === $user->id)
+            || ($trip->booking->driver && $trip->booking->driver->fleet_owner_id === $user->id);
 
         if (!$canView) {
             return response()->json(['message' => 'Forbidden'], 403);
@@ -175,7 +201,9 @@ class TripController extends Controller
         $cargo           = $trip->booking->cargoRequest;
         $destinationName = $trip->destination ?? $cargo?->destination;
 
-        [$destLat, $destLng] = $this->resolveCityCoords($destinationName);
+        [$destLat, $destLng] = $cargo?->destination_lat && $cargo?->destination_lng
+            ? [(float) $cargo->destination_lat, (float) $cargo->destination_lng]
+            : $this->resolveCityCoords($destinationName);
         [$pickLat, $pickLng] = $cargo?->pickup_lat && $cargo?->pickup_lng
             ? [(float) $cargo->pickup_lat, (float) $cargo->pickup_lng]
             : $this->resolveCityCoords($cargo?->pickup_location ?? $cargo?->city);
@@ -192,14 +220,15 @@ class TripController extends Controller
             'destination_lng'      => $destLng,
             'pickup_lat'           => $pickLat,
             'pickup_lng'           => $pickLng,
+            'picked_up_at'         => $trip->picked_up_at?->toISOString(),
         ]);
     }
 
-    /** Look up city-centre coordinates from the VehicleController city table. */
+    /** Look up city-centre coordinates from the canonical CityCoordinates table. */
     private function resolveCityCoords(?string $cityName): array
     {
         if (!$cityName) return [null, null];
-        foreach (VehicleController::CITY_COORDS as $city => [$clat, $clng]) {
+        foreach (CityCoordinates::COORDS as $city => [$clat, $clng]) {
             if (stripos($cityName, $city) !== false || stripos($city, $cityName) !== false) {
                 return [(float) $clat, (float) $clng];
             }

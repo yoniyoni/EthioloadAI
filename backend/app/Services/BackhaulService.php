@@ -4,71 +4,20 @@ namespace App\Services;
 
 use App\Models\BackhaulRecommendation;
 use App\Models\CargoRequest;
+use App\Models\PlatformSetting;
 use App\Models\Trip;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
 class BackhaulService
 {
-    // Ethiopian corridor cities: each entry lists accepted name variants and coordinates.
-    private static array $CITIES = [
-        ['names' => ['addis ababa', 'addis abeba', 'addis'], 'lat' => 9.03,  'lng' => 38.74],
-        ['names' => ['mekele', 'mekelle'],                    'lat' => 13.49, 'lng' => 39.47],
-        ['names' => ['gondar', 'gonder'],                   'lat' => 12.60, 'lng' => 37.47],
-        ['names' => ['bahir dar', 'bahar dar', 'bahirdar'], 'lat' => 11.59, 'lng' => 37.39],
-        ['names' => ['dire dawa', 'diredawa'],              'lat' => 9.59,  'lng' => 41.86],
-        ['names' => ['hawassa', 'awasa'],                   'lat' => 7.06,  'lng' => 38.47],
-        ['names' => ['jimma', 'jima'],                      'lat' => 7.67,  'lng' => 36.83],
-        // North / Tigray corridor
-        ['names' => ['metema'],                             'lat' => 12.85, 'lng' => 36.20],
-        ['names' => ['humera', 'humer'],                    'lat' => 14.30, 'lng' => 36.61],
-        ['names' => ['shire endaselassie', 'shire indasilase', 'shire'], 'lat' => 14.10, 'lng' => 38.28],
-        ['names' => ['adigrat'],                            'lat' => 14.27, 'lng' => 39.46],
-        ['names' => ['axum', 'aksum'],                      'lat' => 14.13, 'lng' => 38.72],
-        ['names' => ['adwa'],                               'lat' => 14.17, 'lng' => 38.89],
-        // Amhara / Lake Tana corridor
-        ['names' => ['addis zemen'],                        'lat' => 12.13, 'lng' => 37.79],
-        ['names' => ['maksegnit'],                          'lat' => 12.51, 'lng' => 37.52],
-        ['names' => ['woreta'],                             'lat' => 11.91, 'lng' => 37.70],
-        ['names' => ['debre tabor', 'debretabor'],          'lat' => 11.85, 'lng' => 38.01],
-        ['names' => ['motta'],                              'lat' => 11.07, 'lng' => 37.87],
-        ['names' => ['injibara'],                           'lat' => 10.93, 'lng' => 36.94],
-        ['names' => ['debre markos', 'debremarkos'],        'lat' => 10.33, 'lng' => 37.72],
-        // North-East corridor
-        ['names' => ['dessie', 'desse'],                    'lat' => 11.13, 'lng' => 39.63],
-        ['names' => ['woldia', 'woldiya'],                  'lat' => 11.82, 'lng' => 39.60],
-        ['names' => ['debre birhan', 'debrebirhan'],        'lat' => 9.68,  'lng' => 39.53],
-        // Central / Addis surroundings
-        ['names' => ['adama / nazret', 'adama', 'nazret'],  'lat' => 8.54,  'lng' => 39.27],
-        ['names' => ['bishoftu', 'debre zeyt', 'debre zeit', 'debrezeit'], 'lat' => 8.75, 'lng' => 38.98],
-        ['names' => ['holeta'],                             'lat' => 9.05,  'lng' => 38.51],
-        ['names' => ['sebeta'],                             'lat' => 8.91,  'lng' => 38.62],
-        // East / Harari
-        ['names' => ['harar', 'harer'],                     'lat' => 9.31,  'lng' => 42.12],
-        ['names' => ['jijiga', 'jigjiga'],                  'lat' => 9.35,  'lng' => 42.79],
-        ['names' => ['kebri dahar', 'kebridahar'],          'lat' => 6.73,  'lng' => 44.27],
-        // South / SNNP
-        ['names' => ['shashemene', 'shashamane'],           'lat' => 7.20,  'lng' => 38.60],
-        ['names' => ['dilla'],                              'lat' => 6.41,  'lng' => 38.31],
-        ['names' => ['wolaita sodo', 'wolayta sodo', 'sodo / wolaita', 'sodo'], 'lat' => 6.85, 'lng' => 37.75],
-        ['names' => ['arba minch', 'arbaminch'],            'lat' => 6.04,  'lng' => 37.55],
-        ['names' => ['moyale'],                             'lat' => 3.53,  'lng' => 39.05],
-        // West
-        ['names' => ['nekemte', 'naqamte'],                 'lat' => 9.09,  'lng' => 36.55],
-        ['names' => ['assosa', 'asosa'],                    'lat' => 10.07, 'lng' => 34.53],
-        ['names' => ['gambela', 'gambella'],                'lat' => 8.25,  'lng' => 34.59],
-        // South-East / Bale
-        ['names' => ['bale robe', 'robe', 'balerobe'],      'lat' => 7.12,  'lng' => 40.00],
-        ['names' => ['goba'],                               'lat' => 7.00,  'lng' => 39.98],
-    ];
-
     /**
      * Generate and persist backhaul recommendations for a trip.
      * Returns the top-5 BackhaulRecommendation records with cargoRequest loaded.
      */
     public function recommendForTrip(Trip $trip): Collection
     {
-        $trip->loadMissing('booking.cargoRequest');
+        $trip->loadMissing('booking.cargoRequest', 'booking.vehicle');
         $booking = $trip->booking;
 
         if (!$booking) {
@@ -77,34 +26,106 @@ class BackhaulService
 
         $driverId       = $booking->driver_id;
         $currentCargoId = $booking->cargo_id;
-        $destCoords     = $this->resolveCity($trip->destination);
+        $tripCargo      = $booking->cargoRequest;
+        $vehicle        = $booking->vehicle;
 
-        if (!$destCoords) {
-            Log::warning("BackhaulService: no city match for destination '{$trip->destination}' (trip #{$trip->id})");
+        if (!$vehicle) {
+            Log::warning("BackhaulService: no vehicle on booking #{$booking->id} for trip #{$trip->id} — cannot determine cargo eligibility");
             return collect();
         }
 
-        [$destLat, $destLng] = $destCoords;
+        // Prefer the trip's own cargo's stored destination coordinates (added
+        // in an earlier PostGIS phase) over a fresh city-name text lookup.
+        // Only fall back to the resolveCity() text match when the cargo (or
+        // its coordinates) is missing.
+        if ($tripCargo && $tripCargo->destination_lat !== null && $tripCargo->destination_lng !== null) {
+            $destLat = (float) $tripCargo->destination_lat;
+            $destLng = (float) $tripCargo->destination_lng;
+        } else {
+            $destCoords = $this->resolveCity($trip->destination);
 
-        // Fetch all pending cargo except the one already being hauled
-        $candidates = CargoRequest::where('status', 'pending')
+            if (!$destCoords) {
+                Log::warning("BackhaulService: no city match for destination '{$trip->destination}' (trip #{$trip->id})");
+                return collect();
+            }
+
+            [$destLat, $destLng] = $destCoords;
+        }
+
+        // Radius (km) is admin-editable via PlatformSetting; read fresh on
+        // every call so changes apply without a deploy. Both the ST_DWithin
+        // filter below and the scoring formula's normalization divisor use
+        // this same value, so the two always move together.
+        $radiusKm     = (float) PlatformSetting::get('spatial.backhaul_radius_km', 200);
+        $radiusMeters = $radiusKm * 1000;
+
+        // Vehicle eligibility: only recommend cargo this vehicle can actually
+        // carry. Mirrors the same service_type <-> vehicle_category matching
+        // (and the same "heavy also accepts a null service_type" allowance)
+        // already used throughout CargoRequestController, plus a capacity
+        // cap — neither existed here before.
+        $requiredServiceType = $vehicle->vehicle_category === 'light' ? 'intracity' : 'intercity';
+
+        // Base filters shared by both tiers: pending cargo, excluding the
+        // cargo already being hauled on this trip, and now vehicle-eligible.
+        $baseQuery = CargoRequest::where('status', 'pending')
             ->when($currentCargoId, fn ($q) => $q->where('id', '!=', $currentCargoId))
-            ->get();
+            ->where('weight', '<=', $vehicle->capacity)
+            ->where(function ($q) use ($requiredServiceType) {
+                $q->where('service_type', $requiredServiceType);
+                if ($requiredServiceType === 'intercity') {
+                    $q->orWhereNull('service_type');
+                }
+            });
 
-        $scored = $candidates->map(function (CargoRequest $cargo) use ($destLat, $destLng) {
-            $pickupCoords = $this->resolveCity($cargo->pickup_location);
-            if (!$pickupCoords) {
-                return null;
-            }
+        // Tier A: cargo rows with a real stored pickup_point. PostGIS-
+        // accelerated: ST_DWithin does the radius filter using the
+        // cargo_requests_pickup_point_gist index; the KNN `<->` operator
+        // does the index-accelerated distance sort.
+        $tierA = (clone $baseQuery)
+            ->whereNotNull('pickup_point')
+            ->whereRaw(
+                'ST_DWithin(pickup_point, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography, ?)',
+                [$destLng, $destLat, $radiusMeters]
+            )
+            ->orderByRaw(
+                'pickup_point <-> ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography',
+                [$destLng, $destLat]
+            )
+            ->orderBy('cargo_requests.created_at', 'desc')
+            ->selectRaw(
+                'cargo_requests.*, ST_Distance(pickup_point, ST_SetSRID(ST_MakePoint(?, ?), 4326)::geography) / 1000 AS distance_km_pg',
+                [$destLng, $destLat]
+            )
+            ->get()
+            ->each(function (CargoRequest $c) {
+                $c->distance_km = round((float) $c->distance_km_pg, 1);
+            });
 
-            [$pickLat, $pickLng] = $pickupCoords;
-            $distanceKm = $this->haversine($destLat, $destLng, $pickLat, $pickLng);
+        // Tier B: cargo rows without a stored pickup_point. Same
+        // resolveCity()-based Haversine fallback as before, just isolated to
+        // this smaller subset, filtered to the same radius in PHP (there's
+        // no SQL geography column to filter on for these rows).
+        $tierB = (clone $baseQuery)
+            ->whereNull('pickup_point')
+            ->get()
+            ->map(function (CargoRequest $c) use ($destLat, $destLng) {
+                $pickupCoords = $this->resolveCity($c->pickup_location);
+                if (!$pickupCoords) {
+                    $c->distance_km = null;
+                    return $c;
+                }
+                [$pickLat, $pickLng] = $pickupCoords;
+                $c->distance_km = round(DistanceService::haversineKm($destLat, $destLng, $pickLat, $pickLng), 1);
+                return $c;
+            })
+            ->filter(fn (CargoRequest $c) => $c->distance_km !== null && $c->distance_km <= $radiusKm);
 
-            if ($distanceKm > 100) {
-                return null; // outside 100 km radius
-            }
+        $candidates = $tierA->concat($tierB);
 
-            $distanceScore = max(0.0, 1.0 - ($distanceKm / 100.0));
+        $scored = $candidates->map(function (CargoRequest $cargo) use ($radiusKm) {
+            $distanceKm    = $cargo->distance_km;
+            $distanceScore = max(0.0, 1.0 - ($distanceKm / $radiusKm));
 
             $urgencyScore = match (strtolower($cargo->urgency_level ?? 'normal')) {
                 'urgent', 'express' => 1.0,
@@ -120,7 +141,7 @@ class BackhaulService
             return [
                 'cargo'       => $cargo,
                 'score'       => round($finalScore, 3),
-                'distance_km' => round($distanceKm, 1),
+                'distance_km' => $distanceKm,
             ];
         })->filter()->sortByDesc('score')->take(5);
 
@@ -164,42 +185,11 @@ class BackhaulService
 
     /**
      * Returns [lat, lng] for a city string, or null if unknown.
-     * Matches greedily — longest matching name wins to avoid "Addis" matching
-     * inside "Addis Zemen" prematurely. List is ordered longest-first where
-     * ambiguous.
+     * Delegates to CityCoordinates' canonical alias/substring resolution
+     * (single source of truth, replacing this class's former $CITIES table).
      */
     private function resolveCity(string $location): ?array
     {
-        $s = strtolower(trim($location));
-        // Prefer longer matches (e.g. "Addis Zemen" before "Addis")
-        $best      = null;
-        $bestLen   = 0;
-
-        foreach (self::$CITIES as $city) {
-            foreach ($city['names'] as $name) {
-                if (str_contains($s, $name) && strlen($name) > $bestLen) {
-                    $best    = [$city['lat'], $city['lng']];
-                    $bestLen = strlen($name);
-                }
-            }
-        }
-
-        return $best;
-    }
-
-    /**
-     * Haversine great-circle distance in kilometres.
-     */
-    private function haversine(float $lat1, float $lng1, float $lat2, float $lng2): float
-    {
-        $R   = 6371.0;
-        $φ1  = deg2rad($lat1);
-        $φ2  = deg2rad($lat2);
-        $Δφ  = deg2rad($lat2 - $lat1);
-        $Δλ  = deg2rad($lng2 - $lng1);
-
-        $a = sin($Δφ / 2) ** 2 + cos($φ1) * cos($φ2) * sin($Δλ / 2) ** 2;
-
-        return 2 * $R * atan2(sqrt($a), sqrt(1 - $a));
+        return CityCoordinates::resolveFromText($location);
     }
 }

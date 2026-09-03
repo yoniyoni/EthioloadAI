@@ -12,6 +12,7 @@ class Trip extends Model
         'destination',
         'route_data',
         'trip_status',
+        'picked_up_at',
         'trip_type',
         'total_stops',
         'completed_stops',
@@ -22,6 +23,7 @@ class Trip extends Model
     protected $casts = [
         'route_data'      => 'array',
         'start_time'      => 'datetime',
+        'picked_up_at'    => 'datetime',
         'end_time'        => 'datetime',
         'total_stops'     => 'integer',
         'completed_stops' => 'integer',
@@ -51,5 +53,10 @@ class Trip extends Model
     public function isMultiStop(): bool
     {
         return $this->trip_type === 'multi_stop';
+    }
+
+    public function isPickedUp(): bool
+    {
+        return $this->picked_up_at !== null;
     }
 }

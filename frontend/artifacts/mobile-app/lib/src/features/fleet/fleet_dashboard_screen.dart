@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../data/api/api_client.dart';
+import '../../data/repositories/repositories.dart';
+import '../../utils/weight_format.dart';
 
 // ── Fleet dashboard provider ──────────────────────────────────────────────
 
@@ -127,6 +129,15 @@ class _DashboardBody extends ConsumerWidget {
               onTap: () => context.go('/fleet/dispatch'),
             ),
           ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _ActionBtn(
+              icon: Icons.map_outlined,
+              label: 'Live Map',
+              color: Colors.teal,
+              onTap: () => context.push('/fleet/live-map'),
+            ),
+          ),
         ]),
 
         const SizedBox(height: 24),
@@ -209,6 +220,38 @@ class _FleetDriversScreenState extends ConsumerState<FleetDriversScreen> {
     super.dispose();
   }
 
+  Future<void> _openCreateDriverSheet() async {
+    final created = await showModalBottomSheet<(String, String)>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => const _CreateDriverSheet(),
+    );
+
+    if (created == null || !mounted) return;
+    final (fullName, phone) = created;
+    ref.invalidate(fleetDashboardProvider);
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Driver account created'),
+        content: Text(
+          'A driver account was created for $fullName.\n\n'
+          'Their initial password is their phone number '
+          '($phone). Please tell them to change it after '
+          'their first login.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _addDriver() async {
     final id = int.tryParse(_driverIdCtrl.text.trim());
     if (id == null) {
@@ -249,6 +292,33 @@ class _FleetDriversScreenState extends ConsumerState<FleetDriversScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // Create a brand new driver account
+          const Text('Create New Driver',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 6),
+          const Text(
+            "Don't have a driver account yet? Create one directly — "
+            'they can log in right away.',
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _openCreateDriverSheet,
+              icon: const Icon(Icons.person_add_alt_1),
+              label: const Text('Create New Driver'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.blue,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+          const Divider(height: 1),
+          const SizedBox(height: 24),
+
           // Add driver by ID
           const Text('Link a Driver to Your Fleet',
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
@@ -303,10 +373,26 @@ class _FleetDriversScreenState extends ConsumerState<FleetDriversScreen> {
                 children: drivers
                     .map((d) => _DriverTile(
                           driver: d,
+                          onTap: () => context.push('/fleet/drivers/${d["id"]}'),
                           onRemove: () async {
-                            await ref.read(apiClientProvider).delete(
-                                '/fleet/drivers/${d["id"]}');
-                            ref.invalidate(fleetDashboardProvider);
+                            try {
+                              await ref.read(apiClientProvider).delete(
+                                  '/fleet/drivers/${d["id"]}');
+                              ref.invalidate(fleetDashboardProvider);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                  content: Text('${d["name"] ?? "Driver"} removed from fleet'),
+                                  backgroundColor: Colors.green,
+                                ));
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                  content: Text(e is ApiException ? e.message : 'Failed to remove driver: $e'),
+                                  backgroundColor: Colors.red,
+                                ));
+                              }
+                            }
                           },
                         ))
                     .toList(),
@@ -316,6 +402,147 @@ class _FleetDriversScreenState extends ConsumerState<FleetDriversScreen> {
             error: (e, _) => Text('Error: $e'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Create driver bottom sheet ────────────────────────────────────────────
+//
+// Pops with a (fullName, phone) record on success so the caller can show a
+// follow-up dialog without holding a BuildContext across this widget's own
+// async gap.
+
+class _CreateDriverSheet extends ConsumerStatefulWidget {
+  const _CreateDriverSheet();
+
+  @override
+  ConsumerState<_CreateDriverSheet> createState() =>
+      _CreateDriverSheetState();
+}
+
+class _CreateDriverSheetState extends ConsumerState<_CreateDriverSheet> {
+  final _nameCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  bool _submitting = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _phoneCtrl.dispose();
+    _emailCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final fullName = _nameCtrl.text.trim();
+    final phone = _phoneCtrl.text.trim();
+    final email = _emailCtrl.text.trim();
+    if (fullName.isEmpty || phone.isEmpty) {
+      setState(() => _error = 'Name and phone are required');
+      return;
+    }
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+    try {
+      await ref.read(fleetRepositoryProvider).createDriver(
+            fullName: fullName,
+            phone: phone,
+            email: email.isEmpty ? null : email,
+          );
+      if (mounted) Navigator.pop(context, (fullName, phone));
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _submitting = false;
+          _error = e.toString();
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Create New Driver',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            const Text(
+              'Creates a driver account directly and adds it to your fleet.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _nameCtrl,
+              decoration: InputDecoration(
+                labelText: 'Full Name',
+                prefixIcon: const Icon(Icons.person_outline),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _phoneCtrl,
+              keyboardType: TextInputType.phone,
+              decoration: InputDecoration(
+                labelText: 'Phone',
+                prefixIcon: const Icon(Icons.phone_outlined),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              decoration: InputDecoration(
+                labelText: 'Email (optional)',
+                prefixIcon: const Icon(Icons.email_outlined),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(_error!,
+                  style: const TextStyle(color: Colors.red, fontSize: 12)),
+            ],
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _submitting ? null : _submit,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: _submitting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Text('Create Driver'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -373,7 +600,8 @@ class _FleetAddVehicleScreenState
         data: {
           'truck_type': _truckType,
           'plate_number': _plateCtrl.text.trim().toUpperCase(),
-          'capacity': double.tryParse(_capacityCtrl.text.trim()) ?? 0,
+          'capacity': WeightFormat.kuntalToTons(
+              double.tryParse(_capacityCtrl.text.trim()) ?? 0),
           'current_city': _city,
           'vehicle_category': _vehicleCategory,
           if (driverId != null) 'driver_id': driverId,
@@ -473,8 +701,8 @@ class _FleetAddVehicleScreenState
             controller: _capacityCtrl,
             keyboardType: TextInputType.number,
             decoration: InputDecoration(
-              labelText: 'Capacity (tons)',
-              suffixText: 'tons',
+              labelText: 'Capacity (kuntal)',
+              suffixText: 'kuntal',
               prefixIcon: const Icon(Icons.scale_outlined),
               border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8)),
@@ -616,11 +844,26 @@ class FleetVehiclesScreen extends ConsumerWidget {
                         ?.cast<Map<String, dynamic>>() ??
                     [],
                 onAssign: (driverId) async {
-                  await ref.read(apiClientProvider).patch<Map<String, dynamic>>(
-                    '/fleet/vehicles/${vehicles[i]["id"]}/assign',
-                    data: {'driver_id': driverId},
-                  );
-                  ref.invalidate(fleetDashboardProvider);
+                  try {
+                    await ref.read(apiClientProvider).patch<Map<String, dynamic>>(
+                      '/fleet/vehicles/${vehicles[i]["id"]}/assign',
+                      data: {'driver_id': driverId},
+                    );
+                    ref.invalidate(fleetDashboardProvider);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('Vehicle assigned successfully'),
+                        backgroundColor: Colors.green,
+                      ));
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(e is ApiException ? e.message : 'Assignment failed: $e'),
+                        backgroundColor: Colors.red,
+                      ));
+                    }
+                  }
                 },
               ),
             );
@@ -633,7 +876,16 @@ class FleetVehiclesScreen extends ConsumerWidget {
   }
 }
 
-class _VehicleDetailTile extends StatelessWidget {
+/// Formats a timestamp as a short relative "time ago" string.
+String _relativeTime(DateTime dt) {
+  final diff = DateTime.now().difference(dt);
+  if (diff.inMinutes < 1) return 'just now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+  if (diff.inHours < 24) return '${diff.inHours}h ago';
+  return '${diff.inDays}d ago';
+}
+
+class _VehicleDetailTile extends ConsumerWidget {
   final Map<String, dynamic> vehicle;
   final List<Map<String, dynamic>> drivers;
   final Future<void> Function(int driverId) onAssign;
@@ -644,14 +896,97 @@ class _VehicleDetailTile extends StatelessWidget {
     required this.onAssign,
   });
 
+  Future<void> _openEditSheet(BuildContext context, WidgetRef ref) async {
+    final vehicleId = vehicle['id'] as int;
+    final plateCtrl =
+        TextEditingController(text: vehicle['plate_number']?.toString() ?? '');
+    final truckTypeCtrl =
+        TextEditingController(text: vehicle['truck_type']?.toString() ?? '');
+    final capacityTons = (vehicle['capacity'] as num?)?.toDouble();
+    final capacityCtrl = TextEditingController(
+        text: capacityTons == null
+            ? ''
+            : WeightFormat.tonsToKuntal(capacityTons)
+                .toStringAsFixed(WeightFormat.tonsToKuntal(capacityTons) % 1 == 0 ? 0 : 1));
+    final cityCtrl =
+        TextEditingController(text: vehicle['current_city']?.toString() ?? '');
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (sheetContext) => _EditVehicleSheet(
+        vehicleId: vehicleId,
+        plateCtrl: plateCtrl,
+        truckTypeCtrl: truckTypeCtrl,
+        capacityCtrl: capacityCtrl,
+        cityCtrl: cityCtrl,
+      ),
+    );
+  }
+
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+    final vehicleId = vehicle['id'] as int;
+    final plateNumber = vehicle['plate_number']?.toString() ?? 'this vehicle';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete this vehicle?'),
+        content: Text(
+            'Delete $plateNumber from your fleet? This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete',
+                style: TextStyle(color: Color(0xFFEF4444))),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await ref.read(vehicleRepositoryProvider).delete(vehicleId);
+      ref.invalidate(fleetDashboardProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('$plateNumber deleted'),
+          backgroundColor: Colors.green,
+        ));
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(e is ApiException ? e.message : 'Delete failed: $e'),
+          backgroundColor: Colors.red,
+        ));
+      }
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final isAvailable = vehicle['availability_status'] == 'available';
+    final isVerified = vehicle['verification_status'] == true;
     final assignedDriverId = vehicle['driver_id'];
     final assignedDriver = drivers.cast<Map?>().firstWhere(
           (d) => d?['id'] == assignedDriverId,
           orElse: () => null,
         );
+
+    final lat = vehicle['latitude'];
+    final lng = vehicle['longitude'];
+    final hasLocation = lat != null && lng != null;
+    final lastLocationAt = vehicle['last_location_at'] != null
+        ? DateTime.tryParse(vehicle['last_location_at'].toString())
+        : null;
+
+    final vehicleId = vehicle['id'];
+    final plateNumber = vehicle['plate_number']?.toString() ?? '';
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -678,27 +1013,56 @@ class _VehicleDetailTile extends StatelessWidget {
                   style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
               Text(
                 '${vehicle['truck_type'] ?? ''} · '
-                '${vehicle['capacity'] ?? 0} tons · '
+                '${WeightFormat.display((vehicle['capacity'] as num? ?? 0).toDouble())} · '
                 '${vehicle['current_city'] ?? ''}',
                 style: TextStyle(fontSize: 12, color: Colors.grey[600]),
               ),
+              if (hasLocation) ...[
+                const SizedBox(height: 2),
+                Text(
+                  lastLocationAt != null
+                      ? 'Last seen: ${_relativeTime(lastLocationAt)}'
+                      : 'Last seen: location available',
+                  style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                ),
+              ],
             ]),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: isAvailable ? Colors.green.withAlpha(20) : Colors.orange.withAlpha(20),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              isAvailable ? 'Available' : 'Busy',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: isAvailable ? Colors.green : Colors.orange,
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: isAvailable ? Colors.green.withAlpha(20) : Colors.orange.withAlpha(20),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                isAvailable ? 'Available' : 'Busy',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: isAvailable ? Colors.green : Colors.orange,
+                ),
               ),
             ),
-          ),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: isVerified
+                    ? Colors.green.withAlpha(20)
+                    : Colors.grey.withAlpha(30),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                isVerified ? 'Verified' : 'Unverified',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: isVerified ? Colors.green : Colors.grey[700],
+                ),
+              ),
+            ),
+          ]),
         ]),
         if (drivers.isNotEmpty) ...[
           const SizedBox(height: 10),
@@ -719,27 +1083,243 @@ class _VehicleDetailTile extends StatelessWidget {
               ),
             ),
             PopupMenuButton<int>(
-              tooltip: 'Assign driver',
+              tooltip: isVerified
+                  ? 'Assign driver'
+                  : 'Vehicle must be verified before it can be assigned',
+              enabled: isVerified,
               onSelected: (id) => onAssign(id),
               itemBuilder: (_) => drivers
                   .map((d) => PopupMenuItem<int>(
                         value: d['id'] as int,
-                        child: Text(d['name']?.toString() ?? '—'),
+                        enabled: d['verified'] == true,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(d['name']?.toString() ?? '—'),
+                            if (d['verified'] != true) ...[
+                              const SizedBox(width: 6),
+                              Text('(unverified)',
+                                  style: TextStyle(
+                                      fontSize: 11, color: Colors.grey[500])),
+                            ],
+                          ],
+                        ),
                       ))
                   .toList(),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.blue.shade200),
+                  border: Border.all(
+                      color: isVerified ? Colors.blue.shade200 : Colors.grey.shade300),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: const Text('Assign',
-                    style: TextStyle(fontSize: 12, color: Colors.blue)),
+                child: Text('Assign',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: isVerified ? Colors.blue : Colors.grey)),
               ),
             ),
           ]),
         ],
+        const SizedBox(height: 10),
+        const Divider(height: 1),
+        const SizedBox(height: 10),
+        Row(children: [
+          IconButton(
+            onPressed: vehicleId == null
+                ? null
+                : () => _openEditSheet(context, ref),
+            icon: const Icon(Icons.edit_outlined, size: 20),
+            color: const Color(0xFF0F3D1A),
+            tooltip: 'Edit vehicle',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          ),
+          IconButton(
+            onPressed: vehicleId == null
+                ? null
+                : () => _confirmDelete(context, ref),
+            icon: const Icon(Icons.delete_outline, size: 20),
+            color: const Color(0xFFEF4444),
+            tooltip: 'Delete vehicle',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          ),
+          const Spacer(),
+          OutlinedButton.icon(
+            onPressed: vehicleId == null
+                ? null
+                : () => context.go(
+                    '/vehicle-documents/$vehicleId?plate=${Uri.encodeComponent(plateNumber)}'),
+            icon: const Icon(Icons.folder_outlined, size: 16),
+            label: const Text('Documents'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF0F3D1A),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              textStyle: const TextStyle(fontSize: 12),
+            ),
+          ),
+        ]),
       ]),
+    );
+  }
+}
+
+// ── Edit vehicle bottom sheet ─────────────────────────────────────────────
+
+class _EditVehicleSheet extends ConsumerStatefulWidget {
+  final int vehicleId;
+  final TextEditingController plateCtrl;
+  final TextEditingController truckTypeCtrl;
+  final TextEditingController capacityCtrl;
+  final TextEditingController cityCtrl;
+
+  const _EditVehicleSheet({
+    required this.vehicleId,
+    required this.plateCtrl,
+    required this.truckTypeCtrl,
+    required this.capacityCtrl,
+    required this.cityCtrl,
+  });
+
+  @override
+  ConsumerState<_EditVehicleSheet> createState() => _EditVehicleSheetState();
+}
+
+class _EditVehicleSheetState extends ConsumerState<_EditVehicleSheet> {
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    widget.plateCtrl.dispose();
+    widget.truckTypeCtrl.dispose();
+    widget.capacityCtrl.dispose();
+    widget.cityCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      final plate = widget.plateCtrl.text.trim();
+      final truckType = widget.truckTypeCtrl.text.trim();
+      final capacity = widget.capacityCtrl.text.trim();
+      final city = widget.cityCtrl.text.trim();
+      await ref.read(vehicleRepositoryProvider).update(widget.vehicleId, {
+        if (truckType.isNotEmpty) 'truck_type': truckType,
+        if (plate.isNotEmpty) 'plate_number': plate.toUpperCase(),
+        if (capacity.isNotEmpty && double.tryParse(capacity) != null)
+          'capacity': WeightFormat.kuntalToTons(double.parse(capacity)),
+        if (city.isNotEmpty) 'current_city': city,
+      });
+      if (mounted) {
+        ref.invalidate(fleetDashboardProvider);
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Vehicle updated'),
+          backgroundColor: Colors.green,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = e is ApiException ? e.message : 'Failed to update vehicle: $e';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Edit Vehicle',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: widget.truckTypeCtrl,
+              decoration: InputDecoration(
+                labelText: 'Vehicle Type',
+                prefixIcon: const Icon(Icons.local_shipping_outlined),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: widget.plateCtrl,
+              textCapitalization: TextCapitalization.characters,
+              decoration: InputDecoration(
+                labelText: 'Plate Number',
+                prefixIcon: const Icon(Icons.confirmation_number_outlined),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: widget.capacityCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                labelText: 'Capacity (kuntal)',
+                suffixText: 'kuntal',
+                prefixIcon: const Icon(Icons.scale_outlined),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: widget.cityCtrl,
+              decoration: InputDecoration(
+                labelText: 'Current City',
+                prefixIcon: const Icon(Icons.location_city_outlined),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(_error!,
+                  style: const TextStyle(color: Colors.red, fontSize: 12)),
+            ],
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _saving ? null : _save,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: _saving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Text('Save Changes',
+                        style: TextStyle(color: Colors.white)),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -830,45 +1410,54 @@ class _ActionBtn extends StatelessWidget {
 class _DriverTile extends StatelessWidget {
   final Map<String, dynamic> driver;
   final VoidCallback? onRemove;
-  const _DriverTile({required this.driver, this.onRemove});
+  final VoidCallback? onTap;
+  const _DriverTile({required this.driver, this.onRemove, this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.grey[200]!),
       ),
-      child: Row(children: [
-        const CircleAvatar(
-          backgroundColor: Color(0xFF1976D2),
-          child: Icon(Icons.person, color: Colors.white, size: 18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(children: [
+            const CircleAvatar(
+              backgroundColor: Color(0xFF1976D2),
+              child: Icon(Icons.person, color: Colors.white, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(driver['name']?.toString() ?? '—',
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.bold)),
+                  Text(driver['phone']?.toString() ?? '—',
+                      style:
+                          TextStyle(fontSize: 12, color: Colors.grey[600])),
+                ],
+              ),
+            ),
+            if (onTap != null)
+              Icon(Icons.chevron_right, color: Colors.grey[400], size: 20),
+            if (onRemove != null)
+              IconButton(
+                icon: const Icon(Icons.remove_circle_outline,
+                    color: Colors.red, size: 20),
+                onPressed: onRemove,
+                tooltip: 'Remove from fleet',
+              ),
+          ]),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(driver['name']?.toString() ?? '—',
-                  style: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.bold)),
-              Text(driver['phone']?.toString() ?? '—',
-                  style:
-                      TextStyle(fontSize: 12, color: Colors.grey[600])),
-            ],
-          ),
-        ),
-        if (onRemove != null)
-          IconButton(
-            icon: const Icon(Icons.remove_circle_outline,
-                color: Colors.red, size: 20),
-            onPressed: onRemove,
-            tooltip: 'Remove from fleet',
-          ),
-      ]),
+      ),
     );
   }
 }

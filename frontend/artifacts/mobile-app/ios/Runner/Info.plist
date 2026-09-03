@@ -45,5 +45,20 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>EthioLoad uses your location to show shippers nearby available trucks and to share your position during an active trip.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>EthioLoad uses your location in the background during an active trip so the shipper can keep tracking your truck while your phone is locked.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>EthioLoad uses your location in the background during an active trip so the shipper can keep tracking your truck while your phone is locked.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>comgooglemaps</string>
+		<string>waze</string>
+	</array>
 </dict>
 </plist>

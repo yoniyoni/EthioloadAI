@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:dio/dio.dart' as dio_pkg;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api/api_client.dart';
@@ -17,7 +18,7 @@ class AuthRepository {
     required String role, // shipper | driver
   }) async {
     final response = await _api.post<AuthResponse>(
-      '/register',                          // ✓ POST /register
+      '/register', // ✓ POST /register
       data: {
         'full_name': fullName,
         'email': email,
@@ -36,7 +37,7 @@ class AuthRepository {
     required String password,
   }) async {
     final response = await _api.post<AuthResponse>(
-      '/login',                             // ✓ POST /login
+      '/login', // ✓ POST /login
       data: {'identifier': identifier, 'password': password},
       fromJson: (json) => AuthResponse.fromJson(json as Map<String, dynamic>),
     );
@@ -46,14 +47,14 @@ class AuthRepository {
 
   Future<void> logout() async {
     try {
-      await _api.post<void>('/logout');     // ✓ POST /logout (auth)
+      await _api.post<void>('/logout'); // ✓ POST /logout (auth)
     } catch (_) {
     } finally {
       await _api.deleteToken();
     }
   }
 
-  Future<User> me() async =>              // ✓ GET /me (auth)
+  Future<User> me() async => // ✓ GET /me (auth)
       _api.get<User>('/me',
           fromJson: (json) => User.fromJson(json as Map<String, dynamic>));
 
@@ -68,6 +69,58 @@ class AuthRepository {
       'current_password': currentPassword,
       'new_password': newPassword,
     });
+  }
+
+  // ✓ POST /forgot-password — always succeeds regardless of whether the
+  // identifier matches an account (server-side, deliberately — no
+  // enumeration). Throws ApiException only on network/validation failure.
+  Future<void> requestPasswordReset(String identifier) async {
+    await _api.post<void>('/forgot-password', data: {'identifier': identifier});
+  }
+
+  // ✓ POST /reset-password
+  Future<void> resetPassword({
+    required String identifier,
+    required String code,
+    required String newPassword,
+  }) async {
+    await _api.post<void>('/reset-password', data: {
+      'identifier': identifier,
+      'code': code,
+      'new_password': newPassword,
+      'new_password_confirmation': newPassword,
+    });
+  }
+
+  // ✓ PATCH /driver/payout-details — driver-only, where Chapa Transfers
+  // sends their share once a shipper confirms arrival.
+  Future<User> updatePayoutDetails({
+    required String bankCode,
+    required String accountNumber,
+    required String accountName,
+  }) async =>
+      _api.patch<User>(
+        '/driver/payout-details',
+        data: {
+          'payout_bank_code': bankCode,
+          'payout_account_number': accountNumber,
+          'payout_account_name': accountName,
+        },
+        fromJson: (json) => User.fromJson(json as Map<String, dynamic>),
+      );
+
+  // ✓ GET /chapa/banks
+  Future<List<Bank>> listBanks() async {
+    final response = await _api.dio.get('/chapa/banks');
+    if (response.statusCode == 200) {
+      final raw = response.data;
+      final list = (raw is Map && raw.containsKey('data'))
+          ? raw['data'] as List
+          : raw as List;
+      return list.map((e) => Bank.fromJson(e as Map<String, dynamic>)).toList();
+    }
+    throw ApiException(
+        message: 'Failed to load bank list', statusCode: response.statusCode);
   }
 }
 
@@ -99,10 +152,9 @@ class CargoRepository {
   }
 
   // ✓ GET /cargo-requests/{id}  (apiResource show)
-  Future<CargoRequest> get(int id) async =>
-      _api.get<CargoRequest>('/cargo-requests/$id',
-          fromJson: (json) =>
-              CargoRequest.fromJson(json as Map<String, dynamic>));
+  Future<CargoRequest> get(int id) async => _api.get<CargoRequest>(
+      '/cargo-requests/$id',
+      fromJson: (json) => CargoRequest.fromJson(json as Map<String, dynamic>));
 
   // ✓ POST /cargo/create  (dedicated alias)
   Future<CargoRequest> create({
@@ -127,12 +179,12 @@ class CargoRepository {
           'urgency_level': urgencyLevel,
           if (budget != null) 'budget': budget,
           'price_type': priceType,
-          if (bidDeadline != null) 'bid_deadline': bidDeadline.toIso8601String(),
+          if (bidDeadline != null)
+            'bid_deadline': bidDeadline.toIso8601String(),
           if (pickupLat != null && pickupLng != null) 'pickup_lat': pickupLat,
           if (pickupLat != null && pickupLng != null) 'pickup_lng': pickupLng,
         },
-        fromJson: (json) =>
-            CargoRequest.fromJson(json as Map<String, dynamic>),
+        fromJson: (json) => CargoRequest.fromJson(json as Map<String, dynamic>),
       );
 
   // ✓ PUT/PATCH /cargo-requests/{id}  (apiResource update)
@@ -140,8 +192,7 @@ class CargoRepository {
       _api.patch<CargoRequest>(
         '/cargo-requests/$id',
         data: {if (status != null) 'status': status},
-        fromJson: (json) =>
-            CargoRequest.fromJson(json as Map<String, dynamic>),
+        fromJson: (json) => CargoRequest.fromJson(json as Map<String, dynamic>),
       );
 
   // ✓ POST /cargo-requests/{cargoId}/book-direct — driver accepts fixed-price cargo
@@ -150,8 +201,7 @@ class CargoRepository {
         await _api.dio.post('/cargo-requests/$cargoId/book-direct');
     if (response.statusCode == 200 || response.statusCode == 201) {
       final raw = response.data;
-      final data =
-          (raw is Map && raw.containsKey('data')) ? raw['data'] : raw;
+      final data = (raw is Map && raw.containsKey('data')) ? raw['data'] : raw;
       return Booking.fromJson(data as Map<String, dynamic>);
     }
     throw ApiException(
@@ -168,18 +218,28 @@ class CargoRepository {
         await _api.dio.post('/cargo-requests/$cargoId/accept-price');
     if (response.statusCode == 200 || response.statusCode == 201) {
       final raw = response.data;
-      final data =
-          (raw is Map && raw.containsKey('data')) ? raw['data'] : raw;
+      final data = (raw is Map && raw.containsKey('data')) ? raw['data'] : raw;
       return Bid.fromJson(data as Map<String, dynamic>);
     }
     final msg = (response.data is Map)
-        ? (response.data['message'] as String? ?? 'Failed to register interest.')
+        ? (response.data['message'] as String? ??
+            'Failed to register interest.')
         : 'Failed to register interest.';
     throw ApiException(message: msg, statusCode: response.statusCode);
   }
 
   // ✓ DELETE /cargo-requests/{id}  (apiResource destroy)
   Future<void> delete(int id) => _api.delete('/cargo-requests/$id');
+
+  // POST /cargo-requests/{id}/repost — shipper reopens bidding on cargo
+  // whose deadline passed (status 'expired') with a new future bid_deadline.
+  // Cargo goes back to 'pending' on success.
+  Future<CargoRequest> repost(int id, DateTime bidDeadline) async =>
+      _api.post<CargoRequest>(
+        '/cargo-requests/$id/repost',
+        data: {'bid_deadline': bidDeadline.toIso8601String()},
+        fromJson: (json) => CargoRequest.fromJson(json as Map<String, dynamic>),
+      );
 
   // POST /ai/predict-price — AI price estimate for a cargo job
   Future<({int? min, int? max, int? distanceKm})> predictPrice({
@@ -200,21 +260,23 @@ class CargoRepository {
         'weight': weight,
         'material_type': materialType,
         'from': pickup,
-        'to':   destination,
+        'to': destination,
       };
       if (fromLat != null) body['from_lat'] = fromLat;
       if (fromLng != null) body['from_lng'] = fromLng;
-      if (toLat   != null) body['to_lat']   = toLat;
-      if (toLng   != null) body['to_lng']   = toLng;
+      if (toLat != null) body['to_lat'] = toLat;
+      if (toLng != null) body['to_lng'] = toLng;
 
       final response = await _api.dio.post('/ai/predict-price', data: body);
       if (response.statusCode == 200) {
         final raw = response.data;
         final d = (raw is Map && raw.containsKey('data')) ? raw['data'] : raw;
         return (
-          min: (d['price_min'] ?? d['min_price'] ?? d['min']) as int?,
-          max: (d['price_max'] ?? d['max_price'] ?? d['max']) as int?,
-          distanceKm: (d['distance_km'] ?? d['distanceKm']) as int?,
+          min:
+              ((d['price_min'] ?? d['min_price'] ?? d['min']) as num?)?.toInt(),
+          max:
+              ((d['price_max'] ?? d['max_price'] ?? d['max']) as num?)?.toInt(),
+          distanceKm: ((d['distance_km'] ?? d['distanceKm']) as num?)?.toInt(),
         );
       }
     } catch (_) {}
@@ -230,6 +292,7 @@ class CargoRepository {
     required DateTime preferredDate,
     String? vehicleTypeNeeded,
     String priceType = 'negotiable',
+    String urgencyLevel = 'normal',
     double? budget,
     DateTime? bidDeadline,
     double? pickupLat,
@@ -247,13 +310,14 @@ class CargoRepository {
           if (vehicleTypeNeeded != null && vehicleTypeNeeded.isNotEmpty)
             'vehicle_type_needed': vehicleTypeNeeded,
           'price_type': priceType,
+          'urgency_level': urgencyLevel,
           if (budget != null) 'budget': budget,
-          if (bidDeadline != null) 'bid_deadline': bidDeadline.toIso8601String(),
+          if (bidDeadline != null)
+            'bid_deadline': bidDeadline.toIso8601String(),
           if (pickupLat != null && pickupLng != null) 'pickup_lat': pickupLat,
           if (pickupLat != null && pickupLng != null) 'pickup_lng': pickupLng,
         },
-        fromJson: (json) =>
-            CargoRequest.fromJson(json as Map<String, dynamic>),
+        fromJson: (json) => CargoRequest.fromJson(json as Map<String, dynamic>),
       );
 
   // POST /geocode/nearest-city — reverse-geocode GPS coords to nearest city
@@ -276,17 +340,29 @@ class CargoRepository {
         message: 'Geocoding failed', statusCode: response.statusCode);
   }
 
-  // GET /cargo-requests with meta (location_unset flag for drivers)
-  Future<({bool locationUnset, List<CargoRequest> cargo})> listWithMeta() async {
-    final response = await _api.dio.get('/cargo-requests');
+  // GET /cargo-requests with meta (location_unset flag + current_city for
+  // drivers). radiusKm overrides the platform-default search radius — only
+  // takes effect for heavy/intercity drivers; light/intracity drivers are
+  // matched by exact city, not radius, so the backend ignores it and
+  // radiusKm comes back null (the UI uses that to hide the radius control).
+  Future<({bool locationUnset, String? currentCity, double? radiusKm, List<CargoRequest> cargo})>
+      listWithMeta({double? radiusKm}) async {
+    final response = await _api.dio.get('/cargo-requests',
+        queryParameters: radiusKm != null ? {'radius_km': radiusKm} : null);
     if (response.statusCode == 200) {
       final raw = response.data;
       final locationUnset = raw is Map && raw['location_unset'] == true;
+      final currentCity = raw is Map ? raw['current_city'] as String? : null;
+      final appliedRadiusKm = raw is Map && raw['radius_km'] != null
+          ? double.tryParse(raw['radius_km'].toString())
+          : null;
       final list = (raw is Map && raw.containsKey('data'))
           ? raw['data'] as List
           : raw as List;
       return (
         locationUnset: locationUnset,
+        currentCity: currentCity,
+        radiusKm: appliedRadiusKm,
         cargo: list
             .map((e) => CargoRequest.fromJson(e as Map<String, dynamic>))
             .toList(),
@@ -311,6 +387,34 @@ class CargoRepository {
       }
     } catch (_) {}
     return (city: null, cargo: <CargoRequest>[]);
+  }
+
+  // GET /nearby-drivers/by-location?lat=X&lng=Y&serviceType=intercity|intracity
+  Future<List<NearbyDriver>> nearbyDriversByLocation(
+    double latitude,
+    double longitude, {
+    String serviceType = 'intercity',
+  }) async {
+    final response = await _api.dio.get(
+      '/nearby-drivers/by-location',
+      queryParameters: {
+        'lat': latitude,
+        'lng': longitude,
+        'serviceType': serviceType,
+      },
+    );
+    if (response.statusCode == 200) {
+      final raw = response.data;
+      final list = (raw is Map && raw.containsKey('drivers'))
+          ? raw['drivers'] as List
+          : <NearbyDriver>[];
+      return list
+          .map((e) => NearbyDriver.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    throw ApiException(
+        message: 'Failed to load nearby drivers',
+        statusCode: response.statusCode);
   }
 
   // GET /cargo-requests/{id}/nearby-drivers
@@ -407,6 +511,17 @@ class VehicleRepository {
         message: 'Failed to load nearby vehicles',
         statusCode: response.statusCode);
   }
+
+  // ✓ PATCH /vehicles/{id}
+  Future<Vehicle> update(int id, Map<String, dynamic> data) =>
+      _api.patch<Vehicle>(
+        '/vehicles/$id',
+        data: data,
+        fromJson: (json) => Vehicle.fromJson(json as Map<String, dynamic>),
+      );
+
+  // ✓ DELETE /vehicles/{id}
+  Future<void> delete(int id) => _api.delete('/vehicles/$id');
 }
 
 final vehicleRepositoryProvider = Provider<VehicleRepository>(
@@ -436,9 +551,8 @@ class BookingRepository {
   }
 
   // ✓ GET /bookings/{id}  (apiResource show)
-  Future<Booking> get(int id) async =>
-      _api.get<Booking>('/bookings/$id',
-          fromJson: (json) => Booking.fromJson(json as Map<String, dynamic>));
+  Future<Booking> get(int id) async => _api.get<Booking>('/bookings/$id',
+      fromJson: (json) => Booking.fromJson(json as Map<String, dynamic>));
 
   // ✓ POST /booking/create  (dedicated alias)
   Future<Booking> create({
@@ -458,6 +572,15 @@ class BookingRepository {
         },
         fromJson: (json) => Booking.fromJson(json as Map<String, dynamic>),
       );
+
+  // ✓ PATCH /bookings/{id}/confirm-arrival — shipper-only. Releases the
+  // already-collected payment to the driver. ApiClient already unwraps the
+  // response's top-level 'data' key, so fromJson receives the booking
+  // object directly — same shape as get()/create() above.
+  Future<Booking> confirmArrival(int bookingId) async => _api.patch<Booking>(
+        '/bookings/$bookingId/confirm-arrival',
+        fromJson: (json) => Booking.fromJson(json as Map<String, dynamic>),
+      );
 }
 
 final bookingRepositoryProvider = Provider<BookingRepository>(
@@ -471,23 +594,27 @@ class TripRepository {
   TripRepository(this._api);
 
   // ✓ POST /trips
-  Future<Trip> start(int bookingId) async =>
-      _api.post<Trip>(
+  Future<Trip> start(int bookingId) async => _api.post<Trip>(
         '/trips',
         data: {'booking_id': bookingId},
         fromJson: (json) => Trip.fromJson(json as Map<String, dynamic>),
       );
 
   // ✓ GET /trips/{id}
-  Future<Trip> get(int tripId) async =>
-      _api.get<Trip>('/trips/$tripId',
-          fromJson: (json) => Trip.fromJson(json as Map<String, dynamic>));
+  Future<Trip> get(int tripId) async => _api.get<Trip>('/trips/$tripId',
+      fromJson: (json) => Trip.fromJson(json as Map<String, dynamic>));
 
   // ✓ PATCH /trips/{id}/status  — valid: ongoing | completed
-  Future<Trip> complete(int tripId) async =>
-      _api.patch<Trip>(
+  Future<Trip> complete(int tripId) async => _api.patch<Trip>(
         '/trips/$tripId/status',
         data: {'trip_status': 'completed'},
+        fromJson: (json) => Trip.fromJson(json as Map<String, dynamic>),
+      );
+
+  // ✓ PATCH /trips/{id}/confirm-pickup
+  Future<Trip> confirmPickup(int tripId) async => _api.patch<Trip>(
+        '/trips/$tripId/confirm-pickup',
+        data: <String, dynamic>{},
         fromJson: (json) => Trip.fromJson(json as Map<String, dynamic>),
       );
 
@@ -544,6 +671,33 @@ class TripRepository {
         message: 'Failed to add stop', statusCode: response.statusCode);
   }
 
+  // ✓ GET /trips/{trip}/consolidation-candidates?radius_km=
+  // Returns (candidates, remainingCapacityTons). Omit radiusKm to use the
+  // admin-configured platform default.
+  Future<(List<ConsolidationCandidate>, double?)> getConsolidationCandidates(
+    int tripId, {
+    double? radiusKm,
+  }) async {
+    final response = await _api.dio.get(
+      '/trips/$tripId/consolidation-candidates',
+      queryParameters: radiusKm != null ? {'radius_km': radiusKm} : null,
+    );
+    if (response.statusCode == 200) {
+      final body = response.data as Map<String, dynamic>;
+      final list = (body['data'] as List)
+          .map((e) =>
+              ConsolidationCandidate.fromJson(e as Map<String, dynamic>))
+          .toList();
+      final remaining = body['remaining_capacity_tons'] != null
+          ? double.tryParse(body['remaining_capacity_tons'].toString())
+          : null;
+      return (list, remaining);
+    }
+    throw ApiException(
+        message: 'Failed to load consolidation candidates',
+        statusCode: response.statusCode);
+  }
+
   // ✓ PATCH /trips/{trip}/stops/{stop}/arrive
   Future<TripStop> arriveAtStop(int tripId, int stopId) async {
     final response =
@@ -559,8 +713,7 @@ class TripRepository {
 
   // ✓ PATCH /trips/{trip}/stops/{stop}/load
   Future<TripStop> loadAtStop(int tripId, int stopId) async {
-    final response =
-        await _api.dio.patch('/trips/$tripId/stops/$stopId/load');
+    final response = await _api.dio.patch('/trips/$tripId/stops/$stopId/load');
     if (response.statusCode == 200) {
       final data = (response.data as Map<String, dynamic>)['data'];
       return TripStop.fromJson(
@@ -585,8 +738,7 @@ class TripRepository {
 
   // ✓ DELETE /trips/{trip}/stops/{stop}
   Future<void> removeStop(int tripId, int stopId) async {
-    final response =
-        await _api.dio.delete('/trips/$tripId/stops/$stopId');
+    final response = await _api.dio.delete('/trips/$tripId/stops/$stopId');
     if (response.statusCode != 200) {
       throw ApiException(
           message: 'Failed to remove stop', statusCode: response.statusCode);
@@ -594,16 +746,19 @@ class TripRepository {
   }
 
   // GET /trips/{tripId}/backhaul-recommendations
-  Future<List<BackhaulRecommendation>> getBackhaulRecommendations(int tripId) async {
+  Future<List<BackhaulRecommendation>> getBackhaulRecommendations(
+      int tripId) async {
     try {
-      final response = await _api.dio.get('/trips/$tripId/backhaul-recommendations');
+      final response =
+          await _api.dio.get('/trips/$tripId/backhaul-recommendations');
       if (response.statusCode == 200) {
         final raw = response.data;
         final list = (raw is Map && raw.containsKey('data'))
             ? raw['data'] as List
             : (raw is List ? raw : []);
         return list
-            .map((e) => BackhaulRecommendation.fromJson(e as Map<String, dynamic>))
+            .map((e) =>
+                BackhaulRecommendation.fromJson(e as Map<String, dynamic>))
             .toList();
       }
     } catch (_) {}
@@ -663,6 +818,15 @@ class PaymentRepository {
   Future<Payment> getByBooking(int bookingId) async =>
       _api.get<Payment>('/payments/$bookingId',
           fromJson: (json) => Payment.fromJson(json as Map<String, dynamic>));
+
+  // ✓ POST /payments/chapa/initialize
+  Future<ChapaInitResult> initializeChapa({required int bookingId}) async =>
+      _api.post<ChapaInitResult>(
+        '/payments/chapa/initialize',
+        data: {'booking_id': bookingId},
+        fromJson: (json) =>
+            ChapaInitResult.fromJson(json as Map<String, dynamic>),
+      );
 }
 
 final paymentRepositoryProvider = Provider<PaymentRepository>(
@@ -715,8 +879,7 @@ class AiRepository {
     );
     final list = (data as Map)['opportunities'] as List? ?? [];
     return list
-        .map((e) =>
-            BackhaulOpportunity.fromJson(e as Map<String, dynamic>))
+        .map((e) => BackhaulOpportunity.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 
@@ -794,15 +957,97 @@ class DocumentRepository {
   // ✓ POST /driver/documents  (multipart)
   Future<DriverDocument> upload({
     required String documentType,
-    required String filePath,
+    required Uint8List fileBytes,
     required String fileName,
   }) async {
     final formData = dio_pkg.FormData.fromMap({
       'document_type': documentType,
-      'file': await dio_pkg.MultipartFile.fromFile(filePath, filename: fileName),
+      'file': dio_pkg.MultipartFile.fromBytes(fileBytes, filename: fileName),
     });
     final response = await _api.dio.post(
       '/driver/documents',
+      data: formData,
+      options: dio_pkg.Options(contentType: 'multipart/form-data'),
+    );
+    if (response.statusCode == 201 || response.statusCode == 200) {
+      final raw = response.data;
+      final data = (raw is Map && raw.containsKey('data')) ? raw['data'] : raw;
+      return DriverDocument.fromJson(data as Map<String, dynamic>);
+    }
+    throw ApiException(
+        message: 'Upload failed', statusCode: response.statusCode);
+  }
+
+  // ✓ GET /vehicles/{vehicleId}/documents
+  Future<List<VehicleDocument>> listForVehicle(int vehicleId) async {
+    final response = await _api.dio.get('/vehicles/$vehicleId/documents');
+    if (response.statusCode == 200) {
+      final raw = response.data;
+      final list = (raw is Map && raw.containsKey('data'))
+          ? raw['data'] as List
+          : raw as List;
+      return list
+          .map((e) => VehicleDocument.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    throw ApiException(
+        message: 'Failed to load documents', statusCode: response.statusCode);
+  }
+
+  // ✓ POST /vehicles/{vehicleId}/documents  (multipart)
+  Future<VehicleDocument> uploadForVehicle({
+    required int vehicleId,
+    required String documentType,
+    required Uint8List fileBytes,
+    required String fileName,
+  }) async {
+    final formData = dio_pkg.FormData.fromMap({
+      'document_type': documentType,
+      'file': dio_pkg.MultipartFile.fromBytes(fileBytes, filename: fileName),
+    });
+    final response = await _api.dio.post(
+      '/vehicles/$vehicleId/documents',
+      data: formData,
+      options: dio_pkg.Options(contentType: 'multipart/form-data'),
+    );
+    if (response.statusCode == 201 || response.statusCode == 200) {
+      final raw = response.data;
+      final data = (raw is Map && raw.containsKey('data')) ? raw['data'] : raw;
+      return VehicleDocument.fromJson(data as Map<String, dynamic>);
+    }
+    throw ApiException(
+        message: 'Upload failed', statusCode: response.statusCode);
+  }
+
+  // ✓ GET /fleet/drivers/{driverId}/documents
+  Future<List<DriverDocument>> listForDriver(int driverId) async {
+    final response = await _api.dio.get('/fleet/drivers/$driverId/documents');
+    if (response.statusCode == 200) {
+      final raw = response.data;
+      final list = (raw is Map && raw.containsKey('data'))
+          ? raw['data'] as List
+          : raw as List;
+      return list
+          .map((e) => DriverDocument.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    throw ApiException(
+        message: 'Failed to load documents', statusCode: response.statusCode);
+  }
+
+  // ✓ POST /fleet/drivers/{driverId}/documents  (multipart)
+  Future<DriverDocument> uploadForDriver({
+    required int driverId,
+    required String documentType,
+    required Uint8List fileBytes,
+    required String fileName,
+  }) async {
+    final formData = dio_pkg.FormData.fromMap({
+      'document_type': documentType,
+      'file': dio_pkg.MultipartFile.fromBytes(fileBytes, filename: fileName),
+    });
+    final response = await _api.dio.post(
+      '/fleet/drivers/$driverId/documents',
       data: formData,
       options: dio_pkg.Options(contentType: 'multipart/form-data'),
     );
@@ -898,14 +1143,16 @@ class BidRepository {
       {required double counterAmount, String? counterNote}) async {
     final response = await _api.dio.patch('/bids/$bidId/counter', data: {
       'counter_amount': counterAmount,
-      if (counterNote != null && counterNote.isNotEmpty) 'counter_note': counterNote,
+      if (counterNote != null && counterNote.isNotEmpty)
+        'counter_note': counterNote,
     });
     if (response.statusCode == 200) {
       final data = (response.data as Map<String, dynamic>)['data'];
       return Bid.fromJson(data as Map<String, dynamic>);
     }
     throw ApiException(
-        message: 'Failed to send counter-offer', statusCode: response.statusCode);
+        message: 'Failed to send counter-offer',
+        statusCode: response.statusCode);
   }
 
   // ✓ PATCH /bids/{bidId}/accept-counter — accept the current counter-offer
@@ -916,7 +1163,8 @@ class BidRepository {
       return Booking.fromJson(data as Map<String, dynamic>);
     }
     throw ApiException(
-        message: 'Failed to accept counter-offer', statusCode: response.statusCode);
+        message: 'Failed to accept counter-offer',
+        statusCode: response.statusCode);
   }
 
   // ✓ PATCH /bids/{bidId} — driver updates their own pending bid
@@ -1027,11 +1275,12 @@ class RoutingRepository {
       final resp = await _api.dio.get('/routing/route', queryParameters: {
         'from_lat': fromLat,
         'from_lng': fromLng,
-        'to_lat':   toLat,
-        'to_lng':   toLng,
+        'to_lat': toLat,
+        'to_lng': toLng,
       });
       if (resp.statusCode == 200 && resp.data is Map) {
-        return RouteResult.fromJson(Map<String, dynamic>.from(resp.data as Map));
+        return RouteResult.fromJson(
+            Map<String, dynamic>.from(resp.data as Map));
       }
       return null;
     } catch (_) {
@@ -1043,8 +1292,8 @@ class RoutingRepository {
   Future<List<PlaceResult>> searchPlace(String query) async {
     if (query.trim().isEmpty) return [];
     try {
-      final resp = await _api.dio.get('/routing/search',
-          queryParameters: {'q': query.trim()});
+      final resp = await _api.dio
+          .get('/routing/search', queryParameters: {'q': query.trim()});
       if (resp.statusCode == 200 && resp.data is Map) {
         final raw = (resp.data as Map)['places'] as List? ?? [];
         return raw
@@ -1061,8 +1310,8 @@ class RoutingRepository {
   /// GET /routing/reverse?lat=&lng= — reverse geocode via Nominatim.
   Future<Map<String, dynamic>?> reverseGeocode(double lat, double lng) async {
     try {
-      final resp = await _api.dio.get('/routing/reverse',
-          queryParameters: {'lat': lat, 'lng': lng});
+      final resp = await _api.dio
+          .get('/routing/reverse', queryParameters: {'lat': lat, 'lng': lng});
       if (resp.statusCode == 200 && resp.data is Map) {
         return Map<String, dynamic>.from(resp.data as Map);
       }
@@ -1087,7 +1336,8 @@ class RoutingRepository {
       };
       if (category != null) params['category'] = category;
 
-      final resp = await _api.dio.get('/nearby-trucks', queryParameters: params);
+      final resp =
+          await _api.dio.get('/nearby-trucks', queryParameters: params);
       if (resp.statusCode == 200 && resp.data is Map) {
         final raw = (resp.data as Map)['trucks'] as List? ?? [];
         return raw
@@ -1104,4 +1354,217 @@ class RoutingRepository {
 
 final routingRepositoryProvider = Provider<RoutingRepository>(
   (ref) => RoutingRepository(ref.read(apiClientProvider)),
+);
+
+// ── Fleet ─────────────────────────────────────────────────────────────────
+
+class FleetRepository {
+  final ApiClient _api;
+  FleetRepository(this._api);
+
+  // ✓ GET /fleet/available-cargo?city=&lat=&lng=&radius_km=
+  Future<List<CargoRequest>> searchCargo({
+    String? city,
+    double? lat,
+    double? lng,
+    double? radiusKm,
+  }) async {
+    final response =
+        await _api.dio.get('/fleet/available-cargo', queryParameters: {
+      if (city != null) 'city': city,
+      if (lat != null) 'lat': lat,
+      if (lng != null) 'lng': lng,
+      if (radiusKm != null) 'radius_km': radiusKm,
+    });
+    if (response.statusCode == 200) {
+      final raw = response.data;
+      final list = (raw is Map && raw.containsKey('data'))
+          ? raw['data'] as List
+          : raw as List;
+      return list
+          .map((e) => CargoRequest.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    throw ApiException(
+        message: 'Failed to load available cargo',
+        statusCode: response.statusCode);
+  }
+
+  // ✓ GET /fleet/cargo/{cargoId}/candidates
+  Future<List<FleetCandidate>> getCargoCandidates(int cargoId) async {
+    final response = await _api.dio.get('/fleet/cargo/$cargoId/candidates');
+    if (response.statusCode == 200) {
+      final raw = response.data;
+      final list = (raw is Map && raw.containsKey('data'))
+          ? raw['data'] as List
+          : raw as List;
+      return list
+          .map((e) => FleetCandidate.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+    throw ApiException(
+        message: 'Failed to load candidates', statusCode: response.statusCode);
+  }
+
+  // ✓ GET /fleet/dashboard
+  Future<Map<String, dynamic>> getDashboard() async {
+    final response = await _api.dio.get('/fleet/dashboard');
+    if (response.statusCode == 200) {
+      return response.data as Map<String, dynamic>;
+    }
+    throw ApiException(
+        message: 'Failed to load fleet dashboard',
+        statusCode: response.statusCode);
+  }
+
+  // ✓ POST /fleet/drivers
+  Future<Map<String, dynamic>> createDriver({
+    required String fullName,
+    required String phone,
+    String? email,
+  }) async {
+    final response = await _api.dio.post('/fleet/drivers', data: {
+      'full_name': fullName,
+      'phone': phone,
+      if (email != null && email.isNotEmpty) 'email': email,
+    });
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return response.data as Map<String, dynamic>;
+    }
+    throw ApiException(
+        message: 'Failed to create driver', statusCode: response.statusCode);
+  }
+
+  // ✓ POST /fleet/drivers/add
+  Future<void> addDriver(int driverId) async {
+    final response = await _api.dio
+        .post('/fleet/drivers/add', data: {'driver_id': driverId});
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw ApiException(
+          message: 'Failed to add driver', statusCode: response.statusCode);
+    }
+  }
+
+  // ✓ DELETE /fleet/drivers/{driverId}
+  Future<void> removeDriver(int driverId) async {
+    final response = await _api.dio.delete('/fleet/drivers/$driverId');
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      throw ApiException(
+          message: 'Failed to remove driver', statusCode: response.statusCode);
+    }
+  }
+
+  // ✓ GET /fleet/drivers/{driverId}
+  Future<Map<String, dynamic>> getDriverDetail(int driverId) =>
+      _api.get<Map<String, dynamic>>('/fleet/drivers/$driverId');
+
+  // ✓ PATCH /fleet/drivers/{driverId}
+  Future<void> updateDriver(
+    int driverId, {
+    String? fullName,
+    String? phone,
+    String? email,
+  }) =>
+      _api.patch<void>(
+        '/fleet/drivers/$driverId',
+        data: {
+          if (fullName != null) 'full_name': fullName,
+          if (phone != null) 'phone': phone,
+          if (email != null) 'email': email,
+        },
+      );
+
+  // ✓ DELETE /fleet/drivers/{driverId}/permanently
+  Future<void> deleteDriverAccount(int driverId) =>
+      _api.delete('/fleet/drivers/$driverId/permanently');
+
+  // ✓ GET /fleet/vehicles/{vehicleId}
+  Future<Map<String, dynamic>> getVehicleDetail(int vehicleId) =>
+      _api.get<Map<String, dynamic>>('/fleet/vehicles/$vehicleId');
+
+  // ✓ POST /fleet/vehicles
+  Future<void> addVehicle({
+    required String truckType,
+    required String plateNumber,
+    required double capacity,
+    required String currentCity,
+    String? vehicleCategory,
+    int? driverId,
+  }) async {
+    final response = await _api.dio.post('/fleet/vehicles', data: {
+      'truck_type': truckType,
+      'plate_number': plateNumber,
+      'capacity': capacity,
+      'current_city': currentCity,
+      if (vehicleCategory != null) 'vehicle_category': vehicleCategory,
+      if (driverId != null) 'driver_id': driverId,
+    });
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw ApiException(
+          message: 'Failed to add vehicle', statusCode: response.statusCode);
+    }
+  }
+
+  // ✓ PATCH /fleet/vehicles/{vehicleId}/assign
+  Future<void> assignVehicle(int vehicleId, int driverId) async {
+    final response = await _api.dio.patch(
+      '/fleet/vehicles/$vehicleId/assign',
+      data: {'driver_id': driverId},
+    );
+    if (response.statusCode != 200) {
+      throw ApiException(
+          message: 'Failed to assign vehicle', statusCode: response.statusCode);
+    }
+  }
+
+  // ✓ POST /fleet/bookings
+  Future<void> createBooking({
+    required int cargoId,
+    required int vehicleId,
+    required int driverId,
+    required double estimatedPrice,
+  }) async {
+    final response = await _api.dio.post('/fleet/bookings', data: {
+      'cargo_id': cargoId,
+      'vehicle_id': vehicleId,
+      'driver_id': driverId,
+      'estimated_price': estimatedPrice,
+    });
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw ApiException(
+          message: 'Failed to create booking', statusCode: response.statusCode);
+    }
+  }
+
+  // ✓ PATCH /fleet/bookings/{bookingId}/dispatch
+  Future<void> dispatchBooking(int bookingId, {required int driverId}) async {
+    final response = await _api.dio.patch(
+      '/fleet/bookings/$bookingId/dispatch',
+      data: {'driver_id': driverId},
+    );
+    if (response.statusCode != 200) {
+      throw ApiException(
+          message: 'Failed to dispatch booking',
+          statusCode: response.statusCode);
+    }
+  }
+
+  // GET /fleet/live-map
+  Future<List<Map<String, dynamic>>> getLiveMap() async {
+    final response = await _api.dio.get('/fleet/live-map');
+    if (response.statusCode == 200) {
+      final raw = response.data;
+      final list = (raw is Map && raw.containsKey('data'))
+          ? raw['data'] as List
+          : raw as List;
+      return list.cast<Map<String, dynamic>>();
+    }
+    throw ApiException(
+        message: 'Failed to load fleet live map',
+        statusCode: response.statusCode);
+  }
+}
+
+final fleetRepositoryProvider = Provider<FleetRepository>(
+  (ref) => FleetRepository(ref.read(apiClientProvider)),
 );

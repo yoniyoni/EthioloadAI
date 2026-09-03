@@ -9,13 +9,21 @@
 class User {
   final int id;
   final String fullName;
-  final String email;
+  // Nullable — registration allows an account with phone only, no email
+  // (see backend RegisterRequest); a non-null cast here would crash
+  // User.fromJson() for any such user, on every login/me/profile response.
+  final String? email;
   final String phone;
   /// 'shipper' | 'driver' | 'admin' | 'fleet_owner'
   final String role;
   final String? location;
   final bool verificationStatus;
   final bool isActive;
+  // Driver payout destination for Chapa Transfers — null until the driver
+  // fills in the payout-details screen.
+  final String? payoutBankCode;
+  final String? payoutAccountNumber;
+  final String? payoutAccountName;
 
   User({
     required this.id,
@@ -26,7 +34,13 @@ class User {
     this.location,
     this.verificationStatus = false,
     this.isActive = true,
+    this.payoutBankCode,
+    this.payoutAccountNumber,
+    this.payoutAccountName,
   });
+
+  bool get hasPayoutDetails =>
+      payoutBankCode != null && payoutAccountNumber != null;
 
   bool get isAdmin      => role.toLowerCase() == 'admin';
   bool get isDriver     => role.toLowerCase() == 'driver';
@@ -38,13 +52,16 @@ class User {
   factory User.fromJson(Map<String, dynamic> json) => User(
         id: json['id'] as int,
         fullName: (json['full_name'] ?? json['name'] ?? '') as String,
-        email: json['email'] as String,
+        email: json['email'] as String?,
         phone: (json['phone'] ?? '') as String,
         role: (json['role'] ?? 'shipper') as String,
         location: json['location'] as String?,
         verificationStatus: json['verification_status'] == true ||
             json['verification_status'] == 1,
         isActive: json['is_active'] == true || json['is_active'] == 1,
+        payoutBankCode: json['payout_bank_code'] as String?,
+        payoutAccountNumber: json['payout_account_number'] as String?,
+        payoutAccountName: json['payout_account_name'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -56,7 +73,25 @@ class User {
         'location': location,
         'verification_status': verificationStatus,
         'is_active': isActive,
+        'payout_bank_code': payoutBankCode,
+        'payout_account_number': payoutAccountNumber,
+        'payout_account_name': payoutAccountName,
       };
+}
+
+// ── Bank (Chapa payout destination) ─────────────────────────────────────
+
+class Bank {
+  final String code;
+  final String name;
+
+  Bank({required this.code, required this.name});
+
+  factory Bank.fromJson(Map<String, dynamic> json) => Bank(
+        // Chapa's /v1/banks entries use these field names.
+        code: (json['id'] ?? json['code'] ?? '').toString(),
+        name: (json['name'] ?? json['bank_name'] ?? 'Unknown bank') as String,
+      );
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────
@@ -282,14 +317,28 @@ class Booking {
   final String? urgencyLevel;
   final String serviceType;
   final String? city;
-  // Contact info — shown after accepted/confirmed
-  final String? driverPhone;
+  // Names are always sent; phone numbers only once payment clears — the
+  // backend omits them entirely until then (BookingResource), so these stay
+  // null through the pre-payment states and populate themselves the moment
+  // the booking flips to 'paid'.
   final String? driverName;
-  final String? shipperPhone;
+  final String? driverPhone;
+  // Vehicle's last-known live position — populated between "booking
+  // confirmed" and "driver starts the trip", before a Trip row (and its
+  // richer live-tracking data) exists.
+  final double? driverLat;
+  final double? driverLng;
+  final DateTime? driverLastLocationAt;
   final String? shipperName;
-  // Payment
-  /// 'telebirr' | 'bank_transfer' | 'cash' | null
+  final String? shipperPhone;
+  // Payment / escrow
+  /// 'telebirr' | 'bank_transfer' | 'cash' | 'chapa' | null
   final String? paymentMethod;
+  /// 'pending' | 'paid' | 'failed' | null — null means no Payment row yet.
+  final String? paymentStatus;
+  /// 'not_applicable' | 'pending' | 'paid_out' | 'failed' | null
+  final String? payoutStatus;
+  bool get isPaid => paymentStatus == 'paid';
   // Rating
   final bool hasRating;
   final DateTime? createdAt;
@@ -319,11 +368,16 @@ class Booking {
     this.urgencyLevel,
     this.serviceType = 'intercity',
     this.city,
-    this.driverPhone,
     this.driverName,
-    this.shipperPhone,
+    this.driverPhone,
+    this.driverLat,
+    this.driverLng,
+    this.driverLastLocationAt,
     this.shipperName,
+    this.shipperPhone,
     this.paymentMethod,
+    this.paymentStatus,
+    this.payoutStatus,
     this.hasRating = false,
     this.createdAt,
     this.updatedAt,
@@ -371,11 +425,22 @@ class Booking {
         urgencyLevel: json['urgency_level'] as String?,
         serviceType: (json['service_type'] ?? 'intercity') as String,
         city: json['city'] as String?,
-        driverPhone: json['driver_phone'] as String?,
         driverName: json['driver_name'] as String?,
-        shipperPhone: json['shipper_phone'] as String?,
+        driverPhone: json['driver_phone'] as String?,
+        driverLat: json['driver_lat'] != null
+            ? double.tryParse(json['driver_lat'].toString())
+            : null,
+        driverLng: json['driver_lng'] != null
+            ? double.tryParse(json['driver_lng'].toString())
+            : null,
+        driverLastLocationAt: json['driver_last_location_at'] != null
+            ? DateTime.tryParse(json['driver_last_location_at'].toString())
+            : null,
         shipperName: json['shipper_name'] as String?,
+        shipperPhone: json['shipper_phone'] as String?,
         paymentMethod: json['payment_method'] as String?,
+        paymentStatus: json['payment_status'] as String?,
+        payoutStatus: json['payout_status'] as String?,
         hasRating: json['has_rating'] == true,
         createdAt: json['created_at'] != null
             ? DateTime.tryParse(json['created_at'] as String)
@@ -434,6 +499,63 @@ class DriverDocument {
         updatedAt: json['updated_at'] != null
             ? DateTime.tryParse(json['updated_at'] as String)
             : null,
+      );
+}
+
+// ── VehicleDocument ───────────────────────────────────────────────────────
+
+class VehicleDocument {
+  final int id;
+  final int vehicleId;
+  /// 'registration_certificate' | 'insurance_certificate' | 'roadworthiness_certificate' | 'ownership_document'
+  final String documentType;
+  final String documentLabel;
+  final String originalName;
+  /// 'pending' | 'approved' | 'rejected'
+  final String status;
+  final String? rejectionReason;
+  final String fileUrl;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+  final String? plateNumber;
+  final String? truckType;
+
+  VehicleDocument({
+    required this.id,
+    required this.vehicleId,
+    required this.documentType,
+    required this.documentLabel,
+    required this.originalName,
+    required this.status,
+    this.rejectionReason,
+    required this.fileUrl,
+    this.createdAt,
+    this.updatedAt,
+    this.plateNumber,
+    this.truckType,
+  });
+
+  bool get isPending  => status == 'pending';
+  bool get isApproved => status == 'approved';
+  bool get isRejected => status == 'rejected';
+
+  factory VehicleDocument.fromJson(Map<String, dynamic> json) => VehicleDocument(
+        id:              json['id'] as int,
+        vehicleId:       json['vehicle_id'] as int,
+        documentType:    json['document_type'] as String,
+        documentLabel:   (json['document_label'] ?? json['document_type']) as String,
+        originalName:    json['original_name'] as String,
+        status:          (json['status'] ?? 'pending') as String,
+        rejectionReason: json['rejection_reason'] as String?,
+        fileUrl:         json['file_url'] as String,
+        createdAt: json['created_at'] != null
+            ? DateTime.tryParse(json['created_at'] as String)
+            : null,
+        updatedAt: json['updated_at'] != null
+            ? DateTime.tryParse(json['updated_at'] as String)
+            : null,
+        plateNumber: json['plate_number'] as String?,
+        truckType:   json['truck_type'] as String?,
       );
 }
 
@@ -532,20 +654,27 @@ class Bid {
   final String status;
   final double? aiScore;
   final bool isRecommended;
-  /// Straight-line km from vehicle location to cargo pickup (informational only)
+  /// Road distance (km) from vehicle location to cargo pickup, via OSRM when
+  /// reachable, else a straight-line estimate (informational only)
   final double? distanceKm;
   /// 'driver' | 'fleet_owner'
   final String? bidderType;
+  // Phone numbers deliberately omitted — see Booking.
   final String? driverName;
-  final String? driverPhone;
   final double? driverRating;
   final int? driverTripCount;
   final String? truckType;
   final double? vehicleCapacity;
   final String? plateNumber;
-  // Shipper contact — shown to driver when bid is accepted
+  /// Vehicle's current live position — a query-time snapshot, not the
+  /// position at bid placement. Used for the shipper's pre-trip map.
+  final double? driverLat;
+  final double? driverLng;
+  /// True when this bid's vehicle currently has a booking with an ongoing
+  /// trip — lets the shipper see "free now" vs "wraps up another job
+  /// first" before picking a driver.
+  final bool driverBusy;
   final String? shipperName;
-  final String? shipperPhone;
   // Counter-offer fields
   final double? counterAmount;
   final String? counterNote;
@@ -580,14 +709,15 @@ class Bid {
     this.distanceKm,
     this.bidderType,
     this.driverName,
-    this.driverPhone,
     this.driverRating,
     this.driverTripCount,
     this.truckType,
     this.vehicleCapacity,
     this.plateNumber,
+    this.driverLat,
+    this.driverLng,
+    this.driverBusy = false,
     this.shipperName,
-    this.shipperPhone,
     this.counterAmount,
     this.counterNote,
     this.counterBy,
@@ -628,7 +758,6 @@ class Bid {
             : null,
         bidderType: json['bidder_type'] as String?,
         driverName: json['driver_name'] as String?,
-        driverPhone: json['driver_phone'] as String?,
         driverRating: json['driver_rating'] != null
             ? double.tryParse(json['driver_rating'].toString())
             : null,
@@ -638,8 +767,14 @@ class Bid {
             ? double.tryParse(json['vehicle_capacity'].toString())
             : null,
         plateNumber: json['plate_number'] as String?,
+        driverLat: json['driver_lat'] != null
+            ? double.tryParse(json['driver_lat'].toString())
+            : null,
+        driverLng: json['driver_lng'] != null
+            ? double.tryParse(json['driver_lng'].toString())
+            : null,
+        driverBusy: json['driver_busy'] == true,
         shipperName: json['shipper_name'] as String?,
-        shipperPhone: json['shipper_phone'] as String?,
         counterAmount: json['counter_amount'] != null
             ? double.tryParse(json['counter_amount'].toString())
             : null,
@@ -775,6 +910,7 @@ class Trip {
   final List<TripStop> stops;
   final DateTime? startTime;
   final DateTime? endTime;
+  final DateTime? pickedUpAt;
   final DateTime? createdAt;
   final double? bookingEstimatedPrice;
   final double? bookingCommissionFee;
@@ -793,6 +929,7 @@ class Trip {
     this.stops = const [],
     this.startTime,
     this.endTime,
+    this.pickedUpAt,
     this.createdAt,
     this.bookingEstimatedPrice,
     this.bookingCommissionFee,
@@ -800,6 +937,7 @@ class Trip {
 
   bool get isMultiStop => tripType == 'multi_stop';
   int  get remainingStops => totalStops - completedStops;
+  bool get isPickedUp => pickedUpAt != null;
 
   factory Trip.fromJson(Map<String, dynamic> json) => Trip(
         id: json['id'] as int,
@@ -826,6 +964,9 @@ class Trip {
             : null,
         endTime: json['end_time'] != null
             ? DateTime.tryParse(json['end_time'] as String)
+            : null,
+        pickedUpAt: json['picked_up_at'] != null
+            ? DateTime.tryParse(json['picked_up_at'] as String)
             : null,
         createdAt: json['created_at'] != null
             ? DateTime.tryParse(json['created_at'] as String)
@@ -869,6 +1010,20 @@ class Payment {
         createdAt: json['created_at'] != null
             ? DateTime.tryParse(json['created_at'] as String)
             : null,
+      );
+}
+
+/// Result of starting a Chapa checkout — a hosted page URL to open plus the
+/// reference the backend will use to confirm the outcome once it's done.
+class ChapaInitResult {
+  final String checkoutUrl;
+  final String txRef;
+
+  ChapaInitResult({required this.checkoutUrl, required this.txRef});
+
+  factory ChapaInitResult.fromJson(Map<String, dynamic> json) => ChapaInitResult(
+        checkoutUrl: json['checkout_url'] as String,
+        txRef: json['tx_ref'] as String,
       );
 }
 
@@ -1041,6 +1196,8 @@ class NearbyTruck {
   final double rating;
   final double distanceKm;
   final String lastSeen;
+  /// True when this truck currently has a booking with an ongoing trip.
+  final bool isBusy;
 
   NearbyTruck({
     required this.vehicleId,
@@ -1055,6 +1212,7 @@ class NearbyTruck {
     required this.rating,
     required this.distanceKm,
     required this.lastSeen,
+    this.isBusy = false,
   });
 
   factory NearbyTruck.fromJson(Map<String, dynamic> j) => NearbyTruck(
@@ -1070,6 +1228,7 @@ class NearbyTruck {
         rating:          double.tryParse(j['rating'].toString()) ?? 0.0,
         distanceKm:      double.tryParse(j['distance_km'].toString()) ?? 0.0,
         lastSeen:        (j['last_seen'] ?? '') as String,
+        isBusy:          j['is_busy'] == true,
       );
 }
 
@@ -1181,6 +1340,7 @@ class TripLocation {
   final double? destinationLng;
   final double? pickupLat;
   final double? pickupLng;
+  final DateTime? pickedUpAt;
 
   TripLocation({
     this.currentLat,
@@ -1194,6 +1354,7 @@ class TripLocation {
     this.destinationLng,
     this.pickupLat,
     this.pickupLng,
+    this.pickedUpAt,
   });
 
   bool get hasPosition => currentLat != null && currentLng != null;
@@ -1233,6 +1394,111 @@ class TripLocation {
       pickupLng:           j['pickup_lng'] != null
           ? double.tryParse(j['pickup_lng'].toString())
           : null,
+      pickedUpAt:          j['picked_up_at'] != null
+          ? DateTime.tryParse(j['picked_up_at'] as String)
+          : null,
     );
   }
+}
+
+// ── FleetCandidate ────────────────────────────────────────────────────────
+
+class FleetCandidate {
+  final int vehicleId;
+  final String plateNumber;
+  final String truckType;
+  final String? vehicleCategory;
+  final int driverId;
+  final String? driverName;
+  final String? driverPhone;
+  final bool online;
+  final bool available;
+  final double? distanceKm;
+  final bool? headingTowardPickup;
+  final String? currentCity;
+  final DateTime? lastLocationAt;
+
+  FleetCandidate({
+    required this.vehicleId,
+    required this.plateNumber,
+    required this.truckType,
+    this.vehicleCategory,
+    required this.driverId,
+    this.driverName,
+    this.driverPhone,
+    required this.online,
+    required this.available,
+    this.distanceKm,
+    this.headingTowardPickup,
+    this.currentCity,
+    this.lastLocationAt,
+  });
+
+  factory FleetCandidate.fromJson(Map<String, dynamic> j) => FleetCandidate(
+        vehicleId:           j['vehicle_id'] as int,
+        plateNumber:         (j['plate_number'] ?? '') as String,
+        truckType:           (j['truck_type'] ?? '') as String,
+        vehicleCategory:     j['vehicle_category'] as String?,
+        driverId:            j['driver_id'] as int,
+        driverName:          j['driver_name'] as String?,
+        driverPhone:         j['driver_phone'] as String?,
+        online:              j['online'] == true,
+        available:           j['available'] == true,
+        distanceKm:          j['distance_km'] != null
+            ? double.tryParse(j['distance_km'].toString())
+            : null,
+        headingTowardPickup: j['heading_toward_pickup'] as bool?,
+        currentCity:         j['current_city'] as String?,
+        lastLocationAt:      j['last_location_at'] != null
+            ? DateTime.tryParse(j['last_location_at'].toString())
+            : null,
+      );
+}
+
+/// A shipper's pending cargo request offered as a mid-trip consolidation
+/// pickup — see GET /trips/{trip}/consolidation-candidates.
+class ConsolidationCandidate {
+  final int id;
+  final String pickupLocation;
+  final String destination;
+  final String materialType;
+  final double weight;
+  final String urgencyLevel;
+  final double? budget;
+  final String priceType;
+  final double? distanceKm;
+  // Phone deliberately omitted — the backend no longer sends it, see
+  // ConsolidationService.php.
+  final String shipperName;
+
+  ConsolidationCandidate({
+    required this.id,
+    required this.pickupLocation,
+    required this.destination,
+    required this.materialType,
+    required this.weight,
+    required this.urgencyLevel,
+    this.budget,
+    required this.priceType,
+    this.distanceKm,
+    required this.shipperName,
+  });
+
+  factory ConsolidationCandidate.fromJson(Map<String, dynamic> j) =>
+      ConsolidationCandidate(
+        id:              j['id'] as int,
+        pickupLocation:  (j['pickup_location'] ?? '') as String,
+        destination:     (j['destination'] ?? '') as String,
+        materialType:    (j['material_type'] ?? '') as String,
+        weight:          double.tryParse(j['weight'].toString()) ?? 0,
+        urgencyLevel:    (j['urgency_level'] ?? 'normal') as String,
+        budget:          j['budget'] != null
+            ? double.tryParse(j['budget'].toString())
+            : null,
+        priceType:       (j['price_type'] ?? 'negotiable') as String,
+        distanceKm:      j['distance_km'] != null
+            ? double.tryParse(j['distance_km'].toString())
+            : null,
+        shipperName:     (j['shipper_name'] ?? 'Unknown') as String,
+      );
 }

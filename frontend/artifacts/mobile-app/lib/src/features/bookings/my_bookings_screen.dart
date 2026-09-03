@@ -8,15 +8,21 @@ import '../../data/api/api_client.dart';
 import '../../data/providers/data_providers.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/repositories.dart';
+import '../../services/location_service.dart';
+import '../payments/chapa_checkout_screen.dart';
 import '../shared/widgets/shared_widgets.dart';
+import '../../utils/weight_format.dart';
 
-/// Full booking lifecycle:
+/// Full booking lifecycle (upfront escrow — see PaymentService on the
+/// backend for the money side):
 ///
-///  Shipper books cargo  →  booking: pending
-///  Driver accepts       →  booking: accepted   (price summary shown; no payment yet)
-///  Driver starts trip   →  trip: ongoing
-///  Driver delivers      →  booking: delivered  (payment unlocked)
-///  Shipper pays         →  booking: confirmed  (payment created)
+///  Shipper books cargo   →  booking: pending
+///  Driver accepts        →  booking: accepted/confirmed (price agreed —
+///                            shipper must pay now, before the trip starts)
+///  Shipper pays (Chapa)  →  booking: paid       (held; trip may start)
+///  Driver starts trip    →  trip: ongoing
+///  Driver delivers       →  booking: delivered  (awaiting shipper confirmation)
+///  Shipper confirms      →  booking: completed  (payout to driver attempted)
 class MyBookingsScreen extends ConsumerStatefulWidget {
   const MyBookingsScreen({super.key});
 
@@ -327,33 +333,124 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
         }
       });
 
-  /// Shipper pays — shows payment method picker then confirms booking
-  Future<void> _pay() async {
-    final method = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => const _PaymentMethodSheet(),
-    );
-    if (method == null || !mounted) return;
+  /// Shipper pays — now happens upfront, as soon as a price is agreed, not
+  /// after delivery. Cash is no longer offered here (the platform can't
+  /// hold cash in escrow) — Chapa is the only path that unlocks the trip,
+  /// so this goes straight to checkout rather than showing a method picker.
+  Future<void> _pay() => _payViaChapa();
 
-    await _run(() async {
-      final payment = await ref.read(paymentRepositoryProvider).create(
-            bookingId: widget.booking.id,
-            amount: widget.booking.estimatedPrice,
-            paymentMethod: method,
-          );
+  /// Starts a Chapa checkout, opens it in-app, then confirms the real
+  /// outcome by polling the backend — the WebView returning is only a
+  /// signal that the shipper finished on Chapa's page, never proof of
+  /// payment on its own.
+  Future<void> _payViaChapa() async {
+    setState(() => _busy = true);
+    try {
+      final init = await ref
+          .read(paymentRepositoryProvider)
+          .initializeChapa(bookingId: widget.booking.id);
+
+      if (!mounted) return;
+      final finishedOnChapa = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => ChapaCheckoutScreen(
+            checkoutUrl: init.checkoutUrl,
+            returnUrlPrefix: '$kBaseUrl/payments/chapa/return',
+          ),
+        ),
+      );
+      if (!mounted || finishedOnChapa != true) return;
+
+      await _pollPaymentStatus();
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-            'Payment of ETB ${payment.amount.toStringAsFixed(0)} confirmed via '
-            '${_methodLabel(method)}.',
-          ),
-          backgroundColor: kSuccess,
-          duration: const Duration(seconds: 4),
+          content: Text(e.toString()),
+          backgroundColor: kDanger,
         ));
       }
-    });
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Chapa's server-to-server webhook may land a second or two after the
+  /// shipper is redirected back — poll briefly rather than trusting the
+  /// redirect itself, and never claim success unless the backend confirms it.
+  Future<void> _pollPaymentStatus() async {
+    const delays = [
+      Duration(milliseconds: 800),
+      Duration(seconds: 2),
+      Duration(seconds: 2),
+      Duration(seconds: 2),
+      Duration(seconds: 2),
+    ];
+    for (final delay in delays) {
+      await Future.delayed(delay);
+      if (!mounted) return;
+      try {
+        final payment =
+            await ref.read(paymentRepositoryProvider).getByBooking(widget.booking.id);
+        if (payment.paymentStatus == 'paid') {
+          widget.onRefresh();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(
+                'Payment of ETB ${payment.amount.toStringAsFixed(0)} confirmed via Chapa.',
+              ),
+              backgroundColor: kSuccess,
+              duration: const Duration(seconds: 4),
+            ));
+          }
+          return;
+        }
+      } catch (_) {
+        // No payment record yet, or a transient error — keep polling.
+      }
+    }
+    if (mounted) {
+      widget.onRefresh();
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text(
+          "Still confirming your payment with Chapa — check back in a moment.",
+        ),
+        backgroundColor: kAmber,
+        duration: Duration(seconds: 5),
+      ));
+    }
+  }
+
+  /// Shipper confirms the cargo arrived — this is what actually releases
+  /// the already-collected payment to the driver (backend attempts a real
+  /// Chapa transfer). The confirmation itself always succeeds once the
+  /// backend accepts the request; a failed transfer is a separate,
+  /// non-blocking outcome shown for transparency, not treated as an error.
+  Future<void> _confirmArrival() async {
+    setState(() => _busy = true);
+    try {
+      final updated =
+          await ref.read(bookingRepositoryProvider).confirmArrival(widget.booking.id);
+      if (!mounted) return;
+      widget.onRefresh();
+
+      final payoutOk = updated.payoutStatus == 'paid_out';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(payoutOk
+            ? 'Delivery confirmed — your driver has been paid.'
+            : 'Delivery confirmed. Your driver will receive payment shortly.'),
+        backgroundColor: kSuccess,
+        duration: const Duration(seconds: 4),
+      ));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: kDanger,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   /// Driver starts the trip
@@ -366,16 +463,23 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
           _tripStarted = true;
           _tripId = trip.id;
         });
+        await LocationService.startTracking(
+          ref,
+          serviceType: widget.booking.serviceType,
+          tripOngoing: true,
+        );
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Trip started! You are now on the way.'),
+          content: Text('Pickup journey started — live tracking is on.'),
           backgroundColor: kGreen,
         ));
         widget.onRefresh();
+        context.push('/driver/active-trip/${trip.id}');
       }
     } catch (e) {
-      // 400 means trip already exists — treat as success
-      if (e.toString().contains('400') ||
-          e.toString().toLowerCase().contains('already exists')) {
+      final message = e.toString();
+      if (message.toLowerCase().contains('already exists')) {
+        // Trip already exists — treat as success.
         if (mounted) {
           setState(() => _tripStarted = true);
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -384,10 +488,21 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
           ));
           widget.onRefresh();
         }
+      } else if (message.toLowerCase().contains('payment must be completed')) {
+        // Upfront-escrow gate — the shipper hasn't paid yet. Not an error
+        // exactly, just not ready; amber rather than red.
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Waiting for the shipper to complete payment before you can start this trip.'),
+            backgroundColor: kAmber,
+            duration: Duration(seconds: 4),
+          ));
+        }
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(e.toString()),
+            content: Text(message),
             backgroundColor: kDanger,
           ));
         }
@@ -397,7 +512,10 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
     }
   }
 
-  /// Driver completes the trip — then immediately asks for payment method
+  /// Driver completes the trip. Payment already happened upfront (before
+  /// the trip could even start — see the backend's trip-start gate), so
+  /// there's nothing left to self-report here anymore; this just confirms
+  /// delivery and tells the driver payment is now the shipper's move.
   Future<void> _completeTrip() async {
     if (_tripId == null) return;
     setState(() => _busy = true);
@@ -406,57 +524,14 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
       if (!mounted) return;
       setState(() => _tripStarted = false);
 
-      // Task 4: immediately prompt driver to record payment method
-      final method = await showModalBottomSheet<String>(
-        context: context,
-        backgroundColor: Colors.transparent,
-        isScrollControlled: true,
-        builder: (_) => const _DriverPaymentSheet(),
-      );
-
-      if (!mounted) return;
-
-      if (method != null) {
-        try {
-          final payment = await ref.read(paymentRepositoryProvider).create(
-            bookingId: widget.booking.id,
-            amount: widget.booking.estimatedPrice,
-            paymentMethod: method,
-          );
-          final net = widget.booking.estimatedPrice -
-              (widget.booking.commissionFee ??
-                  widget.booking.estimatedPrice * 0.10);
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(
-                'ጉዞ ተጠናቋል! Delivery confirmed. You will receive ETB '
-                '${net.toStringAsFixed(0)} via ${_methodLabel(payment.paymentMethod)}.',
-                style: GoogleFonts.inter(),
-              ),
-              backgroundColor: kSuccess,
-              duration: const Duration(seconds: 5),
-            ));
-          }
-        } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(
-                'Cargo delivered! Payment record failed: $e',
-                style: GoogleFonts.inter(),
-              ),
-              backgroundColor: kAmber,
-              duration: const Duration(seconds: 4),
-            ));
-          }
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Cargo delivered! Payment will be confirmed by the shipper.'),
-            backgroundColor: kSuccess,
-          ));
-        }
-      }
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text(
+          'ጉዞ ተጠናቋል! Delivery confirmed — waiting for the shipper to '
+          'confirm arrival, which releases your payment.',
+        ),
+        backgroundColor: kSuccess,
+        duration: Duration(seconds: 5),
+      ));
 
       widget.onRefresh();
     } catch (e) {
@@ -469,33 +544,6 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-  }
-
-  /// Driver records payment method from the 'delivered' state (if skipped earlier)
-  Future<void> _recordPayment() async {
-    final method = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (_) => const _DriverPaymentSheet(),
-    );
-    if (method == null || !mounted) return;
-    await _run(() async {
-      await ref.read(paymentRepositoryProvider).create(
-        bookingId: widget.booking.id,
-        amount: widget.booking.estimatedPrice,
-        paymentMethod: method,
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-            'Payment recorded via ${_methodLabel(method)}!',
-            style: GoogleFonts.inter(),
-          ),
-          backgroundColor: kSuccess,
-        ));
-      }
-    });
   }
 
   @override
@@ -639,7 +687,7 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
                       if (b.weight != null)
                         _Chip(
                             icon: Icons.scale_rounded,
-                            label: '${b.weight!.toStringAsFixed(0)} t',
+                            label: WeightFormat.display(b.weight!),
                             color: kAmber),
                       if (b.urgencyLevel != null)
                         _Chip(
@@ -664,7 +712,7 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
                 _InfoRow('Price',
                     'ETB ${b.estimatedPrice.toStringAsFixed(0)}'),
                 if (b.commissionFee != null) ...[
-                  _InfoRow('Platform Fee (10%)',
+                  _InfoRow('Platform Fee (2%)',
                       'ETB ${b.commissionFee!.toStringAsFixed(0)}'),
                   _InfoRow(
                     'You Earn',
@@ -763,17 +811,22 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
       );
     }
 
-    // ── DRIVER: accepted → price breakdown + start/in-progress trip ─────
-    if (isDriver && status == 'accepted') {
+    // ── DRIVER: accepted/paid → price breakdown + start/in-progress trip.
+    //    Both statuses share this branch — 'accepted' is pre-payment
+    //    (waiting), 'paid' is post-payment (may start) — the b.isPaid
+    //    check below (not the status string) is what actually decides
+    //    which UI shows. Without 'paid' here, a driver's screen would go
+    //    completely blank the moment a shipper pays. ───────────────────
+    if (isDriver && (status == 'accepted' || status == 'paid')) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (b.shipperName != null || b.shipperPhone != null) ...[
+          if (b.shipperName != null) ...[
             _ContactCard(
               icon: Icons.person_outline_rounded,
-              name: b.shipperName ?? 'Shipper',
-              phone: b.shipperPhone ?? '—',
-              label: 'Shipper Contact',
+              name: b.shipperName!,
+              phone: b.shipperPhone,
+              label: 'Shipper',
               color: kGreen,
             ),
             const SizedBox(height: 10),
@@ -828,45 +881,33 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(fontSize: 11, color: kTextMuted),
             ),
-          ] else
+          ] else if (b.isPaid)
             _ActionButton(
-              label: 'Start Trip',
+              label: 'Start Pickup',
               icon: Icons.play_circle_rounded,
               color: kGreen,
               onTap: _startTrip,
-              subtitle: 'Begin cargo delivery to the shipper',
+              subtitle: 'Navigate to collect the cargo',
+            )
+          else
+            _InfoBanner(
+              icon: Icons.hourglass_top_rounded,
+              message: 'Waiting for the shipper to complete payment — '
+                  "you'll be able to start once it's confirmed.",
+              color: kAmber,
             ),
         ],
       );
     }
 
-    // ── DRIVER: delivered → record payment if skipped at delivery ────────
+    // ── DRIVER: delivered → payment already collected upfront; waiting on
+    //    the shipper's arrival confirmation to release it ─────────────────
     if (isDriver && status == 'delivered') {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _InfoBanner(
-            icon: Icons.local_shipping_rounded,
-            message: 'Cargo delivered! Record how payment was made.',
-            color: kAmber,
-          ),
-          const SizedBox(height: 8),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.payment_rounded, size: 18),
-            label: Text('Record Payment Method',
-                style: GoogleFonts.inter(
-                    fontSize: 14, fontWeight: FontWeight.w600)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: kAmber,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-              elevation: 0,
-            ),
-            onPressed: _recordPayment,
-          ),
-        ],
+      return _InfoBanner(
+        icon: Icons.local_shipping_rounded,
+        message: 'Cargo delivered! Waiting for the shipper to confirm '
+            'arrival — your payment is released automatically once they do.',
+        color: kAmber,
       );
     }
 
@@ -897,27 +938,56 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
       );
     }
 
-    // ── SHIPPER: accepted → price info; payment after delivery ───────────
-    if (!isDriver && status == 'accepted') {
+    // ── SHIPPER: accepted/confirmed → price agreed, pay now to unlock
+    //    the trip (upfront escrow — held until you confirm arrival) ──────
+    if (!isDriver && (status == 'accepted' || status == 'confirmed')) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (b.driverName != null || b.driverPhone != null) ...[
+          if (b.driverName != null) ...[
             _ContactCard(
               icon: Icons.local_shipping_outlined,
-              name: b.driverName ?? 'Driver',
-              phone: b.driverPhone ?? '—',
+              name: b.driverName!,
+              phone: b.driverPhone,
               label: 'Your Driver',
               color: kGreen,
             ),
             const SizedBox(height: 10),
           ],
           _PriceSummaryCard(booking: b, forDriver: false),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
+          _ActionButton(
+            label: 'Pay Now  ·  ETB ${b.estimatedPrice.toStringAsFixed(0)}',
+            icon: Icons.payment_rounded,
+            color: kSuccess,
+            onTap: _pay,
+            subtitle: 'Held securely until you confirm the cargo arrived',
+          ),
+        ],
+      );
+    }
+
+    // ── SHIPPER: paid → held; trip starting/in progress ──────────────────
+    if (!isDriver && status == 'paid') {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (b.driverName != null) ...[
+            _ContactCard(
+              icon: Icons.local_shipping_outlined,
+              name: b.driverName!,
+              phone: b.driverPhone,
+              label: 'Your Driver',
+              color: kGreen,
+            ),
+            const SizedBox(height: 10),
+          ],
           _InfoBanner(
-            icon: Icons.local_shipping_outlined,
-            message: 'Driver is on the way — payment is collected after delivery.',
-            color: kAmber,
+            icon: Icons.verified_rounded,
+            message: b.isTripOngoing
+                ? 'Payment received — driver is on the way.'
+                : 'Payment received — waiting for your driver to start the trip.',
+            color: kGreen,
           ),
           if (b.isTripOngoing) ...[
             const SizedBox(height: 10),
@@ -943,44 +1013,52 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
       );
     }
 
-    // ── SHIPPER: delivered → pay now ─────────────────────────────────────
+    // ── SHIPPER: delivered → confirm arrival to release payment ──────────
     if (!isDriver && status == 'delivered') {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (b.driverName != null || b.driverPhone != null) ...[
+          if (b.driverName != null) ...[
             _ContactCard(
               icon: Icons.local_shipping_outlined,
-              name: b.driverName ?? 'Driver',
-              phone: b.driverPhone ?? '—',
+              name: b.driverName!,
+              phone: b.driverPhone,
               label: 'Your Driver',
               color: kGreen,
             ),
             const SizedBox(height: 10),
           ],
-          _PriceSummaryCard(booking: b, forDriver: false),
+          _InfoBanner(
+            icon: Icons.inventory_2_outlined,
+            message: 'Your driver marked this as delivered.',
+            color: kAmber,
+          ),
           const SizedBox(height: 10),
           _ActionButton(
-            label: 'Pay Now  ·  ETB ${b.estimatedPrice.toStringAsFixed(0)}',
-            icon: Icons.payment_rounded,
+            label: 'Confirm Arrival',
+            icon: Icons.check_circle_rounded,
             color: kSuccess,
-            onTap: _pay,
-            subtitle: 'Cargo has been delivered — choose payment method',
+            onTap: _confirmArrival,
+            subtitle: 'Releases payment to your driver',
           ),
         ],
       );
     }
 
-    // ── SHIPPER: confirmed → complete + rate driver ───────────────────────
-    if (!isDriver && (status == 'confirmed' || status == 'completed')) {
+    // ── SHIPPER: completed → done + rate driver. ('confirmed' is
+    //    intentionally not checked here — it's intercepted by the
+    //    accepted/confirmed branch above, since bookDirect creates bookings
+    //    directly in that status and it means the same "price agreed, not
+    //    yet paid" thing there.) ────────────────────────────────────────
+    if (!isDriver && status == 'completed') {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (b.driverName != null || b.driverPhone != null) ...[
+          if (b.driverName != null) ...[
             _ContactCard(
               icon: Icons.local_shipping_outlined,
-              name: b.driverName ?? 'Driver',
-              phone: b.driverPhone ?? '—',
+              name: b.driverName!,
+              phone: b.driverPhone,
               label: 'Your Driver',
               color: kGreen,
             ),
@@ -1286,17 +1364,21 @@ class _Chip extends StatelessWidget {
 
 // ── Contact card ──────────────────────────────────────────────────────────
 
+/// Shows who the other party on a booking is. Phone is optional and only
+/// renders when non-null — the backend only sends it once payment clears
+/// (BookingResource), so this card naturally shows name-only before that
+/// and gains a tap-to-copy phone row the moment the booking is paid.
 class _ContactCard extends StatelessWidget {
   final IconData icon;
   final String name;
-  final String phone;
+  final String? phone;
   final String label;
   final Color color;
 
   const _ContactCard({
     required this.icon,
     required this.name,
-    required this.phone,
+    this.phone,
     required this.label,
     required this.color,
   });
@@ -1337,31 +1419,33 @@ class _ContactCard extends StatelessWidget {
                         fontSize: 13,
                         fontWeight: FontWeight.bold,
                         color: kTextPrimary)),
-                const SizedBox(height: 2),
-                GestureDetector(
-                  onTap: () {
-                    Clipboard.setData(ClipboardData(text: phone));
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text('$phone copied to clipboard'),
-                      duration: const Duration(seconds: 2),
-                    ));
-                  },
-                  child: Row(
-                    children: [
-                      Icon(Icons.phone_rounded, size: 13, color: color),
-                      const SizedBox(width: 4),
-                      Text(phone,
-                          style: GoogleFonts.inter(
-                              fontSize: 13,
-                              color: color,
-                              fontWeight: FontWeight.w600)),
-                      const SizedBox(width: 6),
-                      Text('(tap to copy)',
-                          style: GoogleFonts.inter(
-                              fontSize: 10, color: kTextMuted)),
-                    ],
+                if (phone != null) ...[
+                  const SizedBox(height: 2),
+                  GestureDetector(
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: phone!));
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text('$phone copied to clipboard'),
+                        duration: const Duration(seconds: 2),
+                      ));
+                    },
+                    child: Row(
+                      children: [
+                        Icon(Icons.phone_rounded, size: 13, color: color),
+                        const SizedBox(width: 4),
+                        Text(phone!,
+                            style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: color,
+                                fontWeight: FontWeight.w600)),
+                        const SizedBox(width: 6),
+                        Text('(tap to copy)',
+                            style: GoogleFonts.inter(
+                                fontSize: 10, color: kTextMuted)),
+                      ],
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
@@ -1607,7 +1691,7 @@ class _BackhaulCard extends StatelessWidget {
                     const SizedBox(height: 3),
                     Row(children: [
                       Text(
-                        '${cargo.materialType}  ·  ${cargo.weight.toStringAsFixed(0)} t',
+                        '${cargo.materialType}  ·  ${WeightFormat.display(cargo.weight)}',
                         style: GoogleFonts.inter(
                             fontSize: 11, color: kTextMuted),
                       ),
@@ -1711,13 +1795,14 @@ class _BackhaulCard extends StatelessWidget {
 
 String _methodLabel(String method) {
   switch (method) {
-    case 'telebirr':      return 'Telebirr';
-    case 'cbe_birr':      return 'CBE Birr';
-    case 'awash_bank':    return 'Awash Bank';
-    case 'dashen_bank':   return 'Dashen Bank';
-    case 'bank_transfer': return 'Other Bank';
-    case 'cash':          return 'Cash';
-    default:              return method;
+    case 'chapa':          return 'Chapa';
+    case 'telebirr':       return 'Telebirr';
+    case 'cbe_birr':       return 'CBE Birr';
+    case 'awash_bank':     return 'Awash Bank';
+    case 'dashen_bank':    return 'Dashen Bank';
+    case 'bank_transfer':  return 'Other Bank';
+    case 'cash':           return 'Cash';
+    default:               return method;
   }
 }
 
@@ -1748,299 +1833,10 @@ class _PaymentMethodBadge extends StatelessWidget {
   }
 }
 
-// ── Driver post-delivery payment sheet ───────────────────────────────────
-//
-// Shown to the driver immediately after "Mark as Delivered". Records how the
-// shipper paid at the point of delivery (Ethiopian context: cash on delivery).
-
-class _DriverPaymentSheet extends StatefulWidget {
-  const _DriverPaymentSheet();
-
-  @override
-  State<_DriverPaymentSheet> createState() => _DriverPaymentSheetState();
-}
-
-class _DriverPaymentSheetState extends State<_DriverPaymentSheet> {
-  String? _selected;
-
-  static const _methods = [
-    ('cash',          'Cash / ጥሬ ገንዘብ',     'Paid at delivery — most common in Ethiopia', Icons.payments_rounded),
-    ('telebirr',      'Telebirr',             'Mobile transfer — instant',                   Icons.phone_android_rounded),
-    ('cbe_birr',      'CBE Birr',             'Commercial Bank of Ethiopia',                 Icons.account_balance_rounded),
-    ('awash_bank',    'Awash Bank',           'Bank transfer to Awash account',              Icons.account_balance_outlined),
-    ('dashen_bank',   'Dashen Bank',          'Bank transfer to Dashen account',             Icons.account_balance_outlined),
-    ('bank_transfer', 'Other Bank',           'Any other Ethiopian bank',                    Icons.account_balance_outlined),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: kSurface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      padding: EdgeInsets.fromLTRB(
-          20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                  color: kBorder, borderRadius: BorderRadius.circular(2)),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'How was payment made?',
-            style: GoogleFonts.inter(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: kTextPrimary),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            'ክፍያ እንዴት ተፈጸመ?',
-            style: GoogleFonts.inter(fontSize: 13, color: kTextSecond),
-          ),
-          const SizedBox(height: 16),
-          ..._methods.map((m) {
-            final (value, label, desc, icon) = m;
-            final selected = _selected == value;
-            return GestureDetector(
-              onTap: () => setState(() => _selected = value),
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? kAmber.withValues(alpha: 0.06)
-                      : kBackground,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: selected ? kAmber : kBorder,
-                    width: selected ? 1.5 : 0.5,
-                  ),
-                ),
-                child: Row(children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: (selected ? kAmber : kTextSecond)
-                          .withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(icon,
-                        size: 18,
-                        color: selected ? kAmber : kTextSecond),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(label,
-                            style: GoogleFonts.inter(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: kTextPrimary)),
-                        Text(desc,
-                            style: GoogleFonts.inter(
-                                fontSize: 11, color: kTextSecond)),
-                      ],
-                    ),
-                  ),
-                  if (selected)
-                    const Icon(Icons.check_circle_rounded,
-                        color: kAmber, size: 18),
-                ]),
-              ),
-            );
-          }),
-          const SizedBox(height: 8),
-          Row(children: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, null),
-              style: TextButton.styleFrom(foregroundColor: kTextMuted),
-              child: Text('Skip / ሰርዝ',
-                  style: GoogleFonts.inter(fontSize: 13)),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: _selected == null
-                    ? null
-                    : () => Navigator.pop(context, _selected),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: kAmber,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: kBorder,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                  elevation: 0,
-                ),
-                child: Text(
-                  _selected == null
-                      ? 'Confirm / አረጋግጥ'
-                      : 'Confirm — ${_methodLabel(_selected!)}',
-                  style: GoogleFonts.inter(
-                      fontSize: 14, fontWeight: FontWeight.w700),
-                ),
-              ),
-            ),
-          ]),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Payment method selection bottom sheet ────────────────────────────────
-
-class _PaymentMethodSheet extends StatefulWidget {
-  const _PaymentMethodSheet();
-
-  @override
-  State<_PaymentMethodSheet> createState() => _PaymentMethodSheetState();
-}
-
-class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
-  String? _selected;
-
-  static const _methods = [
-    ('telebirr',      'Telebirr',    'Mobile money — instant transfer',              Icons.phone_android_rounded),
-    ('cbe_birr',      'CBE Birr',    'Commercial Bank of Ethiopia mobile payment',   Icons.account_balance_rounded),
-    ('bank_transfer', 'Other Bank',  'Awash, Abyssinia, Dashen or any other bank',   Icons.account_balance_outlined),
-    ('cash',          'Cash',        'Pay on delivery or pickup',                    Icons.payments_rounded),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: kSurface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: kBorder,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text('Select Payment Method',
-              style: GoogleFonts.inter(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: kTextPrimary)),
-          const SizedBox(height: 4),
-          Text('Choose how the payment will be made',
-              style: GoogleFonts.inter(fontSize: 13, color: kTextSecond)),
-          const SizedBox(height: 16),
-          ..._methods.map((m) {
-            final (value, label, desc, icon) = m;
-            final selected = _selected == value;
-            return GestureDetector(
-              onTap: () => setState(() => _selected = value),
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? kGreen.withValues(alpha: 0.06)
-                      : kBackground,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: selected ? kGreen : kBorder,
-                    width: selected ? 1.5 : 0.5,
-                  ),
-                ),
-                child: Row(children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: (selected ? kGreen : kTextSecond)
-                          .withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(icon,
-                        size: 20,
-                        color: selected ? kGreen : kTextSecond),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(label,
-                            style: GoogleFonts.inter(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: kTextPrimary)),
-                        const SizedBox(height: 2),
-                        Text(desc,
-                            style: GoogleFonts.inter(
-                                fontSize: 12, color: kTextSecond)),
-                      ],
-                    ),
-                  ),
-                  if (selected)
-                    const Icon(Icons.check_circle_rounded,
-                        color: kGreen, size: 20),
-                ]),
-              ),
-            );
-          }),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _selected == null
-                  ? null
-                  : () => Navigator.pop(context, _selected),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kSuccess,
-                foregroundColor: Colors.white,
-                disabledBackgroundColor: kBorder,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-                elevation: 0,
-              ),
-              child: Text(
-                _selected == null
-                    ? 'Select a method to continue'
-                    : 'Confirm Payment via ${_methodLabel(_selected!)}',
-                style: GoogleFonts.inter(
-                    fontSize: 14, fontWeight: FontWeight.w700),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // ── Price summary card ────────────────────────────────────────────────────
 //
 // Shown to both driver (before trip start) and shipper (before/at payment).
-// forDriver=true  → shows "You will receive" (agreed price minus 10%)
+// forDriver=true  → shows "You will receive" (agreed price minus 2%)
 // forDriver=false → shows "Total to pay" (agreed price; commission deducted
 //                   from driver's side, not added on top)
 
@@ -2053,7 +1849,7 @@ class _PriceSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final price      = booking.estimatedPrice;
-    final commission = booking.commissionFee ?? (price * 0.10);
+    final commission = booking.commissionFee ?? (price * 0.02);
     final driverNet  = price - commission;
 
     return Container(
@@ -2085,7 +1881,7 @@ class _PriceSummaryCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           _SummaryRow(
-            label: 'Platform commission (10%)',
+            label: 'Platform commission (2%)',
             value: '− ETB ${commission.toStringAsFixed(0)}',
             valueColor: kDanger,
           ),

@@ -1,4 +1,4 @@
-import re
+import random
 from ..schemas.recommendation import TruckRecommendationRequest, TruckRecommendationResponse, TruckInfo
 from ._geo import road_distance_km
 
@@ -17,6 +17,13 @@ URGENCY_MULTIPLIER = {
     'low': 0.9, 'normal': 1.0, 'high': 1.1, 'express': 1.25,
 }
 
+# Cold-start-safe defaults for a driver with no rating/bid history yet —
+# neutral-good, not zero, so a new driver isn't punished for lacking a track
+# record. Mirrors AiController::localTruckRecommend()'s PHP fallback so both
+# engines rank the same way regardless of which one actually answers a call.
+NEUTRAL_RATING = 4.0
+NEUTRAL_ACCEPTANCE_RATE = 0.7
+
 
 def _score_truck(truck: dict, req: TruckRecommendationRequest,
                  route_km: float, proximity_km: float) -> dict:
@@ -24,8 +31,24 @@ def _score_truck(truck: dict, req: TruckRecommendationRequest,
     urgency_bonus   = URGENCY_MULTIPLIER.get(req.urgency_level.lower(), 1.0)
     material_bonus  = MATERIAL_PRIORITY.get(req.material_type.lower(), 1.0)
     proximity_score = 1.0 / (1.0 + proximity_km / 200.0)
+    rating_score    = (truck.get('avg_rating') or NEUTRAL_RATING) / 5.0
+    accept_score    = truck.get('acceptance_rate')
+    if accept_score is None:
+        accept_score = NEUTRAL_ACCEPTANCE_RATE
 
-    score = (capacity_fit * 0.40) + (urgency_bonus * 0.15) + (proximity_score * 0.30) + (material_bonus * 0.15)
+    # Real driver-performance signal (rating, bid-acceptance rate) alongside
+    # trip fit — not just static trip attributes. Previously capacity_fit
+    # capped at 1.0 for any "big enough" truck and proximity ended up the
+    # only real differentiator, which meant Addis-based trucks (where most
+    # cargo originates) won almost every call regardless of driver quality.
+    score = (
+        (capacity_fit * 0.20)
+        + (urgency_bonus * 0.10)
+        + (proximity_score * 0.20)
+        + (material_bonus * 0.10)
+        + (rating_score * 0.20)
+        + (accept_score * 0.20)
+    )
     score = round(min(max(score, 0.0), 1.0), 2)
 
     estimated_price = int(round(route_km * req.weight * 23 * material_bonus * urgency_bonus))
@@ -41,6 +64,24 @@ def _score_truck(truck: dict, req: TruckRecommendationRequest,
     }
 
 
+def _shuffle_tied_scores(scored: list[dict]) -> list[dict]:
+    """Sorts descending by score, but randomizes order WITHIN each group of
+    equal scores instead of always resolving ties to the same list-order
+    winner. A higher-scored truck never moves below a lower-scored one —
+    two genuinely-tied trucks just take turns being #1 across calls instead
+    of one fixed truck always winning by accident of fleet-list order."""
+    groups: dict[float, list[dict]] = {}
+    for item in scored:
+        groups.setdefault(item['score'], []).append(item)
+
+    result: list[dict] = []
+    for s in sorted(groups.keys(), reverse=True):
+        group = groups[s]
+        random.shuffle(group)
+        result.extend(group)
+    return result
+
+
 def recommend_truck(request: TruckRecommendationRequest) -> TruckRecommendationResponse:
     fleet = request.truck_fleet if (request.truck_fleet and len(request.truck_fleet) > 0) else _DEMO_FLEET
 
@@ -49,11 +90,8 @@ def recommend_truck(request: TruckRecommendationRequest) -> TruckRecommendationR
 
     route_km = road_distance_km(request.pickup_location, request.destination)
 
-    ranked = sorted(
-        [_score_truck(t, request, route_km, road_distance_km(base(t), request.pickup_location)) for t in fleet],
-        key=lambda x: x['score'],
-        reverse=True,
-    )
+    scored = [_score_truck(t, request, route_km, road_distance_km(base(t), request.pickup_location)) for t in fleet]
+    ranked = _shuffle_tied_scores(scored)
 
     return TruckRecommendationResponse(
         recommended_trucks=[TruckInfo(**r) for r in ranked]

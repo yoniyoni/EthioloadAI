@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
+import '../../../config/map_config.dart';
 import '../../../data/models/models.dart';
 import '../../../data/repositories/repositories.dart';
 
@@ -227,7 +228,7 @@ class _MapView extends StatelessWidget {
       ),
       children: [
         TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          urlTemplate: kMapTileUrlTemplate,
           userAgentPackageName: 'com.ethioloadai.app',
         ),
         if (hasRoute)
@@ -260,6 +261,7 @@ class _MapView extends StatelessWidget {
             ),
           ),
         ]),
+        kMapAttribution,
       ],
     );
   }

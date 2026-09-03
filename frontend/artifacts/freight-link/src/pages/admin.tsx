@@ -857,7 +857,7 @@ export default function Admin() {
                                       ? "bg-amber-50 text-amber-700 border-amber-200"
                                       : c.status === "matched" || c.status === "completed"
                                       ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                      : c.status === "cancelled"
+                                      : c.status === "cancelled" || c.status === "expired"
                                       ? "bg-red-50 text-red-700 border-red-200"
                                       : "bg-gray-50 text-gray-600 border-gray-200"
                                   }`}>

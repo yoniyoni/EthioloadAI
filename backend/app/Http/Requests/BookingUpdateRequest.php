@@ -19,7 +19,7 @@ class BookingUpdateRequest extends FormRequest
             'vehicle_id' => 'sometimes|exists:vehicles,id',
             'driver_id' => 'sometimes|exists:users,id',
             'booking_status' => 'sometimes|string',
-            'estimated_price' => 'sometimes|numeric',
+            'estimated_price' => 'sometimes|numeric|min:0',
         ];
     }
 }

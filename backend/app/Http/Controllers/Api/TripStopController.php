@@ -4,14 +4,44 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TripStopResource;
+use App\Models\CargoRequest;
 use App\Models\Trip;
 use App\Models\TripStop;
+use App\Services\ConsolidationService;
 use App\Services\TripService;
 use Illuminate\Http\Request;
 
 class TripStopController extends Controller
 {
-    public function __construct(protected TripService $tripService) {}
+    public function __construct(
+        protected TripService $tripService,
+        protected ConsolidationService $consolidationService,
+    ) {}
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GET /trips/{trip}/consolidation-candidates
+    // Driver-only. Pending cargo near the vehicle's current position that
+    // still fits in the truck's remaining capacity — live-computed, not
+    // cached, since remaining capacity changes with every stop added.
+    // ─────────────────────────────────────────────────────────────────────────
+    public function candidates(Request $request, Trip $trip)
+    {
+        $this->authorizeDriver($trip, auth()->user());
+
+        if ($trip->trip_status !== 'ongoing') {
+            return response()->json(['message' => 'Consolidation candidates are only available on an ongoing trip.'], 422);
+        }
+
+        $validated = $request->validate([
+            'radius_km' => 'nullable|numeric|min:1|max:1000',
+        ]);
+        $radiusKm = isset($validated['radius_km']) ? (float) $validated['radius_km'] : null;
+
+        return response()->json([
+            'data' => $this->consolidationService->findCandidates($trip, $radiusKm),
+            'remaining_capacity_tons' => $this->tripService->remainingCapacityTons($trip),
+        ]);
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // GET /trips/{trip}/stops
@@ -64,6 +94,29 @@ class TripStopController extends Controller
             'agreed_price'     => 'required|numeric|min:0',
             'notes'            => 'nullable|string|max:500',
         ]);
+
+        // When the stop is for a real posted cargo request (consolidation,
+        // not an ad-hoc manual stop), enforce remaining capacity and claim
+        // it atomically so two drivers can't both add the same cargo.
+        $cargo = null;
+        if (!empty($data['cargo_request_id'])) {
+            $cargo = CargoRequest::findOrFail($data['cargo_request_id']);
+
+            $remaining = $this->tripService->remainingCapacityTons($trip);
+            if ($remaining !== null && (float) $cargo->weight > $remaining) {
+                return response()->json([
+                    'message' => "This cargo ({$cargo->weight}t) would exceed your truck's remaining capacity ({$remaining}t).",
+                ], 422);
+            }
+
+            $claimed = CargoRequest::where('id', $cargo->id)
+                ->where('status', 'pending')
+                ->update(['status' => 'matched']);
+
+            if (!$claimed) {
+                return response()->json(['message' => 'This cargo was just matched by someone else.'], 422);
+            }
+        }
 
         $stop = TripStop::create(array_merge($data, ['trip_id' => $trip->id]));
 

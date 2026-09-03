@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Services\CityCoordinates;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -10,21 +11,12 @@ class CargoResource extends JsonResource
     /**
      * Look up [lat, lng] for an Ethiopian city name.
      * Tries exact match, then strips after "/" or ",", then case-insensitive substring.
+     * Backed by CityCoordinates::COORDS (single canonical source, replacing this
+     * method's former local VehicleController::CITY_COORDS + $extra merge).
      */
     private static function cityCoords(string $city): ?array
     {
-        static $extra = [
-            'Shashemene'  => [7.2000,  38.5833],
-            'Asella'      => [7.9500,  39.1333],
-            'Bale Robe'   => [7.1167,  40.0000],
-            'Bishoftu'    => [8.7500,  38.9833],
-            'Moyale'      => [3.5333,  39.0500],
-            'Kebri Dahar' => [6.7500,  44.2833],
-            'Sodo'        => [6.8500,  37.7500],
-            'Adwa'        => [14.1667, 38.9000],
-        ];
-
-        $all = array_merge(\App\Http\Controllers\Api\VehicleController::CITY_COORDS, $extra);
+        $all = CityCoordinates::COORDS;
 
         $trimmed = trim($city);
         if ($trimmed === '' || strtolower($trimmed) === 'other') return null;

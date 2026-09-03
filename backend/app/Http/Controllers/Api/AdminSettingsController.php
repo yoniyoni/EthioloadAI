@@ -38,4 +38,32 @@ class AdminSettingsController extends Controller
             'rate_max' => (float) $data['rate_max'],
         ]);
     }
+
+    public function spatialShow()
+    {
+        return response()->json([
+            'nearby_trucks_radius_km'  => (float) PlatformSetting::get('spatial.nearby_trucks_radius_km', 50),
+            'nearby_drivers_radius_km' => (float) PlatformSetting::get('spatial.nearby_drivers_radius_km', 50),
+            'cargo_search_radius_km'   => (float) PlatformSetting::get('spatial.cargo_search_radius_km', 50),
+            'fleet_dispatch_radius_km' => (float) PlatformSetting::get('spatial.fleet_dispatch_radius_km', 200),
+            'backhaul_radius_km'       => (float) PlatformSetting::get('spatial.backhaul_radius_km', 200),
+        ]);
+    }
+
+    public function spatialUpdate(Request $request)
+    {
+        $data = $request->validate([
+            'nearby_trucks_radius_km'  => 'required|numeric|min:1|max:2000',
+            'nearby_drivers_radius_km' => 'required|numeric|min:1|max:2000',
+            'cargo_search_radius_km'   => 'required|numeric|min:1|max:2000',
+            'fleet_dispatch_radius_km' => 'required|numeric|min:1|max:2000',
+            'backhaul_radius_km'       => 'required|numeric|min:1|max:2000',
+        ]);
+
+        foreach ($data as $key => $value) {
+            PlatformSetting::set("spatial.{$key}", $value);
+        }
+
+        return response()->json(array_merge(['success' => true], array_map(fn ($v) => (float) $v, $data)));
+    }
 }

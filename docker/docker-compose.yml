@@ -24,6 +24,20 @@ services:
       - ../backend:/var/www/html
     command: php artisan serve --host=0.0.0.0 --port=8000
 
+  # Processes QUEUE_CONNECTION=database jobs (e.g. GenerateBackhaulRecommendations)
+  # dispatched by the backend service. Without this, queued jobs are written to
+  # the jobs table and never picked up — same image/env as `backend`, just a
+  # worker process instead of the web server.
+  backend-queue:
+    build: ../backend
+    env_file:
+      - ../.env.example
+    depends_on:
+      - db
+    volumes:
+      - ../backend:/var/www/html
+    command: php artisan queue:work --tries=3
+
   ai_engine:
     build: ../ai_engine
     env_file:
@@ -36,5 +50,101 @@ services:
       - ../ai_engine:/app
     command: uvicorn main:app --host 0.0.0.0 --port 8000
 
+  # One-shot: downloads the configured OSM extract into the osrm_data volume.
+  # Uses a small, actively-maintained image (not the EOL-Debian osrm-backend
+  # image) purely so curl/TLS/CA-certs are current — never touches OSRM itself.
+  osrm-fetch:
+    image: curlimages/curl:8.11.1
+    user: root  # curlimages/curl defaults to a non-root user; the fresh osrm_data volume is root-owned
+    environment:
+      OSRM_REGION_URL: ${OSRM_REGION_URL:-https://download.geofabrik.de/africa/ethiopia-latest.osm.pbf}
+    volumes:
+      - osrm_data:/data
+      - ../docker/osrm/fetch-extract.sh:/fetch-extract.sh:ro
+    entrypoint: ["/bin/sh", "/fetch-extract.sh"]
+
+  # One-shot: builds the MLD routing graph from the downloaded extract, then
+  # exits. Uses the official, unmodified osrm-backend image — no custom build.
+  # Re-running docker compose up skips this (see prepare-data.sh) once the
+  # graph exists, so it only pays the extract/partition/customize cost once
+  # (or after a volume wipe). `osrm` below waits for this to finish first.
+  osrm-data:
+    image: osrm/osrm-backend:v5.25.0
+    depends_on:
+      osrm-fetch:
+        condition: service_completed_successfully
+    environment:
+      OSRM_PROFILE: ${OSRM_PROFILE:-car}
+    volumes:
+      - osrm_data:/data
+      - ../docker/osrm/prepare-data.sh:/prepare-data.sh:ro
+    entrypoint: ["/bin/bash", "/prepare-data.sh"]
+
+  # Self-hosted road-routing engine (replaces the public router.project-osrm.org
+  # demo server — see RoutingService.php). Serves road distance, ETA, turn-by-turn
+  # geometry only; it never performs proximity/nearby search, which stays on
+  # PostGIS (ST_DWithin/KNN). Official, unmodified image. No native /health
+  # route exists in osrm-routed and the base image has no curl/wget, so the
+  # healthcheck script speaks raw HTTP over bash's /dev/tcp against a real
+  # in-bounds request (Addis Ababa) instead.
+  osrm:
+    image: osrm/osrm-backend:v5.25.0
+    depends_on:
+      osrm-data:
+        condition: service_completed_successfully
+    volumes:
+      - osrm_data:/data
+      - ../docker/osrm/healthcheck.sh:/healthcheck.sh:ro
+    ports:
+      - '${OSRM_PORT:-5001}:5000'
+    entrypoint: ["osrm-routed", "--algorithm", "mld", "--max-table-size", "8000", "/data/region.osrm"]
+    healthcheck:
+      test: ["CMD", "bash", "/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # Self-hosted geocoding (place search + reverse geocode), replacing the
+  # public nominatim.openstreetmap.org instance — see RoutingService.php.
+  # That public instance caps usage at 1 req/s and isn't meant for
+  # production traffic; this is the same fix already applied to routing
+  # via OSRM above. Self-contained image (bundles its own Postgres), so
+  # unlike osrm-fetch/osrm-data/osrm there's no separate build stage — the
+  # image handles downloading the extract and importing it on first start.
+  # Same Geofabrik Ethiopia extract source as OSRM, for one consistent
+  # data source. FREEZE=true: static one-time import, no live OSM diffs —
+  # keeps footprint small, matching OSRM's own extract being a point-in-time
+  # snapshot rather than a live-updating one. Buffer/cache sizes are tuned
+  # down from the image's continent/planet-scale defaults since this is a
+  # single small country.
+  nominatim:
+    image: mediagis/nominatim:5.3
+    restart: unless-stopped
+    environment:
+      # Pinned to a dated snapshot, not the "-latest" alias: Geofabrik's
+      # "-latest" now 302-redirects to the dated file, and the image's own
+      # download script combines that redirect with an HTTP Range resume
+      # request in a way that doesn't handle the redirect correctly (wrote
+      # the tiny redirect HTML page into the data file instead of resuming
+      # the real download — hit this directly this session). Pinning to a
+      # concrete filename sidesteps the redirect entirely, and fits FREEZE
+      # mode anyway (a static point-in-time import, not a live-updating one)
+      # — bump the date manually on a future re-import if ever needed.
+      PBF_URL: ${NOMINATIM_PBF_URL:-https://download.geofabrik.de/africa/ethiopia-260831.osm.pbf}
+      IMPORT_STYLE: address
+      NOMINATIM_PASSWORD: ${NOMINATIM_DB_PASSWORD:-changeme-nominatim}
+      FREEZE: "true"
+      POSTGRES_SHARED_BUFFERS: 512MB
+      POSTGRES_EFFECTIVE_CACHE_SIZE: 2GB
+    ports:
+      - '${NOMINATIM_PORT:-8088}:8080'
+    volumes:
+      - nominatim_data:/var/lib/postgresql/16/main
+    shm_size: 1g
+
 volumes:
   pgdata:
+  osrm_data:
+  nominatim_data:

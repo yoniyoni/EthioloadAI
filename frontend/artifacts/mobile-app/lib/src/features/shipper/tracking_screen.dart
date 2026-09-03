@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:easy_localization/easy_localization.dart';
+import '../../config/map_config.dart';
 import '../../data/providers/data_providers.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/repositories.dart';
@@ -12,12 +13,17 @@ const _green = Color(0xFF0F3D1A);
 const _bg    = Color(0xFFF8FBF8);
 
 /// Shipper tracking screen — polls GET /trips/{trip}/location.
-/// Polling interval: 5 min (intracity) / 30 min (intercity).
+/// Polling interval: 20 sec (intracity) / 45 sec (intercity), matching the
+/// driver's live-tracking push cadence so the truck appears to move smoothly.
 /// Feature 3 enhancements: route overlay (planned=grey, traveled=green),
 /// ETA from OSRM, reverse geocode "currently near" label, truck popup.
 class TrackingScreen extends ConsumerStatefulWidget {
-  final int freightId;
-  const TrackingScreen({required this.freightId, super.key});
+  final int? freightId;
+  final int? tripId;
+  final String? serviceType;
+  const TrackingScreen({this.freightId, this.tripId, this.serviceType, super.key})
+      : assert(freightId != null || tripId != null,
+            'TrackingScreen requires freightId or tripId');
 
   @override
   ConsumerState<TrackingScreen> createState() => _TrackingScreenState();
@@ -25,6 +31,11 @@ class TrackingScreen extends ConsumerStatefulWidget {
 
 class _TrackingScreenState extends ConsumerState<TrackingScreen> {
   Timer? _pollTimer;
+  // Lighter-weight poll used only while a booking is confirmed but the
+  // driver hasn't started the trip yet (no Trip row, so _pollTimer/_refresh
+  // have nothing to call) — watches for the trip to appear and seamlessly
+  // upgrades to full live tracking the moment it does.
+  Timer? _preTripPollTimer;
   TripLocation? _location;
   bool _loading    = false;
   bool _firstLoad  = true;
@@ -53,10 +64,24 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
   @override
   void dispose() {
     _pollTimer?.cancel();
+    _preTripPollTimer?.cancel();
     super.dispose();
   }
 
   Future<void> _bootstrap() async {
+    // Fleet-owner drill-in path: tripId is provided directly (no shipper
+    // booking lookup needed — the caller already knows which trip to track).
+    if (widget.tripId != null) {
+      setState(() => _tripId = widget.tripId);
+      await _refresh();
+
+      final interval = widget.serviceType == 'intracity'
+          ? const Duration(seconds: 20)
+          : const Duration(seconds: 45);
+      _pollTimer = Timer.periodic(interval, (_) => _refresh());
+      return;
+    }
+
     final bookings = ref.read(bookingListProvider).valueOrNull ?? [];
     Booking? booking;
     try {
@@ -65,18 +90,49 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
 
     if (booking == null) return;
 
-    setState(() => _booking = booking);
+    setState(() {
+      _booking   = booking;
+      _firstLoad = false;
+    });
 
     final tripId = booking.tripId;
-    if (tripId == null) return;
+    if (tripId == null) {
+      // Booking confirmed, driver hasn't tapped "Start Trip" yet — poll for
+      // that (and for the vehicle's live position, which updates in the
+      // meantime) instead of showing nothing.
+      _preTripPollTimer = Timer.periodic(
+        const Duration(seconds: 20), (_) => _pollForTripStart());
+      return;
+    }
 
     setState(() => _tripId = tripId);
     await _refresh();
+    _startLiveTracking();
+  }
 
+  Future<void> _pollForTripStart() async {
+    final id = _booking?.id;
+    if (id == null || !mounted) return;
+    try {
+      final fresh = await ref.read(bookingRepositoryProvider).get(id);
+      if (!mounted) return;
+      setState(() => _booking = fresh);
+      if (fresh.tripId != null) {
+        _preTripPollTimer?.cancel();
+        setState(() => _tripId = fresh.tripId);
+        await _refresh();
+        _startLiveTracking();
+      }
+    } catch (_) {
+      // Transient failure — next tick tries again.
+    }
+  }
+
+  void _startLiveTracking() {
     final serviceType = _booking?.serviceType ?? 'intercity';
     final interval    = serviceType == 'intracity'
-        ? const Duration(minutes: 5)
-        : const Duration(minutes: 30);
+        ? const Duration(seconds: 20)
+        : const Duration(seconds: 45);
     _pollTimer = Timer.periodic(interval, (_) => _refresh());
   }
 
@@ -147,7 +203,8 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
     } catch (_) {}
   }
 
-  bool get _isIntracity => _booking?.serviceType == 'intracity';
+  bool get _isIntracity =>
+      (_booking?.serviceType ?? widget.serviceType) == 'intracity';
 
   String _lastUpdatedText() {
     final mins    = _location?.minutesSinceUpdate;
@@ -183,10 +240,17 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final loc    = _location;
+    final loc = _location;
+    // Pre-trip fallback: no Trip row yet, so `loc` is never populated —
+    // show the vehicle's last-known position from the booking instead.
+    final preTripPos = (_tripId == null &&
+            _booking?.driverLat != null &&
+            _booking?.driverLng != null)
+        ? LatLng(_booking!.driverLat!, _booking!.driverLng!)
+        : null;
     final center = (loc != null && loc.hasPosition)
         ? LatLng(loc.currentLat!, loc.currentLng!)
-        : _defaultCenter;
+        : preTripPos ?? _defaultCenter;
 
     // Traveled breadcrumbs (green)
     final traveledPoints = (loc?.routeData ?? []).map((p) {
@@ -254,8 +318,7 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
                   ),
                   children: [
                     TileLayer(
-                      urlTemplate:
-                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      urlTemplate: kMapTileUrlTemplate,
                       userAgentPackageName: 'com.ethioloadai.app',
                     ),
 
@@ -294,7 +357,8 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
                         ),
                       ]),
 
-                    // Truck marker (tappable)
+                    // Truck marker (tappable) — live position once the
+                    // trip has started, otherwise the pre-trip snapshot.
                     if (loc != null && loc.hasPosition)
                       MarkerLayer(
                         markers: [
@@ -309,7 +373,23 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
                             ),
                           ),
                         ],
+                      )
+                    else if (preTripPos != null)
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point:  preTripPos,
+                            width:  48,
+                            height: 48,
+                            child:  GestureDetector(
+                              onTap: () => setState(
+                                  () => _showTruckPopup = !_showTruckPopup),
+                              child: _TruckMarker(),
+                            ),
+                          ),
+                        ],
                       ),
+                    kMapAttribution,
                   ],
                 ),
 
@@ -365,7 +445,7 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
 
   Widget _buildInfoCard(TripLocation? loc) {
     if (_tripId == null) {
-      return _NoTripCard(freightId: widget.freightId);
+      return _PreTripCard(booking: _booking, freightId: widget.freightId);
     }
 
     return Column(
@@ -698,20 +778,87 @@ class _InfoRow extends StatelessWidget {
 
 // ── No trip card ──────────────────────────────────────────────────────────
 
-class _NoTripCard extends StatelessWidget {
-  final int freightId;
-  const _NoTripCard({required this.freightId});
+/// Shown between "booking confirmed" and "driver starts the trip" — there's
+/// no Trip row yet for the live-tracking flow below to poll, so this shows
+/// the vehicle's last-known position (from the booking) instead of nothing.
+class _PreTripCard extends StatelessWidget {
+  final Booking? booking;
+  final int? freightId;
+  const _PreTripCard({required this.booking, required this.freightId});
+
+  String _relativeTime(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Center(
-        child: Text(
-          'tracking.no_trip'.tr(),
-          style: TextStyle(color: Colors.grey[500]),
+    final b = booking;
+    if (b == null) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Center(
+          child: Text(
+            'tracking.no_trip'.tr(),
+            style: TextStyle(color: Colors.grey[500]),
+          ),
         ),
-      ),
+      );
+    }
+
+    final hasPosition = b.driverLat != null && b.driverLng != null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _InfoRow(
+          icon: Icons.receipt_long_outlined,
+          label: 'Booking #${b.id}',
+          value: b.bookingStatus.toUpperCase(),
+          valueColor: _green,
+        ),
+        const SizedBox(height: 8),
+        if (b.driverName != null)
+          _InfoRow(
+            icon: Icons.person_outline,
+            label: 'Driver',
+            value: b.driverName!,
+          ),
+        const SizedBox(height: 8),
+        Row(children: [
+          Container(
+            width: 10, height: 10,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: hasPosition ? const Color(0xFFF59E0B) : Colors.grey,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            hasPosition
+                ? 'Driver hasn\'t started the trip yet'
+                : 'Waiting for the driver to share their location',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+              color: hasPosition ? const Color(0xFFF59E0B) : Colors.grey[600],
+            ),
+          ),
+        ]),
+        if (hasPosition && b.driverLastLocationAt != null) ...[
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.only(left: 18),
+            child: Text(
+              'Last seen ${_relativeTime(b.driverLastLocationAt!)} — showing their last known position.',
+              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

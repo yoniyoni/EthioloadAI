@@ -43,6 +43,7 @@ class DriverDocument extends Model
             'vehicle_registration' => 'Vehicle Registration',
             'insurance'           => 'Insurance Certificate',
             'tin'                 => 'TIN Certificate',
+            'professional_permit'  => 'Professional Driving Permit',
             default               => ucfirst(str_replace('_', ' ', $type)),
         };
     }

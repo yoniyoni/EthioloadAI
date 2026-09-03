@@ -42,7 +42,7 @@ class BookingCreateRequest extends FormRequest
             'vehicle_id' => 'required|exists:vehicles,id',
             'driver_id' => 'required|exists:users,id',
             'booking_status' => 'required|string',
-            'estimated_price' => 'required|numeric',
+            'estimated_price' => 'required|numeric|min:0',
         ];
     }
 }

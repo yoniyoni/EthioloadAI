@@ -3,8 +3,10 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:easy_localization/easy_localization.dart';
+import '../../config/map_config.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/repositories.dart';
+import '../../services/location_service.dart';
 
 const _green     = Color(0xFF0F3D1A);
 const _greenFill = Color(0xFF1B5E20);
@@ -38,8 +40,6 @@ class _NavigationScreenState extends ConsumerState<NavigationScreen> {
   bool _loading   = true;
   bool _showSteps = false;
   final MapController _mapCtrl = MapController();
-
-  static const _defaultCenter = LatLng(9.0310, 38.7469);
 
   @override
   void initState() {
@@ -80,8 +80,11 @@ class _NavigationScreenState extends ConsumerState<NavigationScreen> {
     if (widget.originLat != null && widget.originLng != null) {
       return LatLng(widget.originLat!, widget.originLng!);
     }
-    // Use Addis Ababa as fallback origin when position unknown
-    return const LatLng(9.0320, 38.7469);
+    // Caller didn't supply an origin — try live GPS before giving up.
+    // A hardcoded city fallback here would silently route from the wrong
+    // place with no indication to the driver that it happened.
+    final pos = await LocationService.getCurrentPosition();
+    return pos != null ? LatLng(pos.latitude, pos.longitude) : null;
   }
 
   List<LatLng> get _routePoints => (_route?.polyline ?? [])
@@ -153,8 +156,7 @@ class _NavigationScreenState extends ConsumerState<NavigationScreen> {
                       ),
                       children: [
                         TileLayer(
-                          urlTemplate:
-                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          urlTemplate: kMapTileUrlTemplate,
                           userAgentPackageName: 'com.ethioloadai.app',
                         ),
                         if (_routePoints.length >= 2)
@@ -184,6 +186,7 @@ class _NavigationScreenState extends ConsumerState<NavigationScreen> {
                               child:  _OriginPin(),
                             ),
                         ]),
+                        kMapAttribution,
                       ],
                     ),
 

@@ -7,22 +7,29 @@ use App\Http\Requests\CargoCreateRequest;
 use App\Http\Requests\CargoUpdateRequest;
 use App\Http\Resources\BidResource;
 use App\Http\Resources\CargoResource;
+use App\Jobs\GenerateBackhaulRecommendations;
 use App\Models\Booking;
 use App\Models\CargoRequest;
 use App\Models\PlatformSetting;
+use App\Models\Trip;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Notifications\BidPlacedNotification;
 use App\Notifications\BookingCreatedNotification;
 use App\Notifications\FixedPriceBookedNotification;
 use App\Services\BidService;
+use App\Services\CargoExpiryService;
 use App\Services\CityCoordinates;
 use App\Services\DistanceService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class CargoRequestController extends Controller
 {
-    public function __construct(protected BidService $bidService) {}
+    public function __construct(
+        protected BidService $bidService,
+        protected CargoExpiryService $cargoExpiry,
+    ) {}
 
     /**
      * Display a listing of the resource.
@@ -48,6 +55,11 @@ class CargoRequestController extends Controller
      */
     public function index(Request $request)
     {
+        // Lazily close bidding on any cargo whose bid_deadline has passed —
+        // see CargoExpiryService. Keeps this endpoint's 'pending' status
+        // correct with no scheduler running (true of this dev environment).
+        $this->cargoExpiry->expireOverdue();
+
         $user  = $request->user();
         $query = CargoRequest::query()->where('status', 'pending');
 
@@ -189,8 +201,12 @@ class CargoRequestController extends Controller
 
             // Radius (km) is admin-editable via PlatformSetting (Phase 2 Step 3,
             // key distinct from the drivers-search radius keys); read fresh on
-            // every request so changes apply without a deploy.
-            $radiusKm = (float) PlatformSetting::get('spatial.cargo_search_radius_km', 50);
+            // every request so changes apply without a deploy. The driver can
+            // override it per-request (e.g. widen to 100km) via ?radius_km=.
+            $request->validate(['radius_km' => 'nullable|numeric|min:1|max:1000']);
+            $radiusKm = $request->filled('radius_km')
+                ? (float) $request->query('radius_km')
+                : (float) PlatformSetting::get('spatial.cargo_search_radius_km', 50);
             $radiusMeters = $radiusKm * 1000;
 
             // Tier A: cargo rows that already have a real stored pickup_point —
@@ -254,6 +270,7 @@ class CargoRequestController extends Controller
                 'data'           => CargoResource::collection($cargoList),
                 'location_unset' => false,
                 'current_city'   => $vehicle?->current_city,
+                'radius_km'      => $radiusKm,
             ]);
         }
 
@@ -263,6 +280,8 @@ class CargoRequestController extends Controller
     // GET /freight — list for React frontend (camelCase shape)
     public function freightIndex(Request $request)
     {
+        $this->cargoExpiry->expireOverdue();
+
         $user   = $request->user();
         $limit  = (int) $request->query('limit', 20);
         $status = $request->query('status');
@@ -329,6 +348,8 @@ class CargoRequestController extends Controller
      */
     public function returnCargo(Request $request)
     {
+        $this->cargoExpiry->expireOverdue();
+
         $user = auth()->user();
 
         // 1. Try to use the destination of the driver's active booking/trip
@@ -404,34 +425,61 @@ class CargoRequestController extends Controller
         // Use the bidder's first available vehicle — fleet owners' vehicles
         // are linked via fleet_owner_id, not user_id.
         $vehicleColumn = $user->role === 'fleet_owner' ? 'fleet_owner_id' : 'user_id';
-        $vehicle = \App\Models\Vehicle::where($vehicleColumn, $user->id)
-            ->where('availability_status', 'available')
-            ->first();
 
-        if (!$vehicle) {
-            $vehicle = \App\Models\Vehicle::where($vehicleColumn, $user->id)->first();
+        try {
+            $booking = DB::transaction(function () use ($cargo, $user, $vehicleColumn) {
+                // Lock cargo first, then vehicle — same order used by BidService's
+                // accept flows, so the two paths can never deadlock each other.
+                $lockedCargo = CargoRequest::whereKey($cargo->id)->lockForUpdate()->firstOrFail();
+                if ($lockedCargo->status !== 'pending') {
+                    throw new \Exception('This cargo is no longer available.');
+                }
+
+                $vehicle = Vehicle::where($vehicleColumn, $user->id)
+                    ->where('availability_status', 'available')
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$vehicle) {
+                    $vehicle = Vehicle::where($vehicleColumn, $user->id)->lockForUpdate()->first();
+                }
+
+                if (!$vehicle) {
+                    throw new \Exception('You have no registered vehicle. Please register a vehicle first.');
+                }
+
+                // Cap at 2 (one active + one queued) — same rule as
+                // BidService::assertVehicleFree(); TripService::startTrip()
+                // is what stops two from being driven at once.
+                $activeCount = Booking::where('vehicle_id', $vehicle->id)
+                    ->whereNotIn('booking_status', ['cancelled', 'completed', 'delivered'])
+                    ->count();
+                if ($activeCount >= 2) {
+                    throw new \Exception('Your vehicle already has an active trip and a queued one — finish or deliver one before taking on another.');
+                }
+
+                // For a fleet owner, the vehicle's assigned driver executes the trip,
+                // not the fleet owner themself (vehicle->user_id falls back to the
+                // owner's own id when the vehicle has no driver assigned yet).
+                $driverId = $user->role === 'fleet_owner' ? $vehicle->user_id : $user->id;
+
+                $booking = Booking::create([
+                    'cargo_id'         => $lockedCargo->id,
+                    'vehicle_id'       => $vehicle->id,
+                    'driver_id'        => $driverId,
+                    'booking_status'   => 'confirmed',
+                    'estimated_price'  => $lockedCargo->budget,
+                    'commission_fee'   => $lockedCargo->budget * config('services.commission_rate'),
+                ]);
+
+                $lockedCargo->update(['status' => 'matched']);
+                $vehicle->update(['availability_status' => 'busy']);
+
+                return $booking;
+            });
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
         }
-
-        if (!$vehicle) {
-            return response()->json(['message' => 'You have no registered vehicle. Please register a vehicle first.'], 422);
-        }
-
-        // For a fleet owner, the vehicle's assigned driver executes the trip,
-        // not the fleet owner themself (vehicle->user_id falls back to the
-        // owner's own id when the vehicle has no driver assigned yet).
-        $driverId = $user->role === 'fleet_owner' ? $vehicle->user_id : $user->id;
-
-        $booking = \App\Models\Booking::create([
-            'cargo_id'         => $cargo->id,
-            'vehicle_id'       => $vehicle->id,
-            'driver_id'        => $driverId,
-            'booking_status'   => 'confirmed',
-            'estimated_price'  => $cargo->budget,
-            'commission_fee'   => $cargo->budget * 0.10,
-        ]);
-
-        $cargo->update(['status' => 'matched']);
-        $vehicle->update(['availability_status' => 'busy']);
 
         $booking->load(['cargoRequest', 'driver']);
 
@@ -551,6 +599,18 @@ class CargoRequestController extends Controller
                 [$dlat, $dlng] = CityCoordinates::COORDS[$destCityName];
                 $cargoRequest->update(['destination_lat' => $dlat, 'destination_lng' => $dlng]);
             }
+        }
+
+        // GenerateBackhaulRecommendations otherwise only ever runs once, at
+        // trip start — cargo posted after a driver is already en route would
+        // never surface as a backhaul opportunity. Re-run it for every
+        // ongoing trip now that new pending cargo exists; the job is
+        // idempotent (updateOrCreate keyed on trip/driver/cargo) so this is
+        // safe to fire repeatedly and cheap when nothing new matches.
+        if ($cargoRequest->status === 'pending') {
+            Trip::where('trip_status', 'ongoing')->each(
+                fn (Trip $trip) => GenerateBackhaulRecommendations::dispatch($trip)
+            );
         }
 
         return (new CargoResource($cargoRequest))->response()->setStatusCode(201);
@@ -772,7 +832,69 @@ class CargoRequestController extends Controller
             return response()->json(['message' => 'Cargo can only be edited while pending.'], 422);
         }
 
-        $cargoRequest->update($request->validated());
+        try {
+            $cargoRequest = DB::transaction(function () use ($cargoRequest, $user, $request) {
+                // Re-check under lock — a bid-accept may have matched this
+                // cargo between the read above and this transaction starting.
+                $locked = CargoRequest::whereKey($cargoRequest->id)->lockForUpdate()->firstOrFail();
+
+                if (!$user->is_admin && $locked->status !== 'pending') {
+                    throw new \Exception('Cargo can only be edited while pending.');
+                }
+
+                $locked->update($request->validated());
+                return $locked;
+            });
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return new CargoResource($cargoRequest);
+    }
+
+    /**
+     * POST /cargo-requests/{cargo}/repost
+     * Shipper reopens bidding on cargo whose deadline already passed
+     * (status === 'expired', set by CargoExpiryService) by setting a new,
+     * future bid_deadline. Deliberately separate from update() above, which
+     * stays gated to status === 'pending' only — reopening is an explicit
+     * action, not a general edit. Old bids from the expired round are left
+     * as historical 'expired'/'rejected' rows; drivers are not re-notified.
+     */
+    public function repost(Request $request, CargoRequest $cargo)
+    {
+        $cargoRequest = $cargo;
+        $user = auth()->user();
+
+        if (!$user->is_admin && $cargoRequest->user_id !== $user->id) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        $validated = $request->validate([
+            'bid_deadline' => 'required|date|after:now',
+        ]);
+
+        try {
+            $cargoRequest = DB::transaction(function () use ($cargoRequest, $validated) {
+                // Re-check under lock — a lazy expiry sweep or another
+                // request could change status between the read above and here.
+                $locked = CargoRequest::whereKey($cargoRequest->id)->lockForUpdate()->firstOrFail();
+
+                if ($locked->status !== 'expired') {
+                    throw new \Exception('Only cargo whose bidding has closed can be reposted.');
+                }
+
+                $locked->update([
+                    'bid_deadline' => $validated['bid_deadline'],
+                    'status'       => 'pending',
+                ]);
+
+                return $locked;
+            });
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
         return new CargoResource($cargoRequest);
     }
 
@@ -794,21 +916,37 @@ class CargoRequestController extends Controller
             return response()->json(['message' => 'Only pending cargo can be cancelled. A booking already exists for this cargo.'], 422);
         }
 
-        // Notify every driver who bid on this cargo, then remove their bids
-        $pendingBids = $cargoRequest->bids()
-            ->with('driver')
-            ->whereIn('status', ['pending', 'countered'])
-            ->get();
+        try {
+            DB::transaction(function () use ($cargoRequest, $user) {
+                // Re-check under lock: without this, a bid-accept racing this
+                // request could commit a Booking for this cargo right after the
+                // check above passed, and the delete()/cascade below would then
+                // silently wipe out that just-created Booking.
+                $locked = CargoRequest::whereKey($cargoRequest->id)->lockForUpdate()->firstOrFail();
 
-        foreach ($pendingBids as $bid) {
-            $bid->driver?->notify(
-                new \App\Notifications\BidRejectedNotification($bid, 'cargo_cancelled')
-            );
+                if (!$user->is_admin && $locked->status !== 'pending') {
+                    throw new \Exception('Only pending cargo can be cancelled. A booking already exists for this cargo.');
+                }
+
+                // Notify every driver who bid on this cargo, then remove their bids
+                $pendingBids = $locked->bids()
+                    ->with('driver')
+                    ->whereIn('status', ['pending', 'countered'])
+                    ->get();
+
+                foreach ($pendingBids as $bid) {
+                    $bid->driver?->notify(
+                        new \App\Notifications\BidRejectedNotification($bid, 'cargo_cancelled')
+                    );
+                }
+
+                // Remove all bids (FK constraint) then delete the cargo
+                $locked->bids()->delete();
+                $locked->delete();
+            });
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
         }
-
-        // Remove all bids (FK constraint) then delete the cargo
-        $cargoRequest->bids()->delete();
-        $cargoRequest->delete();
 
         return response()->json(['message' => 'Cargo cancelled and all pending bids have been notified.']);
     }

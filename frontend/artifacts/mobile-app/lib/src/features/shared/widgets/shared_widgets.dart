@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../data/api/api_client.dart';
+import '../../../data/models/models.dart';
 import '../../../data/providers/data_providers.dart';
 import '../../../data/repositories/repositories.dart';
+import '../../../utils/ethiopian_date.dart';
 
 // ── Design tokens ─────────────────────────────────────────────────────────
 const kGreen       = Color(0xFF0F3D1A);
@@ -269,6 +272,7 @@ class StatusBadge extends StatelessWidget {
         return (kSuccessBg, kSuccess);
       case 'rejected':
       case 'cancelled':
+      case 'expired':
         return (kDangerBg, kDanger);
       case 'urgent':
         return (kDangerBg, kDanger);
@@ -291,6 +295,7 @@ class StatusBadge extends StatelessWidget {
       'completed': 'Completed',
       'rejected': 'Rejected',
       'cancelled': 'Cancelled',
+      'expired': 'Bidding Closed',
       'urgent': 'Urgent',
       'express': 'Express',
       'normal': 'Normal',
@@ -845,6 +850,9 @@ class _NotifTile extends StatelessWidget {
       case 'bid_countered':
         icon = Icons.swap_horiz_rounded;
         iconColor = Colors.blue;
+      case 'cargo_bidding_expired':
+        icon = Icons.timer_off_rounded;
+        iconColor = kAmber;
       default:
         icon = Icons.notifications_rounded;
         iconColor = kGreen;
@@ -892,4 +900,180 @@ class _NotifTile extends StatelessWidget {
             ),
     );
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// ExpiredCargoBanner + showRepostCargoDialog
+//
+// Cargo whose bid_deadline passed with no booking made flips to
+// status: 'expired' server-side (CargoExpiredService). This is the
+// shipper-facing reminder + fix: an inline card on freight list/detail
+// screens prompting them to set a new deadline, backed by
+// POST /cargo-requests/{id}/repost. Shared here so both screens stay
+// in sync rather than duplicating the dialog logic.
+// ─────────────────────────────────────────────────────────────────────────
+class ExpiredCargoBanner extends ConsumerWidget {
+  final CargoRequest cargo;
+  const ExpiredCargoBanner({super.key, required this.cargo});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: kAmberLight,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: kAmber.withAlpha(120)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.timer_off_rounded, size: 18, color: kAmber),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'No driver responded in time.',
+                  style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: kTextPrimary),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Bidding closed on the old deadline. Set a new date to reopen it to drivers.',
+            style: GoogleFonts.inter(fontSize: 12, color: kTextSecond),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => showRepostCargoDialog(context, ref, cargo),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kAmber,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+              ),
+              child: const Text('Set New Bid Deadline'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+Future<void> showRepostCargoDialog(
+  BuildContext context,
+  WidgetRef ref,
+  CargoRequest cargo,
+) {
+  DateTime? picked;
+  bool submitting = false;
+  String? error;
+
+  return showDialog<void>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (dialogContext, setState) {
+        Future<void> pickDateTime() async {
+          final date = await showDatePicker(
+            context: dialogContext,
+            initialDate: DateTime.now().add(const Duration(days: 3)),
+            firstDate: DateTime.now().add(const Duration(hours: 1)),
+            lastDate: DateTime.now().add(const Duration(days: 90)),
+          );
+          if (date == null || !dialogContext.mounted) return;
+          final time = await showTimePicker(
+            context: dialogContext,
+            initialTime: const TimeOfDay(hour: 18, minute: 0),
+          );
+          if (!dialogContext.mounted) return;
+          setState(() {
+            picked = time == null
+                ? DateTime(date.year, date.month, date.day, 18)
+                : DateTime(
+                    date.year, date.month, date.day, time.hour, time.minute);
+          });
+        }
+
+        Future<void> submit() async {
+          if (picked == null) return;
+          setState(() {
+            submitting = true;
+            error = null;
+          });
+          try {
+            await ref.read(cargoRepositoryProvider).repost(cargo.id, picked!);
+            ref.invalidate(cargoListProvider);
+            ref.invalidate(singleCargoProvider(cargo.id));
+            if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+          } catch (e) {
+            setState(() {
+              submitting = false;
+              error = e is ApiException ? e.message : 'Failed to repost cargo.';
+            });
+          }
+        }
+
+        return AlertDialog(
+          title: const Text('Set a New Bid Deadline'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Reopens this cargo to drivers until the new deadline you pick.',
+                style: GoogleFonts.inter(fontSize: 13, color: kTextSecond),
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: submitting ? null : pickDateTime,
+                icon: const Icon(Icons.event_outlined, size: 18),
+                label: Text(picked == null
+                    ? 'Choose date & time'
+                    : EthiopianDate.displayWithTime(picked!)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: kGreen,
+                  side: const BorderSide(color: kGreen),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 12),
+                ),
+              ),
+              if (error != null) ...[
+                const SizedBox(height: 10),
+                Text(error!,
+                    style: GoogleFonts.inter(fontSize: 12, color: kDanger)),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: submitting
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: (submitting || picked == null) ? null : submit,
+              style: ElevatedButton.styleFrom(backgroundColor: kGreen),
+              child: submitting
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('Repost'),
+            ),
+          ],
+        );
+      },
+    ),
+  );
 }

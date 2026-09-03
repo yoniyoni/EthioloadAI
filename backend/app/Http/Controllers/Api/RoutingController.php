@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\DistanceService;
 use App\Services\RoutingService;
 use Illuminate\Http\Request;
 
@@ -33,10 +34,10 @@ class RoutingController extends Controller
         }
 
         // Haversine fallback when OSRM is unreachable
-        $distKm = $this->haversineKm(
+        $distKm = DistanceService::haversineKm(
             (float) $v['from_lat'], (float) $v['from_lng'],
             (float) $v['to_lat'],   (float) $v['to_lng']
-        ) * 1.25;
+        ) * DistanceService::ROAD_DISTANCE_INFLATION_FACTOR;
 
         return response()->json([
             'distance_km'  => round($distKm, 1),
@@ -75,15 +76,5 @@ class RoutingController extends Controller
             'short_address' => 'Unknown location',
             'city'          => null,
         ]);
-    }
-
-    private function haversineKm(float $lat1, float $lng1, float $lat2, float $lng2): float
-    {
-        $R    = 6371.0;
-        $phi1 = deg2rad($lat1); $phi2 = deg2rad($lat2);
-        $dphi = deg2rad($lat2 - $lat1);
-        $dlam = deg2rad($lng2 - $lng1);
-        $a    = sin($dphi / 2) ** 2 + cos($phi1) * cos($phi2) * sin($dlam / 2) ** 2;
-        return 2 * $R * asin(sqrt($a));
     }
 }

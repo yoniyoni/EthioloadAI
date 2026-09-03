@@ -1,31 +1,37 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/repositories.dart';
+import '../../services/geofence_service.dart';
+import '../../services/location_service.dart';
+import '../../services/navigation_launcher.dart';
+import '../../utils/weight_format.dart';
 
 // ── Amharic city name mapping for the main Ethiopian corridors ────────────
 const _amharicNames = <String, String>{
-  'Addis Ababa':   'አዲስ አበባ',
-  'Gondar':        'ጎንደር',
-  'Bahir Dar':     'ባህር ዳር',
-  'Debre Tabor':   'ደብረ ታቦር',
-  'Debre Markos':  'ደብረ ማርቆስ',
-  'Humera':        'ሁመራ',
-  'Axum':          'አክሱም',
-  'Mekelle':       'መቀሌ',
-  'Dessie':        'ደሴ',
-  'Woldia':        'ወልዲያ',
-  'Diredawa':      'ድሬዳዋ',
-  'Hawassa':       'ሃዋሳ',
-  'Jimma':         'ጅማ',
-  'Nekemte':       'ነቀምት',
-  'Gambella':      'ጋምቤላ',
-  'Jijiga':        'ጅጅጋ',
-  'Adama':         'አዳማ',
-  'Bishoftu':      'ቢሾፍቱ',
-  'Shashamane':    'ሻሸመኔ',
-  'Arba Minch':    'አርባ ምንጭ',
+  'Addis Ababa': 'አዲስ አበባ',
+  'Gondar': 'ጎንደር',
+  'Bahir Dar': 'ባህር ዳር',
+  'Debre Tabor': 'ደብረ ታቦር',
+  'Debre Markos': 'ደብረ ማርቆስ',
+  'Humera': 'ሁመራ',
+  'Axum': 'አክሱም',
+  'Mekelle': 'መቀሌ',
+  'Dessie': 'ደሴ',
+  'Woldia': 'ወልዲያ',
+  'Diredawa': 'ድሬዳዋ',
+  'Hawassa': 'ሃዋሳ',
+  'Jimma': 'ጅማ',
+  'Nekemte': 'ነቀምት',
+  'Gambella': 'ጋምቤላ',
+  'Jijiga': 'ጅጅጋ',
+  'Adama': 'አዳማ',
+  'Bishoftu': 'ቢሾፍቱ',
+  'Shashamane': 'ሻሸመኔ',
+  'Arba Minch': 'አርባ ምንጭ',
 };
 
 String _amharic(String city) => _amharicNames[city] ?? city;
@@ -73,6 +79,7 @@ class ActiveTripNotifier extends StateNotifier<AsyncValue<Trip>> {
     required int stopOrder,
     required String locationName,
     required double agreedPrice,
+    int? cargoRequestId,
     String? notes,
   }) async {
     final stop = await _repo.addStop(
@@ -80,11 +87,16 @@ class ActiveTripNotifier extends StateNotifier<AsyncValue<Trip>> {
       stopOrder: stopOrder,
       locationName: locationName,
       agreedPrice: agreedPrice,
+      cargoRequestId: cargoRequestId,
       notes: notes,
     );
     await _load();
     return stop;
   }
+
+  Future<(List<ConsolidationCandidate>, double?)> getConsolidationCandidates(
+          {double? radiusKm}) =>
+      _repo.getConsolidationCandidates(tripId, radiusKm: radiusKm);
 }
 
 final activeTripProvider = StateNotifierProvider.autoDispose
@@ -107,11 +119,13 @@ class ActiveTripScreen extends ConsumerWidget {
       appBar: AppBar(
         backgroundColor: const Color(0xFF111827),
         foregroundColor: Colors.white,
-        title: const Text('Active Trip', style: TextStyle(fontWeight: FontWeight.w600)),
+        title: const Text('Active Trip',
+            style: TextStyle(fontWeight: FontWeight.w600)),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () => ref.read(activeTripProvider(tripId).notifier).refresh(),
+            onPressed: () =>
+                ref.read(activeTripProvider(tripId).notifier).refresh(),
           ),
         ],
       ),
@@ -134,18 +148,256 @@ class _TripBody extends ConsumerStatefulWidget {
 }
 
 class _TripBodyState extends ConsumerState<_TripBody> {
-  bool _completing  = false;
-  bool _navigating  = false;
+  bool _completing = false;
+  bool _navigating = false;
   bool _showSuccess = false;
   String? _paymentMethod;
   double _amountEarned = 0;
 
+  // ── Geofencing state (pickup / destination arrival gating) ─────────────
+  StreamSubscription<Position>? _positionSub;
+  bool _reachedPickup = false;
+  bool _reachedDestination = false;
+  double? _pickupLat;
+  double? _pickupLng;
+  double? _destLat;
+  double? _destLng;
+  double? _distanceToTargetM;
+  DateTime? _lastPositionAt;
+  bool _confirmingPickup = false;
+  bool _gpsUnavailable = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initGeofencing();
+  }
+
+  @override
+  void dispose() {
+    _positionSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _initGeofencing() async {
+    try {
+      final loc =
+          await ref.read(tripRepositoryProvider).getLocation(widget.tripId);
+      _pickupLat = loc.pickupLat;
+      _pickupLng = loc.pickupLng;
+      _destLat = loc.destinationLat;
+      _destLng = loc.destinationLng;
+    } catch (_) {
+      // best-effort — the distance readout / gating just won't show yet
+    }
+
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (mounted) setState(() => _gpsUnavailable = true);
+      return;
+    }
+
+    var perm = await Geolocator.checkPermission();
+    if (perm == LocationPermission.denied) {
+      perm = await Geolocator.requestPermission();
+    }
+    if (perm == LocationPermission.denied ||
+        perm == LocationPermission.deniedForever) {
+      if (mounted) setState(() => _gpsUnavailable = true);
+      return;
+    }
+
+    // Seed an immediate reading via a one-shot fix rather than waiting on
+    // the stream's first callback — a driver who is already stationary at
+    // the pickup point (e.g. re-opening this screen after it was
+    // backgrounded) may not move the 20m the stream's distanceFilter
+    // requires before it emits again, which would otherwise leave the
+    // "Start Trip" button stuck disabled with no further GPS events to
+    // re-check it.
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      _onPosition(pos);
+    } catch (_) {
+      // best-effort — the stream below will populate it once available
+    }
+
+    _positionSub = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 20,
+      ),
+    ).listen(_onPosition, onError: (_) {
+      if (mounted) setState(() => _gpsUnavailable = true);
+    });
+  }
+
+  void _onPosition(Position pos) {
+    _lastPositionAt = DateTime.now();
+    _gpsUnavailable = false;
+
+    final targetLat = widget.trip.isPickedUp ? _destLat : _pickupLat;
+    final targetLng = widget.trip.isPickedUp ? _destLng : _pickupLng;
+    if (targetLat != null && targetLng != null) {
+      final distance = GeofenceService.distanceToTarget(
+        currentLat: pos.latitude,
+        currentLng: pos.longitude,
+        targetLat: targetLat,
+        targetLng: targetLng,
+      );
+      _distanceToTargetM = distance;
+
+      final radius = widget.trip.isPickedUp
+          ? kDestinationGeofenceRadiusMeters
+          : kPickupGeofenceRadiusMeters;
+      if (distance <= radius) {
+        if (widget.trip.isPickedUp) {
+          _reachedDestination = true;
+        } else {
+          _reachedPickup = true;
+        }
+      }
+    }
+
+    if (mounted) setState(() {});
+  }
+
+  /// Manual fallback for when automatic geofence detection can't confirm
+  /// arrival — e.g. the pickup/destination point is only city-level
+  /// precision (no exact GPS pin was captured when the cargo was booked),
+  /// GPS drift/signal loss, or permission timing. Always available so the
+  /// driver is never permanently blocked by location data outside their
+  /// control.
+  Future<void> _confirmArrivalManually({required bool isPickup}) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+            isPickup ? 'Confirm pickup arrival?' : 'Confirm delivery arrival?'),
+        content: Text(
+          isPickup
+              ? "Only confirm this if you're actually at the pickup location. "
+                  "Use this if GPS isn't detecting your arrival automatically."
+              : "Only confirm this if you're actually at the delivery location. "
+                  "Use this if GPS isn't detecting your arrival automatically.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() {
+      if (isPickup) {
+        _reachedPickup = true;
+      } else {
+        _reachedDestination = true;
+      }
+    });
+  }
+
+  String _secondsAgoLabel(DateTime at) {
+    final secs = DateTime.now().difference(at).inSeconds;
+    if (secs < 60) return '${secs}s ago';
+    return '${(secs / 60).floor()}m ago';
+  }
+
+  Future<void> _confirmPickup() async {
+    setState(() => _confirmingPickup = true);
+    try {
+      await ref.read(tripRepositoryProvider).confirmPickup(widget.tripId);
+      if (!mounted) return;
+      await ref.read(activeTripProvider(widget.tripId).notifier).refresh();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: Colors.red.shade700,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _confirmingPickup = false);
+    }
+  }
+
+  // Launches turn-by-turn in the driver's own navigation app (Google Maps,
+  // then Waze) and falls back to the in-app OSRM/MapTiler NavigationScreen
+  // (pushed via `fallbackRoute`) only if neither is installed. Asserts live
+  // GPS tracking is running first — the foreground service pushes location
+  // independent of which app is in the foreground, so this guarantees the
+  // backend keeps receiving pings while the driver is inside Maps/Waze.
+  Future<void> _launchNavigation({
+    required double lat,
+    required double lng,
+    required String label,
+    required String fallbackRoute,
+  }) async {
+    if (!LocationService.isLiveTracking) {
+      await LocationService.startTracking(ref, tripOngoing: true);
+    }
+    if (!mounted) return;
+
+    final launched = await NavigationLauncher.launchExternalNavigation(
+      lat: lat,
+      lng: lng,
+      label: label,
+    );
+    if (launched || !mounted) return;
+
+    context.push(fallbackRoute);
+  }
+
+  Future<void> _onNavigateToPickup() async {
+    setState(() => _navigating = true);
+    try {
+      final loc =
+          await ref.read(tripRepositoryProvider).getLocation(widget.tripId);
+      if (!mounted) return;
+
+      if (loc.pickupLat == null || loc.pickupLng == null) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Pickup coordinates not available yet.'),
+        ));
+        return;
+      }
+
+      final params = StringBuffer('/navigate?dest_lat=${loc.pickupLat}'
+          '&dest_lng=${loc.pickupLng}'
+          '&dest_name=${Uri.encodeComponent('Pickup')}');
+      if (loc.hasPosition) {
+        params.write('&orig_lat=${loc.currentLat}&orig_lng=${loc.currentLng}');
+      }
+
+      await _launchNavigation(
+        lat: loc.pickupLat!,
+        lng: loc.pickupLng!,
+        label: 'Pickup',
+        fallbackRoute: params.toString(),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Could not load navigation data. Try again.'),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _navigating = false);
+    }
+  }
+
   Future<void> _onNavigate() async {
     setState(() => _navigating = true);
     try {
-      final loc = await ref
-          .read(tripRepositoryProvider)
-          .getLocation(widget.tripId);
+      final loc =
+          await ref.read(tripRepositoryProvider).getLocation(widget.tripId);
       if (!mounted) return;
 
       if (!loc.hasDestination) {
@@ -155,15 +407,20 @@ class _TripBodyState extends ConsumerState<_TripBody> {
         return;
       }
 
-      final params = StringBuffer(
-          '/navigate?dest_lat=${loc.destinationLat}'
+      final destName = loc.destination ?? widget.trip.destination ?? '';
+      final params = StringBuffer('/navigate?dest_lat=${loc.destinationLat}'
           '&dest_lng=${loc.destinationLng}'
-          '&dest_name=${Uri.encodeComponent(loc.destination ?? widget.trip.destination ?? '')}');
+          '&dest_name=${Uri.encodeComponent(destName)}');
       if (loc.hasPosition) {
         params.write('&orig_lat=${loc.currentLat}&orig_lng=${loc.currentLng}');
       }
 
-      if (mounted) context.push(params.toString());
+      await _launchNavigation(
+        lat: loc.destinationLat!,
+        lng: loc.destinationLng!,
+        label: destName,
+        fallbackRoute: params.toString(),
+      );
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -180,36 +437,25 @@ class _TripBodyState extends ConsumerState<_TripBody> {
     try {
       final completedTrip =
           await ref.read(tripRepositoryProvider).complete(widget.tripId);
+      // Drop back to idle-interval pinging instead of going fully dark —
+      // "Go to My Jobs" pops back to an already-built DriverDashboardScreen
+      // instance, so its initState (the only other place tracking starts)
+      // won't fire again to pick this back up.
+      unawaited(LocationService.startTracking(ref));
       if (!mounted) return;
 
-      final method = await showModalBottomSheet<String>(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) => const _TripPaymentSheet(),
-      );
-      if (!mounted) return;
-
-      if (method == null) {
-        setState(() => _completing = false);
-        return;
-      }
-
+      // Payment already happened upfront (before this trip could even
+      // start — see the backend's trip-start payment gate), so there's
+      // nothing left to self-report here. The earnings figure below is the
+      // same math the old payment-recording step used, just without
+      // re-collecting a payment method that's already settled.
       final price = completedTrip.bookingEstimatedPrice ?? 0.0;
-      final commission =
-          completedTrip.bookingCommissionFee ?? (price * 0.10);
-
-      await ref.read(paymentRepositoryProvider).create(
-            bookingId: completedTrip.bookingId,
-            amount: price,
-            paymentMethod: method,
-          );
-      if (!mounted) return;
+      final commission = completedTrip.bookingCommissionFee ?? (price * 0.02);
 
       setState(() {
         _completing = false;
         _showSuccess = true;
-        _paymentMethod = method;
+        _paymentMethod = 'chapa';
         _amountEarned = price - commission;
       });
     } catch (e) {
@@ -255,13 +501,12 @@ class _TripBodyState extends ConsumerState<_TripBody> {
       children: [
         _RouteSummaryCard(trip: widget.trip, progress: progress),
         const SizedBox(height: 16),
-
         if (stops.isNotEmpty) ...[
           const _SectionLabel('Stop Timeline'),
           const SizedBox(height: 8),
           ...stops.asMap().entries.map((entry) {
-            final idx    = entry.key;
-            final stop   = entry.value;
+            final idx = entry.key;
+            final stop = entry.value;
             final isLast = idx == stops.length - 1;
             return _StopTimelineTile(
               stop: stop,
@@ -271,8 +516,137 @@ class _TripBodyState extends ConsumerState<_TripBody> {
           }),
           const SizedBox(height: 16),
         ],
-
-        if (widget.trip.tripStatus == 'ongoing') ...[
+        if (widget.trip.tripStatus == 'ongoing' && !widget.trip.isPickedUp) ...[
+          // Phase A: driver has not yet picked up the cargo — must reach the
+          // pickup geofence before the trip can proceed.
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFF6FF),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFBFDBFE)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.social_distance_rounded,
+                    color: Color(0xFF1565C0), size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _reachedPickup
+                            ? 'Within pickup zone'
+                            : _gpsUnavailable
+                                ? 'GPS unavailable — use manual confirmation below'
+                                : _distanceToTargetM != null
+                                    ? 'Distance to pickup: ${(_distanceToTargetM! / 1000).toStringAsFixed(1)} km'
+                                    : 'Locating pickup point...',
+                        style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1565C0)),
+                      ),
+                      if (_lastPositionAt != null)
+                        Text(
+                          'GPS updated ${_secondsAgoLabel(_lastPositionAt!)}',
+                          style: const TextStyle(
+                              fontSize: 11, color: Color(0xFF6B7280)),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _navigating ? null : _onNavigateToPickup,
+              icon: _navigating
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.navigation_rounded, size: 20),
+              label: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Navigate to Pickup',
+                      style:
+                          TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                ],
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1565C0),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: (_confirmingPickup || !_reachedPickup)
+                  ? null
+                  : _confirmPickup,
+              icon: _confirmingPickup
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.flag_rounded, size: 20),
+              label: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Start Trip',
+                      style:
+                          TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                  Text('ጉዞ ጀምር', style: TextStyle(fontSize: 11)),
+                ],
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF16A34A),
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: const Color(0xFFE5E7EB),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+            ),
+          ),
+          if (!_reachedPickup) ...[
+            const SizedBox(height: 6),
+            const Text(
+              'Get within range of the pickup point to enable this button.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+            ),
+            const SizedBox(height: 8),
+            Center(
+              child: TextButton(
+                onPressed: () => _confirmArrivalManually(isPickup: true),
+                child: const Text(
+                  "Already there? Confirm arrival manually",
+                  style: TextStyle(
+                      fontSize: 12, decoration: TextDecoration.underline),
+                ),
+              ),
+            ),
+          ],
+        ],
+        if (widget.trip.tripStatus == 'ongoing' && widget.trip.isPickedUp) ...[
+          // Phase B: cargo picked up, en route to destination
           // Navigate button — opens OSRM navigation to destination
           SizedBox(
             width: double.infinity,
@@ -280,7 +654,8 @@ class _TripBodyState extends ConsumerState<_TripBody> {
               onPressed: _navigating ? null : _onNavigate,
               icon: _navigating
                   ? const SizedBox(
-                      width: 18, height: 18,
+                      width: 18,
+                      height: 18,
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.navigation_rounded, size: 20),
@@ -288,8 +663,8 @@ class _TripBodyState extends ConsumerState<_TripBody> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text('Navigate / መንገድ ፈልግ',
-                      style: TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w700)),
+                      style:
+                          TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
                 ],
               ),
               style: ElevatedButton.styleFrom(
@@ -318,7 +693,8 @@ class _TripBodyState extends ConsumerState<_TripBody> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: _completing ? null : _completeTrip,
+              onPressed:
+                  (_completing || !_reachedDestination) ? null : _completeTrip,
               icon: _completing
                   ? const SizedBox(
                       width: 18,
@@ -330,14 +706,15 @@ class _TripBodyState extends ConsumerState<_TripBody> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text('Complete Trip',
-                      style: TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w700)),
+                      style:
+                          TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                   Text('ጉዞ ጨርስ', style: TextStyle(fontSize: 11)),
                 ],
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF16A34A),
                 foregroundColor: Colors.white,
+                disabledBackgroundColor: const Color(0xFFE5E7EB),
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
@@ -345,6 +722,29 @@ class _TripBodyState extends ConsumerState<_TripBody> {
               ),
             ),
           ),
+          if (!_reachedDestination) ...[
+            const SizedBox(height: 6),
+            Text(
+              _gpsUnavailable
+                  ? 'GPS unavailable — use manual confirmation below'
+                  : _distanceToTargetM != null
+                      ? 'Distance to destination: ${(_distanceToTargetM! / 1000).toStringAsFixed(1)} km'
+                      : 'Get within range of the destination to enable this button.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+            ),
+            const SizedBox(height: 8),
+            Center(
+              child: TextButton(
+                onPressed: () => _confirmArrivalManually(isPickup: false),
+                child: const Text(
+                  "Already there? Confirm arrival manually",
+                  style: TextStyle(
+                      fontSize: 12, decoration: TextDecoration.underline),
+                ),
+              ),
+            ),
+          ],
         ],
         const SizedBox(height: 12),
       ],
@@ -352,11 +752,10 @@ class _TripBodyState extends ConsumerState<_TripBody> {
   }
 
   Widget _buildSuccess() {
-    final formatted =
-        'ETB ${_amountEarned.toStringAsFixed(0).replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (m) => '${m[1]},',
-    )}';
+    final formatted = 'ETB ${_amountEarned.toStringAsFixed(0).replaceAllMapped(
+          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+          (m) => '${m[1]},',
+        )}';
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -415,7 +814,7 @@ class _TripBodyState extends ConsumerState<_TripBody> {
             child: Column(
               children: [
                 const Text(
-                  'Amount Earned / ያገኘህ ገቢ',
+                  "You'll Earn / የሚያገኙት ገቢ",
                   style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
                 ),
                 const SizedBox(height: 8),
@@ -462,8 +861,8 @@ class _TripBodyState extends ConsumerState<_TripBody> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text('Go to My Jobs',
-                      style: TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w700)),
+                      style:
+                          TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                   Text('ወደ ስራዎቼ', style: TextStyle(fontSize: 11)),
                 ],
               ),
@@ -486,9 +885,7 @@ class _RouteSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final totalFormatted = trip.totalAmount != null
-        ? 'ETB ${trip.totalAmount!.toStringAsFixed(0).replaceAllMapped(
-            RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-            (m) => '${m[1]},')}'
+        ? 'ETB ${trip.totalAmount!.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}'
         : null;
 
     return Container(
@@ -496,26 +893,31 @@ class _RouteSummaryCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8)],
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8)
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.local_shipping, color: Color(0xFF2563EB), size: 20),
+              const Icon(Icons.local_shipping,
+                  color: Color(0xFF2563EB), size: 20),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   '${trip.startLocation ?? 'Origin'} → ${trip.destination ?? 'Destination'}',
                   style: const TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
                       color: Color(0xFF111827)),
                 ),
               ),
               if (trip.isMultiStop)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: const Color(0xFFEFF6FF),
                     borderRadius: BorderRadius.circular(20),
@@ -546,7 +948,8 @@ class _RouteSummaryCard extends StatelessWidget {
               value: progress,
               minHeight: 8,
               backgroundColor: const Color(0xFFE5E7EB),
-              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF16A34A)),
+              valueColor:
+                  const AlwaysStoppedAnimation<Color>(Color(0xFF16A34A)),
             ),
           ),
           const SizedBox(height: 6),
@@ -595,14 +998,14 @@ class _StopTimelineTileState extends ConsumerState<_StopTimelineTile> {
 
   @override
   Widget build(BuildContext context) {
-    final stop    = widget.stop;
+    final stop = widget.stop;
     final notifier = ref.read(activeTripProvider(widget.tripId).notifier);
 
     final dotColor = switch (stop.status) {
       'completed' => const Color(0xFF16A34A),
-      'arrived'   => const Color(0xFFF59E0B),
-      'loaded'    => const Color(0xFF2563EB),
-      _           => const Color(0xFFD1D5DB),
+      'arrived' => const Color(0xFFF59E0B),
+      'loaded' => const Color(0xFF2563EB),
+      _ => const Color(0xFFD1D5DB),
     };
 
     return IntrinsicHeight(
@@ -680,7 +1083,7 @@ class _StopTimelineTileState extends ConsumerState<_StopTimelineTile> {
                   if (stop.cargoMaterial != null) ...[
                     const SizedBox(height: 4),
                     Text(
-                      '${stop.cargoMaterial}${stop.cargoWeight != null ? ' · ${stop.cargoWeight} tons' : ''}',
+                      '${stop.cargoMaterial}${stop.cargoWeight != null ? ' · ${WeightFormat.display(stop.cargoWeight!)}' : ''}',
                       style: const TextStyle(
                           fontSize: 12, color: Color(0xFF6B7280)),
                     ),
@@ -811,8 +1214,7 @@ class _StopActions extends StatelessWidget {
           backgroundColor: const Color(0xFF16A34A),
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 10),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
         child: const Text('Complete Stop',
             style: TextStyle(fontWeight: FontWeight.w600)),
@@ -838,17 +1240,118 @@ class _AddStopSheet extends StatefulWidget {
 }
 
 class _AddStopSheetState extends State<_AddStopSheet> {
-  final _formKey   = GlobalKey<FormState>();
+  // 'nearby' = pick a real posted cargo request that fits remaining
+  // capacity; 'custom' = the original free-text ad-hoc stop.
+  String _mode = 'nearby';
+
+  // ── Nearby-cargo mode state ──────────────────────────────────────────────
+  bool _candidatesLoading = true;
+  String? _candidatesError;
+  List<ConsolidationCandidate>? _candidates;
+  double? _remainingCapacity;
+  ConsolidationCandidate? _selectedCandidate;
+  double _radiusKm = 150; // matches the backend's own default on first load
+  static const _radiusOptions = <double>[50, 100, 150, 250];
+  final _candidatePriceCtrl = TextEditingController();
+  final _candidateNotesCtrl = TextEditingController();
+
+  // ── Custom-stop mode state (unchanged) ───────────────────────────────────
+  final _formKey = GlobalKey<FormState>();
   final _priceCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   String? _selectedCity;
+
   bool _loading = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _loadCandidates();
+  }
+
+  Future<void> _loadCandidates() async {
+    setState(() {
+      _candidatesLoading = true;
+      _candidatesError = null;
+    });
+    try {
+      final (candidates, remaining) = await widget.notifier
+          .getConsolidationCandidates(radiusKm: _radiusKm);
+      if (!mounted) return;
+      setState(() {
+        _candidates = candidates;
+        _remainingCapacity = remaining;
+        _candidatesLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _candidatesError = e.toString();
+        _candidatesLoading = false;
+      });
+    }
+  }
+
+  void _selectCandidate(ConsolidationCandidate c) {
+    setState(() {
+      _selectedCandidate = c;
+      _candidatePriceCtrl.text =
+          c.budget != null ? c.budget!.toStringAsFixed(0) : '';
+    });
+  }
+
+  Future<void> _submitCandidate() async {
+    final selected = _selectedCandidate;
+    if (selected == null) return;
+    final price = double.tryParse(_candidatePriceCtrl.text.replaceAll(',', ''));
+    if (price == null || price <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a valid agreed price')),
+      );
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      await widget.notifier.addStop(
+        stopOrder: widget.nextOrder,
+        locationName: selected.pickupLocation,
+        agreedPrice: price,
+        cargoRequestId: selected.id,
+        notes: _candidateNotesCtrl.text.isNotEmpty
+            ? _candidateNotesCtrl.text
+            : null,
+      );
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   static const _corridorCities = [
-    'Gondar', 'Bahir Dar', 'Debre Tabor', 'Debre Markos',
-    'Humera', 'Axum', 'Mekelle', 'Dessie', 'Woldia',
-    'Diredawa', 'Hawassa', 'Jimma', 'Nekemte', 'Gambella',
-    'Jijiga', 'Adama', 'Bishoftu', 'Shashamane', 'Arba Minch',
+    'Gondar',
+    'Bahir Dar',
+    'Debre Tabor',
+    'Debre Markos',
+    'Humera',
+    'Axum',
+    'Mekelle',
+    'Dessie',
+    'Woldia',
+    'Diredawa',
+    'Hawassa',
+    'Jimma',
+    'Nekemte',
+    'Gambella',
+    'Jijiga',
+    'Adama',
+    'Bishoftu',
+    'Shashamane',
+    'Arba Minch',
     'Addis Ababa',
   ];
 
@@ -856,6 +1359,8 @@ class _AddStopSheetState extends State<_AddStopSheet> {
   void dispose() {
     _priceCtrl.dispose();
     _notesCtrl.dispose();
+    _candidatePriceCtrl.dispose();
+    _candidateNotesCtrl.dispose();
     super.dispose();
   }
 
@@ -885,74 +1390,159 @@ class _AddStopSheetState extends State<_AddStopSheet> {
     final bottom = MediaQuery.of(context).viewInsets.bottom;
     return Padding(
       padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottom),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Add Stop',
-                style:
-                    TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 4),
-            Text('Stop #${widget.nextOrder}',
-                style: const TextStyle(
-                    color: Color(0xFF6B7280), fontSize: 13)),
-            const SizedBox(height: 16),
-            // City picker
-            DropdownButtonFormField<String>(
-              initialValue: _selectedCity,
-              decoration: InputDecoration(
-                labelText: 'City / Location',
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8)),
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 14),
-              ),
-              items: _corridorCities
-                  .map((c) => DropdownMenuItem(
-                      value: c,
-                      child: Text('${_amharic(c)} ($c)')))
-                  .toList(),
-              onChanged: (v) => setState(() => _selectedCity = v),
-              validator: (v) => v == null ? 'Select a city' : null,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Add Stop',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text('Stop #${widget.nextOrder}',
+              style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13)),
+          const SizedBox(height: 16),
+          // Mode toggle
+          Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF3F4F6),
+              borderRadius: BorderRadius.circular(10),
             ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _priceCtrl,
+            child: Row(children: [
+              Expanded(child: _ModeTab(
+                label: 'Nearby Cargo',
+                selected: _mode == 'nearby',
+                onTap: () => setState(() => _mode = 'nearby'),
+              )),
+              Expanded(child: _ModeTab(
+                label: 'Custom Stop',
+                selected: _mode == 'custom',
+                onTap: () => setState(() => _mode = 'custom'),
+              )),
+            ]),
+          ),
+          const SizedBox(height: 16),
+          if (_mode == 'nearby') _buildNearbyPanel() else _buildCustomPanel(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNearbyPanel() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_remainingCapacity != null)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFF6FF),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFBFDBFE)),
+            ),
+            child: Text(
+              '${WeightFormat.display(_remainingCapacity!)} of space left on your truck',
+              style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1D4ED8)),
+            ),
+          ),
+        const Text('Search radius',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF6B7280))),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 32,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _radiusOptions.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (_, i) {
+              final r = _radiusOptions[i];
+              final selected = r == _radiusKm;
+              return ChoiceChip(
+                label: Text('${r.toInt()} km', style: const TextStyle(fontSize: 12)),
+                selected: selected,
+                selectedColor: const Color(0xFF2563EB),
+                labelStyle: TextStyle(
+                  color: selected ? Colors.white : const Color(0xFF374151),
+                ),
+                backgroundColor: const Color(0xFFF3F4F6),
+                onSelected: (_) {
+                  setState(() {
+                    _radiusKm = r;
+                    _selectedCandidate = null;
+                  });
+                  _loadCandidates();
+                },
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (_candidatesLoading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (_candidatesError != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(children: [
+              Text(_candidatesError!,
+                  style: const TextStyle(color: Colors.red, fontSize: 12)),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                  onPressed: _loadCandidates, child: const Text('Retry')),
+            ]),
+          )
+        else if (_candidates == null || _candidates!.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Text(
+              'No nearby cargo fits your remaining capacity right now. '
+              'Use "Custom Stop" to add a manual stop instead.',
+              style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+            ),
+          )
+        else ...[
+          ..._candidates!.map((c) => _CandidateCard(
+                candidate: c,
+                selected: _selectedCandidate?.id == c.id,
+                onTap: () => _selectCandidate(c),
+              )),
+          if (_selectedCandidate != null) ...[
+            const SizedBox(height: 8),
+            TextField(
+              controller: _candidatePriceCtrl,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
                 labelText: 'Agreed Price (ETB)',
                 prefixText: 'ETB ',
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8)),
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 14),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
               ),
-              validator: (v) {
-                if (v == null || v.isEmpty) return 'Enter a price';
-                final n = double.tryParse(v.replaceAll(',', ''));
-                if (n == null || n <= 0) return 'Enter a valid price';
-                return null;
-              },
             ),
             const SizedBox(height: 12),
-            TextFormField(
-              controller: _notesCtrl,
+            TextField(
+              controller: _candidateNotesCtrl,
               maxLines: 2,
               decoration: InputDecoration(
                 labelText: 'Notes (optional)',
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8)),
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 14),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
               ),
             ),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _loading ? null : _submit,
+                onPressed: _loading ? null : _submitCandidate,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF2563EB),
                   foregroundColor: Colors.white,
@@ -972,145 +1562,82 @@ class _AddStopSheetState extends State<_AddStopSheet> {
               ),
             ),
           ],
-        ),
-      ),
+        ],
+      ],
     );
   }
-}
 
-// ── Payment method bottom sheet ────────────────────────────────────────────
-
-String _methodLabel(String method) => switch (method) {
-      'cash'          => 'Cash / ጥሬ ገንዘብ',
-      'telebirr'      => 'Telebirr',
-      'cbe_birr'      => 'CBE',
-      'awash_bank'    => 'Awash Bank',
-      'dashen_bank'   => 'Dashen Bank',
-      'bank_transfer' => 'Bank Transfer / ሌላ ባንክ',
-      _               => method,
-    };
-
-class _TripPaymentSheet extends StatefulWidget {
-  const _TripPaymentSheet();
-
-  @override
-  State<_TripPaymentSheet> createState() => _TripPaymentSheetState();
-}
-
-class _TripPaymentSheetState extends State<_TripPaymentSheet> {
-  String? _selected;
-
-  static const _options = [
-    ('cash',          '💵', 'Cash / ጥሬ ገንዘብ'),
-    ('telebirr',      '📱', 'Telebirr'),
-    ('cbe_birr',      '🏦', 'CBE'),
-    ('awash_bank',    '🏦', 'Awash Bank'),
-    ('dashen_bank',   '🏦', 'Dashen Bank'),
-    ('bank_transfer', '🏦', 'Other Bank / ሌላ ባንክ'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottom),
+  Widget _buildCustomPanel() {
+    return Form(
+      key: _formKey,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: const Color(0xFFE5E7EB),
-                borderRadius: BorderRadius.circular(2),
-              ),
+          // City picker
+          DropdownButtonFormField<String>(
+            initialValue: _selectedCity,
+            decoration: InputDecoration(
+              labelText: 'City / Location',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            ),
+            items: _corridorCities
+                .map((c) => DropdownMenuItem(
+                    value: c, child: Text('${_amharic(c)} ($c)')))
+                .toList(),
+            onChanged: (v) => setState(() => _selectedCity = v),
+            validator: (v) => v == null ? 'Select a city' : null,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _priceCtrl,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: 'Agreed Price (ETB)',
+              prefixText: 'ETB ',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            ),
+            validator: (v) {
+              if (v == null || v.isEmpty) return 'Enter a price';
+              final n = double.tryParse(v.replaceAll(',', ''));
+              if (n == null || n <= 0) return 'Enter a valid price';
+              return null;
+            },
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _notesCtrl,
+            maxLines: 2,
+            decoration: InputDecoration(
+              labelText: 'Notes (optional)',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
             ),
           ),
-          const SizedBox(height: 16),
-          const Text(
-            'How will payment be made?',
-            style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF111827)),
-          ),
-          const Text(
-            'ክፍያ እንዴት ይፈጸማል?',
-            style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
-          ),
-          const SizedBox(height: 16),
-          ..._options.map((opt) {
-            final (value, emoji, label) = opt;
-            final selected = _selected == value;
-            return GestureDetector(
-              onTap: () => setState(() => _selected = value),
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? const Color(0xFFEFF6FF)
-                      : const Color(0xFFF9FAFB),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: selected
-                        ? const Color(0xFF2563EB)
-                        : const Color(0xFFE5E7EB),
-                    width: selected ? 2 : 1,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Text(emoji, style: const TextStyle(fontSize: 20)),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        label,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: selected
-                              ? const Color(0xFF2563EB)
-                              : const Color(0xFF374151),
-                        ),
-                      ),
-                    ),
-                    if (selected)
-                      const Icon(Icons.check_circle_rounded,
-                          color: Color(0xFF2563EB), size: 20),
-                  ],
-                ),
-              ),
-            );
-          }),
-          const SizedBox(height: 8),
+          const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: _selected == null
-                  ? null
-                  : () => Navigator.of(context).pop(_selected),
+              onPressed: _loading ? null : _submit,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFF59E0B),
+                backgroundColor: const Color(0xFF2563EB),
                 foregroundColor: Colors.white,
-                disabledBackgroundColor: const Color(0xFFE5E7EB),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
-              child: const Text(
-                'Confirm Payment / ክፍያ አረጋግጥ',
-                style:
-                    TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-              ),
+              child: _loading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Text('Add Stop',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
             ),
           ),
         ],
@@ -1118,6 +1645,118 @@ class _TripPaymentSheetState extends State<_TripPaymentSheet> {
     );
   }
 }
+
+class _ModeTab extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _ModeTab({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: selected
+              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 3)]
+              : null,
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: selected ? const Color(0xFF111827) : const Color(0xFF6B7280),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CandidateCard extends StatelessWidget {
+  final ConsolidationCandidate candidate;
+  final bool selected;
+  final VoidCallback onTap;
+  const _CandidateCard({required this.candidate, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFEFF6FF) : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected ? const Color(0xFF2563EB) : const Color(0xFFE5E7EB),
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(
+              child: Text(
+                '${candidate.pickupLocation} → ${candidate.destination}',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              ),
+            ),
+            if (selected)
+              const Icon(Icons.check_circle_rounded, color: Color(0xFF2563EB), size: 18),
+          ]),
+          const SizedBox(height: 6),
+          Wrap(spacing: 8, runSpacing: 4, children: [
+            _MiniBadge(WeightFormat.display(candidate.weight)),
+            _MiniBadge(candidate.materialType),
+            if (candidate.distanceKm != null)
+              _MiniBadge('${candidate.distanceKm!.toStringAsFixed(0)} km away'),
+            if (candidate.budget != null)
+              _MiniBadge('ETB ${candidate.budget!.toStringAsFixed(0)}'),
+          ]),
+          const SizedBox(height: 4),
+          Text(candidate.shipperName,
+              style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
+        ]),
+      ),
+    );
+  }
+}
+
+class _MiniBadge extends StatelessWidget {
+  final String label;
+  const _MiniBadge(this.label);
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF3F4F6),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(label,
+            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF374151))),
+      );
+}
+
+// ── Payment method bottom sheet ────────────────────────────────────────────
+
+String _methodLabel(String method) => switch (method) {
+      'chapa' => 'Chapa',
+      'cash' => 'Cash / ጥሬ ገንዘብ',
+      'telebirr' => 'Telebirr',
+      'cbe_birr' => 'CBE',
+      'awash_bank' => 'Awash Bank',
+      'dashen_bank' => 'Dashen Bank',
+      'bank_transfer' => 'Bank Transfer / ሌላ ባንክ',
+      _ => method,
+    };
 
 // ── Helper widgets ─────────────────────────────────────────────────────────
 
@@ -1128,18 +1767,26 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, bg, fg) = switch (status) {
-      'completed' => ('Completed', const Color(0xFFDCFCE7), const Color(0xFF16A34A)),
-      'arrived'   => ('Arrived',   const Color(0xFFFEF3C7), const Color(0xFFF59E0B)),
-      'loaded'    => ('Loaded',    const Color(0xFFEFF6FF), const Color(0xFF2563EB)),
-      _           => ('Pending',   const Color(0xFFF3F4F6), const Color(0xFF6B7280)),
+      'completed' => (
+          'Completed',
+          const Color(0xFFDCFCE7),
+          const Color(0xFF16A34A)
+        ),
+      'arrived' => (
+          'Arrived',
+          const Color(0xFFFEF3C7),
+          const Color(0xFFF59E0B)
+        ),
+      'loaded' => ('Loaded', const Color(0xFFEFF6FF), const Color(0xFF2563EB)),
+      _ => ('Pending', const Color(0xFFF3F4F6), const Color(0xFF6B7280)),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration:
           BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
       child: Text(label,
-          style: TextStyle(
-              color: fg, fontSize: 11, fontWeight: FontWeight.w600)),
+          style:
+              TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.w600)),
     );
   }
 }
