@@ -1,0 +1,64 @@
+{
+  "users": [
+    {
+      "id": 1000000001,
+      "name": "Admin",
+      "email": "abelmulu88@gmail.com",
+      "phone": "+251911000000",
+      "role": "admin",
+      "passwordHash": "bc78e58d55cde1346e68f8e5fe588dedf62fa457aa646a500a53347faff6ee24",
+      "isVerified": true,
+      "createdAt": "2026-09-26T04:28:59.101Z"
+    },
+    {
+      "id": 1790397017341,
+      "name": "Fleet Owner",
+      "email": "this11is11start@gmail.com",
+      "phone": "+251985069388",
+      "role": "fleet_owner",
+      "passwordHash": "37ac789b230358fc1b20a1abe640d3a202f2feea83a2dda480b629857495d002",
+      "isVerified": false,
+      "createdAt": "2026-09-26T04:30:17.342Z"
+    },
+    {
+      "id": 1790397778495,
+      "name": "Abel Mulu",
+      "email": "abelforex1881@gmail.com",
+      "phone": "+251897798870",
+      "role": "shipper",
+      "passwordHash": "37ac789b230358fc1b20a1abe640d3a202f2feea83a2dda480b629857495d002",
+      "isVerified": false,
+      "createdAt": "2026-09-26T04:42:58.496Z"
+    }
+  ],
+  "tokens": [
+    {
+      "token": "mock.1790397017341.1790397017343.b46a33fa124b71e2",
+      "userId": 1790397017341
+    },
+    {
+      "token": "mock.1790397017341.1790397039267.39375067f545ac4d",
+      "userId": 1790397017341
+    },
+    {
+      "token": "mock.1790397017341.1790397125035.a569ad1c462bd58a",
+      "userId": 1790397017341
+    },
+    {
+      "token": "mock.1000000001.1790397375241.7ea48be61f6ac6c8",
+      "userId": 1000000001
+    },
+    {
+      "token": "mock.1790397017341.1790397439218.a216546cf24f4edd",
+      "userId": 1790397017341
+    },
+    {
+      "token": "mock.1790397017341.1790397540510.6dc94048634cad4a",
+      "userId": 1790397017341
+    },
+    {
+      "token": "mock.1790397778495.1790397778497.48aebd0d18f24b75",
+      "userId": 1790397778495
+    }
+  ]
+}

@@ -1,0 +1,2615 @@
+2026-09-26 01:58:17.732 [background-preinit] INFO  o.h.validator.internal.util.Version - HV000001: Hibernate Validator 8.0.1.Final
+2026-09-26 01:58:17.833 [main] INFO  c.ethioloadai.EthioloadAiApplication - Starting EthioloadAiApplication using Java 21.0.12.1 with PID 25476 (C:\Users\HP\Downloads\transportation project\ethiolodeee-main\ethiolodeee-main\backend-spring-boot\target\classes started by HP in C:\Users\HP\Downloads\transportation project\ethiolodeee-main\ethiolodeee-main\backend-spring-boot)
+2026-09-26 01:58:17.839 [main] DEBUG c.ethioloadai.EthioloadAiApplication - Running with Spring Boot v3.2.0, Spring v6.1.1
+2026-09-26 01:58:17.844 [main] INFO  c.ethioloadai.EthioloadAiApplication - The following 1 profile is active: "dev"
+2026-09-26 01:58:19.953 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-09-26 01:58:20.405 [main] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 442 ms. Found 29 JPA repository interfaces.
+2026-09-26 01:58:21.667 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8080 (http)
+2026-09-26 01:58:21.684 [main] INFO  o.a.coyote.http11.Http11NioProtocol - Initializing ProtocolHandler ["http-nio-8080"]
+2026-09-26 01:58:21.687 [main] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2026-09-26 01:58:21.694 [main] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.16]
+2026-09-26 01:58:21.820 [main] INFO  o.a.c.c.C.[.[localhost].[/api] - Initializing Spring embedded WebApplicationContext
+2026-09-26 01:58:21.820 [main] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 3931 ms
+2026-09-26 01:58:22.252 [main] INFO  com.ethioloadai.config.JwtConfig - JWT configuration validated — secret is 59 bytes, expiration 900000ms, refresh 604800000ms
+2026-09-26 01:58:22.424 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Starting...
+2026-09-26 01:58:22.623 [main] INFO  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@4c5e4bfa
+2026-09-26 01:58:22.623 [main] INFO  com.zaxxer.hikari.HikariDataSource - HikariPool-1 - Start completed.
+2026-09-26 01:58:22.773 [main] INFO  o.f.c.i.license.VersionPrinter - Flyway Community Edition 9.22.3 by Redgate
+2026-09-26 01:58:22.773 [main] INFO  o.f.c.i.license.VersionPrinter - See release notes here: https://rd.gt/416ObMi
+2026-09-26 01:58:22.773 [main] INFO  o.f.c.i.license.VersionPrinter - 
+2026-09-26 01:58:22.808 [main] INFO  org.flywaydb.core.FlywayExecutor - Database: jdbc:postgresql://127.0.0.1:5432/ethioloadai_spring (PostgreSQL 18.6)
+2026-09-26 01:58:22.820 [main] WARN  o.f.c.i.database.base.Database - Flyway upgrade recommended: PostgreSQL 18.6 is newer than this version of Flyway and support has not been tested. The latest supported version of PostgreSQL is 15.
+2026-09-26 01:58:22.973 [main] INFO  o.f.core.internal.command.DbValidate - Successfully validated 53 migrations (execution time 00:00.136s)
+2026-09-26 01:58:22.986 [main] INFO  o.f.core.internal.command.DbMigrate - Current version of schema "public": 66
+2026-09-26 01:58:23.005 [main] INFO  o.f.core.internal.command.DbMigrate - Migrating schema "public" to version "67 - create dispatch assignments"
+2026-09-26 01:58:23.202 [main] INFO  o.f.core.internal.command.DbMigrate - Migrating schema "public" to version "68 - add dispatch columns to bookings"
+2026-09-26 01:58:23.216 [main] INFO  o.f.core.internal.command.DbMigrate - Migrating schema "public" to version "69 - phase7 trip delivery extensions"
+2026-09-26 01:58:23.264 [main] INFO  o.f.core.internal.command.DbMigrate - Migrating schema "public" to version "70 - create proof of delivery"
+2026-09-26 01:58:23.319 [main] INFO  o.f.core.internal.command.DbMigrate - Migrating schema "public" to version "71 - create carrier settlements"
+2026-09-26 01:58:23.353 [main] INFO  o.f.core.internal.command.DbMigrate - Successfully applied 5 migrations to schema "public", now at version v71 (execution time 00:00.304s)
+2026-09-26 01:58:23.544 [main] INFO  o.h.jpa.internal.util.LogHelper - HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-09-26 01:58:23.653 [main] INFO  org.hibernate.Version - HHH000412: Hibernate ORM core version 6.3.1.Final
+2026-09-26 01:58:23.711 [main] INFO  o.h.c.i.RegionFactoryInitiator - HHH000026: Second-level cache disabled
+2026-09-26 01:58:24.060 [main] INFO  o.s.o.j.p.SpringPersistenceUnitInfo - No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-09-26 01:58:24.135 [main] WARN  org.hibernate.orm.deprecation - HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-09-26 01:58:28.228 [main] INFO  o.h.e.t.j.p.i.JtaPlatformInitiator - HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-09-26 01:58:28.236 [main] INFO  o.s.o.j.LocalContainerEntityManagerFactoryBean - Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-09-26 01:58:29.425 [main] INFO  o.s.d.j.r.query.QueryEnhancerFactory - Hibernate is in classpath; If applicable, HQL parser will be used.
+2026-09-26 01:58:30.503 [main] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2026-09-26 01:58:30.519 [main] DEBUG c.e.s.ratelimit.RateLimitFilter - Filter 'rateLimitFilter' configured for use
+2026-09-26 01:58:40.765 [main] INFO  o.s.b.a.e.web.EndpointLinksResolver - Exposing 4 endpoint(s) beneath base path '/actuator'
+2026-09-26 01:58:41.334 [main] INFO  c.ethioloadai.config.SecurityConfig - CORS configured with 4 allowed origin(s): [http://localhost:5173, http://localhost:8765, http://127.0.0.1:5173, http://127.0.0.1:8765], and patterns: [http://localhost:*, http://127.0.0.1:*, http://[::1]:*]
+2026-09-26 01:58:42.144 [main] INFO  o.s.s.web.DefaultSecurityFilterChain - Will secure any request with [org.springframework.security.web.session.DisableEncodeUrlFilter@212770ba, org.springframework.security.web.context.request.async.WebAsyncManagerIntegrationFilter@1e3487da, org.springframework.security.web.context.SecurityContextHolderFilter@58aa492d, org.springframework.security.web.header.HeaderWriterFilter@2c7d8547, org.springframework.web.filter.CorsFilter@71d915b4, org.springframework.security.web.authentication.logout.LogoutFilter@11b15c96, com.ethioloadai.security.jwt.JwtAuthenticationFilter@4e23fd4f, org.springframework.security.web.savedrequest.RequestCacheAwareFilter@387d73a2, org.springframework.security.web.servletapi.SecurityContextHolderAwareRequestFilter@5ff510c5, org.springframework.security.web.authentication.AnonymousAuthenticationFilter@336a7a2f, org.springframework.security.web.session.SessionManagementFilter@786a6a76, org.springframework.security.web.access.ExceptionTranslationFilter@3d965cb4, org.springframework.security.web.access.intercept.AuthorizationFilter@3d327a68]
+2026-09-26 01:58:44.223 [main] INFO  o.a.coyote.http11.Http11NioProtocol - Starting ProtocolHandler ["http-nio-8080"]
+2026-09-26 01:58:44.282 [main] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat started on port 8080 (http) with context path '/api'
+2026-09-26 01:58:44.302 [main] INFO  c.ethioloadai.EthioloadAiApplication - Started EthioloadAiApplication in 27.278 seconds (process running for 27.82)
+2026-09-26 01:59:41.973 [http-nio-8080-exec-5] INFO  o.a.c.c.C.[.[localhost].[/api] - Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-09-26 01:59:41.973 [http-nio-8080-exec-5] INFO  o.s.web.servlet.DispatcherServlet - Initializing Servlet 'dispatcherServlet'
+2026-09-26 01:59:41.973 [http-nio-8080-exec-5] INFO  o.s.web.servlet.DispatcherServlet - Completed initialization in 0 ms
+2026-09-26 01:59:42.028 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Securing GET /carrier-companies/1790390576859/documents
+2026-09-26 01:59:42.028 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Securing GET /carrier-companies/1790390576859/documents
+2026-09-26 01:59:42.028 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Securing GET /notifications
+2026-09-26 01:59:42.028 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Securing GET /notifications
+2026-09-26 01:59:42.062 [http-nio-8080-exec-2] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/notifications
+2026-09-26 01:59:42.062 [http-nio-8080-exec-6] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/notifications
+2026-09-26 01:59:42.062 [http-nio-8080-exec-5] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/carrier-companies/1790390576859/documents
+2026-09-26 01:59:42.062 [http-nio-8080-exec-1] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/carrier-companies/1790390576859/documents
+2026-09-26 01:59:42.308 [http-nio-8080-exec-2] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT present but failed validation for: GET /api/notifications
+2026-09-26 01:59:42.307 [http-nio-8080-exec-5] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT present but failed validation for: GET /api/carrier-companies/1790390576859/documents
+2026-09-26 01:59:42.307 [http-nio-8080-exec-6] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT present but failed validation for: GET /api/notifications
+2026-09-26 01:59:42.307 [http-nio-8080-exec-1] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT present but failed validation for: GET /api/carrier-companies/1790390576859/documents
+2026-09-26 01:59:42.309 [http-nio-8080-exec-2] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-09-26 01:59:42.309 [http-nio-8080-exec-6] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-09-26 01:59:42.309 [http-nio-8080-exec-5] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-09-26 01:59:42.309 [http-nio-8080-exec-1] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-09-26 01:59:42.325 [http-nio-8080-exec-6] WARN  o.s.w.s.h.HandlerMappingIntrospector - Cache miss for REQUEST dispatch to '/api/notifications' (previous null). Performing MatchableHandlerMapping lookup. This is logged once only at WARN level, and every time at TRACE.
+2026-09-26 02:04:34.751 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Securing POST /auth/register
+2026-09-26 02:04:34.753 [http-nio-8080-exec-7] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: POST /api/auth/register
+2026-09-26 02:04:34.753 [http-nio-8080-exec-7] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-09-26 02:04:34.753 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Secured POST /auth/register
+2026-09-26 02:04:34.898 [http-nio-8080-exec-7] WARN  c.e.exception.GlobalExceptionHandler - Request field validation failed
+2026-09-26 02:04:48.875 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Securing POST /auth/login
+2026-09-26 02:04:48.876 [http-nio-8080-exec-4] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: POST /api/auth/login
+2026-09-26 02:04:48.877 [http-nio-8080-exec-4] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-09-26 02:04:48.879 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Secured POST /auth/login
+2026-09-26 02:04:48.889 [http-nio-8080-exec-4] INFO  c.e.auth.controller.AuthController - POST /api/auth/login - Login request received
+2026-09-26 02:04:48.907 [http-nio-8080-exec-4] INFO  c.e.a.s.AuthenticationServiceImpl - Login attempt initiated - identifier: abelmulu88@gmail.com
+2026-09-26 02:04:48.983 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:04:49.084 [http-nio-8080-exec-4] WARN  c.e.a.s.AuthenticationServiceImpl - Login failed - invalid credentials for userId: 4, identifier: abelmulu88@gmail.com
+2026-09-26 02:04:49.096 [http-nio-8080-exec-4] ERROR c.e.exception.GlobalExceptionHandler - AuthenticationException: Invalid credentials. Check your email/phone and password.
+2026-09-26 02:05:09.638 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Securing POST /auth/register
+2026-09-26 02:05:09.638 [http-nio-8080-exec-3] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: POST /api/auth/register
+2026-09-26 02:05:09.638 [http-nio-8080-exec-3] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-09-26 02:05:09.638 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Secured POST /auth/register
+2026-09-26 02:05:09.638 [http-nio-8080-exec-3] INFO  c.e.auth.controller.AuthController - POST /api/auth/register - Registration request received
+2026-09-26 02:05:09.647 [http-nio-8080-exec-3] INFO  c.e.a.s.AuthenticationServiceImpl - User registration initiated - phone: +251900000099, email: abelmulu88new@gmail.com
+2026-09-26 02:05:09.665 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id 
+    from
+        users u1_0 
+    where
+        u1_0.phone=? 
+    fetch
+        first ? rows only
+2026-09-26 02:05:09.669 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+    fetch
+        first ? rows only
+2026-09-26 02:05:09.778 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    insert 
+    into
+        users
+        (created_at, email, fleet_owner_id, full_name, is_active, latitude, location, longitude, password, phone, remember_token, role, updated_at, verification_status) 
+    values
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-09-26 02:05:09.790 [http-nio-8080-exec-3] INFO  c.e.a.s.AuthenticationServiceImpl - User registration successful - userId: 38, role: SHIPPER, phone: +251900000099
+2026-09-26 02:05:34.584 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Securing POST /auth/register
+2026-09-26 02:05:34.588 [http-nio-8080-exec-8] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: POST /api/auth/register
+2026-09-26 02:05:34.588 [http-nio-8080-exec-8] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-09-26 02:05:34.589 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Secured POST /auth/register
+2026-09-26 02:05:34.594 [http-nio-8080-exec-8] INFO  c.e.auth.controller.AuthController - POST /api/auth/register - Registration request received
+2026-09-26 02:05:34.596 [http-nio-8080-exec-8] INFO  c.e.a.s.AuthenticationServiceImpl - User registration initiated - phone: +251900000098, email: fleettemp99@gmail.com
+2026-09-26 02:05:34.597 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id 
+    from
+        users u1_0 
+    where
+        u1_0.phone=? 
+    fetch
+        first ? rows only
+2026-09-26 02:05:34.597 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+    fetch
+        first ? rows only
+2026-09-26 02:05:34.689 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    insert 
+    into
+        users
+        (created_at, email, fleet_owner_id, full_name, is_active, latitude, location, longitude, password, phone, remember_token, role, updated_at, verification_status) 
+    values
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+2026-09-26 02:05:34.689 [http-nio-8080-exec-8] INFO  c.e.a.s.AuthenticationServiceImpl - User registration successful - userId: 39, role: FLEET_OWNER, phone: +251900000098
+2026-09-26 02:06:50.193 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Securing POST /auth/login
+2026-09-26 02:06:50.193 [http-nio-8080-exec-6] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: POST /api/auth/login
+2026-09-26 02:06:50.193 [http-nio-8080-exec-6] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-09-26 02:06:50.193 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Secured POST /auth/login
+2026-09-26 02:06:50.202 [http-nio-8080-exec-6] INFO  c.e.auth.controller.AuthController - POST /api/auth/login - Login request received
+2026-09-26 02:06:50.204 [http-nio-8080-exec-6] INFO  c.e.a.s.AuthenticationServiceImpl - Login attempt initiated - identifier: abelmulu88@gmail.com
+2026-09-26 02:06:50.205 [http-nio-8080-exec-6] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:06:50.300 [http-nio-8080-exec-6] INFO  c.e.a.s.AuthenticationServiceImpl - Login successful - userId: 4, role: ADMIN, identifier: abelmulu88@gmail.com
+2026-09-26 02:06:50.583 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Securing POST /auth/login
+2026-09-26 02:06:50.583 [http-nio-8080-exec-5] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: POST /api/auth/login
+2026-09-26 02:06:50.583 [http-nio-8080-exec-5] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-09-26 02:06:50.583 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Secured POST /auth/login
+2026-09-26 02:06:50.594 [http-nio-8080-exec-5] INFO  c.e.auth.controller.AuthController - POST /api/auth/login - Login request received
+2026-09-26 02:06:50.594 [http-nio-8080-exec-5] INFO  c.e.a.s.AuthenticationServiceImpl - Login attempt initiated - identifier: this11is11start@gmail.com
+2026-09-26 02:06:50.594 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:06:50.682 [http-nio-8080-exec-5] INFO  c.e.a.s.AuthenticationServiceImpl - Login successful - userId: 5, role: FLEET_OWNER, identifier: this11is11start@gmail.com
+2026-09-26 02:12:23.156 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Securing POST /auth/login
+2026-09-26 02:12:23.158 [http-nio-8080-exec-7] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: POST /api/auth/login
+2026-09-26 02:12:23.158 [http-nio-8080-exec-7] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-09-26 02:12:23.158 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Secured POST /auth/login
+2026-09-26 02:12:23.158 [http-nio-8080-exec-7] INFO  c.e.auth.controller.AuthController - POST /api/auth/login - Login request received
+2026-09-26 02:12:23.158 [http-nio-8080-exec-7] INFO  c.e.a.s.AuthenticationServiceImpl - Login attempt initiated - identifier: abelmulu88@gmail.com
+2026-09-26 02:12:23.166 [http-nio-8080-exec-7] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:12:23.251 [http-nio-8080-exec-7] INFO  c.e.a.s.AuthenticationServiceImpl - Login successful - userId: 4, role: ADMIN, identifier: abelmulu88@gmail.com
+2026-09-26 02:20:09.447 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Securing POST /auth/login
+2026-09-26 02:20:09.447 [http-nio-8080-exec-3] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: POST /api/auth/login
+2026-09-26 02:20:09.447 [http-nio-8080-exec-3] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-09-26 02:20:09.452 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Secured POST /auth/login
+2026-09-26 02:20:09.454 [http-nio-8080-exec-3] INFO  c.e.auth.controller.AuthController - POST /api/auth/login - Login request received
+2026-09-26 02:20:09.455 [http-nio-8080-exec-3] INFO  c.e.a.s.AuthenticationServiceImpl - Login attempt initiated - identifier: abelmulu88@gmail.com
+2026-09-26 02:20:09.457 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:20:09.552 [http-nio-8080-exec-3] INFO  c.e.a.s.AuthenticationServiceImpl - Login successful - userId: 4, role: ADMIN, identifier: abelmulu88@gmail.com
+2026-09-26 02:20:55.910 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Securing GET /actuator/health
+2026-09-26 02:20:55.929 [http-nio-8080-exec-8] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/actuator/health
+2026-09-26 02:20:55.929 [http-nio-8080-exec-8] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-09-26 02:20:55.932 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Secured GET /actuator/health
+2026-09-26 02:21:59.218 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Securing GET /notifications
+2026-09-26 02:21:59.218 [http-nio-8080-exec-10] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/notifications
+2026-09-26 02:21:59.218 [http-nio-8080-exec-10] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT present but failed validation for: GET /api/notifications
+2026-09-26 02:21:59.218 [http-nio-8080-exec-10] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-09-26 02:22:02.319 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Securing POST /auth/login
+2026-09-26 02:22:02.319 [http-nio-8080-exec-1] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: POST /api/auth/login
+2026-09-26 02:22:02.319 [http-nio-8080-exec-1] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-09-26 02:22:02.319 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Secured POST /auth/login
+2026-09-26 02:22:02.319 [http-nio-8080-exec-1] INFO  c.e.auth.controller.AuthController - POST /api/auth/login - Login request received
+2026-09-26 02:22:02.331 [http-nio-8080-exec-1] INFO  c.e.a.s.AuthenticationServiceImpl - Login attempt initiated - identifier: this11is11start@gmail.com
+2026-09-26 02:22:02.331 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:22:02.414 [http-nio-8080-exec-1] INFO  c.e.a.s.AuthenticationServiceImpl - Login successful - userId: 5, role: FLEET_OWNER, identifier: this11is11start@gmail.com
+2026-09-26 02:22:02.448 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Securing GET /notifications
+2026-09-26 02:22:02.448 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Securing GET /fleet/vehicles
+2026-09-26 02:22:02.448 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Securing GET /fleet/dashboard
+2026-09-26 02:22:02.448 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Securing GET /fleet/drivers
+2026-09-26 02:22:02.448 [http-nio-8080-exec-2] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/fleet/drivers
+2026-09-26 02:22:02.448 [http-nio-8080-exec-5] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/fleet/dashboard
+2026-09-26 02:22:02.448 [http-nio-8080-exec-6] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/notifications
+2026-09-26 02:22:02.448 [http-nio-8080-exec-7] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/fleet/vehicles
+2026-09-26 02:22:02.492 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:22:02.492 [http-nio-8080-exec-6] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:22:02.492 [http-nio-8080-exec-7] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:22:02.492 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:22:02.503 [http-nio-8080-exec-7] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:22:02.503 [http-nio-8080-exec-6] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:22:02.503 [http-nio-8080-exec-2] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:22:02.503 [http-nio-8080-exec-5] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:22:02.531 [http-nio-8080-exec-6] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:22:02.533 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:22:02.533 [http-nio-8080-exec-7] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:22:02.533 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:22:02.533 [http-nio-8080-exec-6] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:22:02.533 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Secured GET /notifications
+2026-09-26 02:22:02.533 [http-nio-8080-exec-7] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:22:02.533 [http-nio-8080-exec-2] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:22:02.541 [http-nio-8080-exec-5] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:22:02.543 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Secured GET /fleet/vehicles
+2026-09-26 02:22:02.543 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Secured GET /fleet/drivers
+2026-09-26 02:22:02.544 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Secured GET /fleet/dashboard
+2026-09-26 02:22:02.545 [http-nio-8080-exec-5] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorizing method invocation ReflectiveMethodInvocation: public org.springframework.http.ResponseEntity com.ethioloadai.fleet.controller.FleetController.getDashboard(com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.fleet.controller.FleetController]
+2026-09-26 02:22:02.545 [http-nio-8080-exec-2] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorizing method invocation ReflectiveMethodInvocation: public org.springframework.http.ResponseEntity com.ethioloadai.fleet.controller.FleetController.getDrivers(com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.fleet.controller.FleetController]
+2026-09-26 02:22:02.545 [http-nio-8080-exec-7] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorizing method invocation ReflectiveMethodInvocation: public org.springframework.http.ResponseEntity com.ethioloadai.fleet.controller.FleetController.getVehicles(com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.fleet.controller.FleetController]
+2026-09-26 02:22:02.568 [http-nio-8080-exec-7] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorized method invocation ReflectiveMethodInvocation: public org.springframework.http.ResponseEntity com.ethioloadai.fleet.controller.FleetController.getVehicles(com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.fleet.controller.FleetController]
+2026-09-26 02:22:02.568 [http-nio-8080-exec-2] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorized method invocation ReflectiveMethodInvocation: public org.springframework.http.ResponseEntity com.ethioloadai.fleet.controller.FleetController.getDrivers(com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.fleet.controller.FleetController]
+2026-09-26 02:22:02.568 [http-nio-8080-exec-5] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorized method invocation ReflectiveMethodInvocation: public org.springframework.http.ResponseEntity com.ethioloadai.fleet.controller.FleetController.getDashboard(com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.fleet.controller.FleetController]
+2026-09-26 02:22:02.568 [http-nio-8080-exec-7] INFO  c.e.fleet.controller.FleetController - GET /api/fleet/vehicles caller=5
+2026-09-26 02:22:02.568 [http-nio-8080-exec-2] INFO  c.e.fleet.controller.FleetController - GET /api/fleet/drivers caller=5
+2026-09-26 02:22:02.568 [http-nio-8080-exec-5] INFO  c.e.fleet.controller.FleetController - GET /api/fleet/dashboard caller=5
+2026-09-26 02:22:02.576 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.id=?
+2026-09-26 02:22:02.576 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.id=?
+2026-09-26 02:22:02.576 [http-nio-8080-exec-7] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.id=?
+2026-09-26 02:22:02.582 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.fleet_owner_id=?
+2026-09-26 02:22:02.582 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.fleet_owner_id=?
+2026-09-26 02:22:02.582 [http-nio-8080-exec-7] DEBUG org.hibernate.SQL - 
+    select
+        v1_0.id,
+        v1_0.approval_status,
+        v1_0.availability_status,
+        v1_0.capacity,
+        v1_0.carrier_company_id,
+        v1_0.created_at,
+        v1_0.current_city,
+        v1_0.fleet_owner_id,
+        v1_0.last_location_at,
+        v1_0.latitude,
+        v1_0.longitude,
+        v1_0.plate_number,
+        v1_0.rating,
+        v1_0.truck_type,
+        v1_0.updated_at,
+        v1_0.user_id,
+        v1_0.vehicle_category 
+    from
+        vehicles v1_0 
+    where
+        v1_0.fleet_owner_id=?
+2026-09-26 02:22:02.585 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        v1_0.id,
+        v1_0.approval_status,
+        v1_0.availability_status,
+        v1_0.capacity,
+        v1_0.carrier_company_id,
+        v1_0.created_at,
+        v1_0.current_city,
+        v1_0.fleet_owner_id,
+        v1_0.last_location_at,
+        v1_0.latitude,
+        v1_0.longitude,
+        v1_0.plate_number,
+        v1_0.rating,
+        v1_0.truck_type,
+        v1_0.updated_at,
+        v1_0.user_id,
+        v1_0.vehicle_category 
+    from
+        vehicles v1_0 
+    where
+        v1_0.fleet_owner_id=?
+2026-09-26 02:22:02.594 [http-nio-8080-exec-5] INFO  c.e.fleet.service.FleetServiceImpl - Fleet dashboard: owner=5, drivers=0, vehicles=0, activeBookings=0
+2026-09-26 02:22:04.647 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Securing GET /carrier-companies/me?page=0&size=10
+2026-09-26 02:22:04.652 [http-nio-8080-exec-4] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/carrier-companies/me
+2026-09-26 02:22:04.654 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:22:04.664 [http-nio-8080-exec-4] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:22:04.668 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:22:04.669 [http-nio-8080-exec-4] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:22:04.669 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Secured GET /carrier-companies/me?page=0&size=10
+2026-09-26 02:22:04.682 [http-nio-8080-exec-4] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorizing method invocation ReflectiveMethodInvocation: public org.springframework.data.domain.Page com.ethioloadai.carrier.company.controller.CarrierCompanyController.mine(com.ethioloadai.user.entity.User,int,int); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:22:04.682 [http-nio-8080-exec-4] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorized method invocation ReflectiveMethodInvocation: public org.springframework.data.domain.Page com.ethioloadai.carrier.company.controller.CarrierCompanyController.mine(com.ethioloadai.user.entity.User,int,int); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:22:04.699 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        cc1_0.id,
+        cc1_0.business_address,
+        cc1_0.business_registration_number,
+        cc1_0.city,
+        cc1_0.company_name,
+        cc1_0.created_at,
+        cc1_0.email,
+        cc1_0.legal_name,
+        cc1_0.owner_id,
+        cc1_0.phone,
+        cc1_0.review_message,
+        cc1_0.reviewed_at,
+        cc1_0.reviewed_by,
+        cc1_0.submitted_at,
+        cc1_0.tin_number,
+        cc1_0.updated_at,
+        cc1_0.verification_status 
+    from
+        carrier_companies cc1_0 
+    where
+        cc1_0.owner_id=? 
+    order by
+        cc1_0.created_at desc,
+        cc1_0.id desc 
+    offset
+        ? rows 
+    fetch
+        first ? rows only
+2026-09-26 02:22:59.651 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Securing POST /auth/login
+2026-09-26 02:22:59.654 [http-nio-8080-exec-3] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: POST /api/auth/login
+2026-09-26 02:22:59.655 [http-nio-8080-exec-3] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-09-26 02:22:59.657 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Secured POST /auth/login
+2026-09-26 02:22:59.660 [http-nio-8080-exec-3] INFO  c.e.auth.controller.AuthController - POST /api/auth/login - Login request received
+2026-09-26 02:22:59.663 [http-nio-8080-exec-3] INFO  c.e.a.s.AuthenticationServiceImpl - Login attempt initiated - identifier: this11is11start@gmail.com
+2026-09-26 02:22:59.665 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:22:59.923 [http-nio-8080-exec-3] INFO  c.e.a.s.AuthenticationServiceImpl - Login successful - userId: 5, role: FLEET_OWNER, identifier: this11is11start@gmail.com
+2026-09-26 02:22:59.981 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Securing GET /notifications
+2026-09-26 02:22:59.981 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Securing GET /fleet/drivers
+2026-09-26 02:22:59.982 [http-nio-8080-exec-8] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/notifications
+2026-09-26 02:22:59.982 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Securing GET /fleet/vehicles
+2026-09-26 02:22:59.982 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Securing GET /fleet/dashboard
+2026-09-26 02:22:59.982 [http-nio-8080-exec-1] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/fleet/vehicles
+2026-09-26 02:22:59.982 [http-nio-8080-exec-10] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/fleet/drivers
+2026-09-26 02:22:59.983 [http-nio-8080-exec-9] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/fleet/dashboard
+2026-09-26 02:22:59.983 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:22:59.983 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:22:59.988 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:22:59.988 [http-nio-8080-exec-8] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:22:59.989 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:22:59.994 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:22:59.997 [http-nio-8080-exec-1] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:22:59.998 [http-nio-8080-exec-10] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:22:59.999 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:22:59.999 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:23:00.001 [http-nio-8080-exec-8] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:23:00.001 [http-nio-8080-exec-10] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:23:00.002 [http-nio-8080-exec-1] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:23:00.002 [http-nio-8080-exec-9] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:23:00.002 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:23:00.005 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Secured GET /fleet/drivers
+2026-09-26 02:23:00.007 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Secured GET /notifications
+2026-09-26 02:23:00.007 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Secured GET /fleet/vehicles
+2026-09-26 02:23:00.008 [http-nio-8080-exec-9] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:23:00.013 [http-nio-8080-exec-10] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorizing method invocation ReflectiveMethodInvocation: public org.springframework.http.ResponseEntity com.ethioloadai.fleet.controller.FleetController.getDrivers(com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.fleet.controller.FleetController]
+2026-09-26 02:23:00.019 [http-nio-8080-exec-10] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorized method invocation ReflectiveMethodInvocation: public org.springframework.http.ResponseEntity com.ethioloadai.fleet.controller.FleetController.getDrivers(com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.fleet.controller.FleetController]
+2026-09-26 02:23:00.020 [http-nio-8080-exec-1] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorizing method invocation ReflectiveMethodInvocation: public org.springframework.http.ResponseEntity com.ethioloadai.fleet.controller.FleetController.getVehicles(com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.fleet.controller.FleetController]
+2026-09-26 02:23:00.027 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Secured GET /fleet/dashboard
+2026-09-26 02:23:00.031 [http-nio-8080-exec-10] INFO  c.e.fleet.controller.FleetController - GET /api/fleet/drivers caller=5
+2026-09-26 02:23:00.032 [http-nio-8080-exec-9] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorizing method invocation ReflectiveMethodInvocation: public org.springframework.http.ResponseEntity com.ethioloadai.fleet.controller.FleetController.getDashboard(com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.fleet.controller.FleetController]
+2026-09-26 02:23:00.032 [http-nio-8080-exec-1] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorized method invocation ReflectiveMethodInvocation: public org.springframework.http.ResponseEntity com.ethioloadai.fleet.controller.FleetController.getVehicles(com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.fleet.controller.FleetController]
+2026-09-26 02:23:00.033 [http-nio-8080-exec-1] INFO  c.e.fleet.controller.FleetController - GET /api/fleet/vehicles caller=5
+2026-09-26 02:23:00.033 [http-nio-8080-exec-9] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorized method invocation ReflectiveMethodInvocation: public org.springframework.http.ResponseEntity com.ethioloadai.fleet.controller.FleetController.getDashboard(com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.fleet.controller.FleetController]
+2026-09-26 02:23:00.033 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.id=?
+2026-09-26 02:23:00.034 [http-nio-8080-exec-9] INFO  c.e.fleet.controller.FleetController - GET /api/fleet/dashboard caller=5
+2026-09-26 02:23:00.035 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.id=?
+2026-09-26 02:23:00.036 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.id=?
+2026-09-26 02:23:00.042 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.fleet_owner_id=?
+2026-09-26 02:23:00.048 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        v1_0.id,
+        v1_0.approval_status,
+        v1_0.availability_status,
+        v1_0.capacity,
+        v1_0.carrier_company_id,
+        v1_0.created_at,
+        v1_0.current_city,
+        v1_0.fleet_owner_id,
+        v1_0.last_location_at,
+        v1_0.latitude,
+        v1_0.longitude,
+        v1_0.plate_number,
+        v1_0.rating,
+        v1_0.truck_type,
+        v1_0.updated_at,
+        v1_0.user_id,
+        v1_0.vehicle_category 
+    from
+        vehicles v1_0 
+    where
+        v1_0.fleet_owner_id=?
+2026-09-26 02:23:00.049 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.fleet_owner_id=?
+2026-09-26 02:23:00.063 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        v1_0.id,
+        v1_0.approval_status,
+        v1_0.availability_status,
+        v1_0.capacity,
+        v1_0.carrier_company_id,
+        v1_0.created_at,
+        v1_0.current_city,
+        v1_0.fleet_owner_id,
+        v1_0.last_location_at,
+        v1_0.latitude,
+        v1_0.longitude,
+        v1_0.plate_number,
+        v1_0.rating,
+        v1_0.truck_type,
+        v1_0.updated_at,
+        v1_0.user_id,
+        v1_0.vehicle_category 
+    from
+        vehicles v1_0 
+    where
+        v1_0.fleet_owner_id=?
+2026-09-26 02:23:00.065 [http-nio-8080-exec-9] INFO  c.e.fleet.service.FleetServiceImpl - Fleet dashboard: owner=5, drivers=0, vehicles=0, activeBookings=0
+2026-09-26 02:23:03.888 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Securing GET /carrier-companies/me?page=0&size=10
+2026-09-26 02:23:03.890 [http-nio-8080-exec-6] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/carrier-companies/me
+2026-09-26 02:23:03.895 [http-nio-8080-exec-6] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:23:03.905 [http-nio-8080-exec-6] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:23:03.908 [http-nio-8080-exec-6] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:23:03.908 [http-nio-8080-exec-6] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:23:03.908 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Secured GET /carrier-companies/me?page=0&size=10
+2026-09-26 02:23:03.908 [http-nio-8080-exec-6] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorizing method invocation ReflectiveMethodInvocation: public org.springframework.data.domain.Page com.ethioloadai.carrier.company.controller.CarrierCompanyController.mine(com.ethioloadai.user.entity.User,int,int); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:23:03.908 [http-nio-8080-exec-6] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorized method invocation ReflectiveMethodInvocation: public org.springframework.data.domain.Page com.ethioloadai.carrier.company.controller.CarrierCompanyController.mine(com.ethioloadai.user.entity.User,int,int); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:23:03.922 [http-nio-8080-exec-6] DEBUG org.hibernate.SQL - 
+    select
+        cc1_0.id,
+        cc1_0.business_address,
+        cc1_0.business_registration_number,
+        cc1_0.city,
+        cc1_0.company_name,
+        cc1_0.created_at,
+        cc1_0.email,
+        cc1_0.legal_name,
+        cc1_0.owner_id,
+        cc1_0.phone,
+        cc1_0.review_message,
+        cc1_0.reviewed_at,
+        cc1_0.reviewed_by,
+        cc1_0.submitted_at,
+        cc1_0.tin_number,
+        cc1_0.updated_at,
+        cc1_0.verification_status 
+    from
+        carrier_companies cc1_0 
+    where
+        cc1_0.owner_id=? 
+    order by
+        cc1_0.created_at desc,
+        cc1_0.id desc 
+    offset
+        ? rows 
+    fetch
+        first ? rows only
+2026-09-26 02:23:11.035 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Securing GET /carrier-companies/15/documents
+2026-09-26 02:23:11.035 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Securing GET /carrier-companies/15
+2026-09-26 02:23:11.037 [http-nio-8080-exec-7] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/carrier-companies/15/documents
+2026-09-26 02:23:11.038 [http-nio-8080-exec-2] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/carrier-companies/15
+2026-09-26 02:23:11.047 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:23:11.047 [http-nio-8080-exec-7] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:23:11.049 [http-nio-8080-exec-7] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:23:11.049 [http-nio-8080-exec-2] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:23:11.055 [http-nio-8080-exec-7] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:23:11.055 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:23:11.055 [http-nio-8080-exec-7] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:23:11.063 [http-nio-8080-exec-2] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:23:11.071 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Secured GET /carrier-companies/15/documents
+2026-09-26 02:23:11.071 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Secured GET /carrier-companies/15
+2026-09-26 02:23:11.071 [http-nio-8080-exec-2] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorizing method invocation ReflectiveMethodInvocation: public com.ethioloadai.carrier.company.dto.CarrierCompanyResponse com.ethioloadai.carrier.company.controller.CarrierCompanyController.get(java.lang.Long,com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:23:11.071 [http-nio-8080-exec-7] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorizing method invocation ReflectiveMethodInvocation: public java.util.List com.ethioloadai.carrier.company.controller.CarrierCompanyController.documents(java.lang.Long,com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:23:11.080 [http-nio-8080-exec-7] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorized method invocation ReflectiveMethodInvocation: public java.util.List com.ethioloadai.carrier.company.controller.CarrierCompanyController.documents(java.lang.Long,com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:23:11.080 [http-nio-8080-exec-2] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorized method invocation ReflectiveMethodInvocation: public com.ethioloadai.carrier.company.dto.CarrierCompanyResponse com.ethioloadai.carrier.company.controller.CarrierCompanyController.get(java.lang.Long,com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:23:11.080 [http-nio-8080-exec-7] DEBUG org.hibernate.SQL - 
+    select
+        cc1_0.id,
+        cc1_0.business_address,
+        cc1_0.business_registration_number,
+        cc1_0.city,
+        cc1_0.company_name,
+        cc1_0.created_at,
+        cc1_0.email,
+        cc1_0.legal_name,
+        cc1_0.owner_id,
+        cc1_0.phone,
+        cc1_0.review_message,
+        cc1_0.reviewed_at,
+        cc1_0.reviewed_by,
+        cc1_0.submitted_at,
+        cc1_0.tin_number,
+        cc1_0.updated_at,
+        cc1_0.verification_status 
+    from
+        carrier_companies cc1_0 
+    where
+        cc1_0.id=?
+2026-09-26 02:23:11.080 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        cc1_0.id,
+        cc1_0.business_address,
+        cc1_0.business_registration_number,
+        cc1_0.city,
+        cc1_0.company_name,
+        cc1_0.created_at,
+        cc1_0.email,
+        cc1_0.legal_name,
+        cc1_0.owner_id,
+        cc1_0.phone,
+        cc1_0.review_message,
+        cc1_0.reviewed_at,
+        cc1_0.reviewed_by,
+        cc1_0.submitted_at,
+        cc1_0.tin_number,
+        cc1_0.updated_at,
+        cc1_0.verification_status 
+    from
+        carrier_companies cc1_0 
+    where
+        cc1_0.id=?
+2026-09-26 02:23:11.094 [http-nio-8080-exec-7] DEBUG org.hibernate.SQL - 
+    select
+        ccd1_0.id,
+        ccd1_0.carrier_company_id,
+        ccd1_0.content_type,
+        ccd1_0.document_type,
+        ccd1_0.file_size,
+        ccd1_0.original_name,
+        ccd1_0.review_message,
+        ccd1_0.reviewed_at,
+        ccd1_0.reviewed_by,
+        ccd1_0.storage_key,
+        ccd1_0.uploaded_at,
+        ccd1_0.verification_status 
+    from
+        carrier_company_documents ccd1_0 
+    where
+        ccd1_0.carrier_company_id=? 
+    order by
+        ccd1_0.id
+2026-09-26 02:23:30.052 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Securing GET /notifications
+2026-09-26 02:23:30.059 [http-nio-8080-exec-5] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/notifications
+2026-09-26 02:23:30.059 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:23:30.068 [http-nio-8080-exec-5] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:23:30.072 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:23:30.072 [http-nio-8080-exec-5] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:23:30.078 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Secured GET /notifications
+2026-09-26 02:23:31.038 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Securing POST /carrier-companies/15/team/invitations
+2026-09-26 02:23:31.039 [http-nio-8080-exec-4] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: POST /api/carrier-companies/15/team/invitations
+2026-09-26 02:23:31.043 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:23:31.051 [http-nio-8080-exec-4] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:23:31.052 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:23:31.052 [http-nio-8080-exec-4] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:23:31.068 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Secured POST /carrier-companies/15/team/invitations
+2026-09-26 02:23:31.088 [http-nio-8080-exec-4] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorizing method invocation ReflectiveMethodInvocation: public org.springframework.http.ResponseEntity com.ethioloadai.carrier.team.controller.CompanyTeamController.invite(java.lang.Long,com.ethioloadai.carrier.team.dto.InvitationRequest,com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.carrier.team.controller.CompanyTeamController]
+2026-09-26 02:23:31.088 [http-nio-8080-exec-4] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorized method invocation ReflectiveMethodInvocation: public org.springframework.http.ResponseEntity com.ethioloadai.carrier.team.controller.CompanyTeamController.invite(java.lang.Long,com.ethioloadai.carrier.team.dto.InvitationRequest,com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.carrier.team.controller.CompanyTeamController]
+2026-09-26 02:23:31.107 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        cc1_0.id,
+        cc1_0.business_address,
+        cc1_0.business_registration_number,
+        cc1_0.city,
+        cc1_0.company_name,
+        cc1_0.created_at,
+        cc1_0.email,
+        cc1_0.legal_name,
+        cc1_0.owner_id,
+        cc1_0.phone,
+        cc1_0.review_message,
+        cc1_0.reviewed_at,
+        cc1_0.reviewed_by,
+        cc1_0.submitted_at,
+        cc1_0.tin_number,
+        cc1_0.updated_at,
+        cc1_0.verification_status 
+    from
+        carrier_companies cc1_0 
+    where
+        cc1_0.id=? for no key update
+2026-09-26 02:23:31.119 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        cm1_0.id,
+        cm1_0.carrier_company_id,
+        cm1_0.created_at,
+        cm1_0.invited_by,
+        cm1_0.joined_at,
+        cm1_0.role,
+        cm1_0.role_changed_at,
+        cm1_0.role_changed_by,
+        cm1_0.status,
+        cm1_0.status_changed_at,
+        cm1_0.status_changed_by,
+        cm1_0.updated_at,
+        cm1_0.user_id 
+    from
+        company_memberships cm1_0 
+    where
+        cm1_0.carrier_company_id=? 
+        and cm1_0.user_id=?
+2026-09-26 02:23:31.136 [http-nio-8080-exec-4] ERROR c.e.exception.GlobalExceptionHandler - BaseException: Company owner access required
+2026-09-26 02:23:35.843 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Securing GET /notifications
+2026-09-26 02:23:35.844 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Securing GET /carrier-companies/me?page=0&size=10
+2026-09-26 02:23:35.853 [http-nio-8080-exec-8] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/notifications
+2026-09-26 02:23:35.856 [http-nio-8080-exec-3] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/carrier-companies/me
+2026-09-26 02:23:35.872 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:23:35.873 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:23:35.876 [http-nio-8080-exec-3] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:23:35.878 [http-nio-8080-exec-8] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:23:35.879 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:23:35.880 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:23:35.882 [http-nio-8080-exec-3] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:23:35.883 [http-nio-8080-exec-8] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:23:35.886 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Secured GET /carrier-companies/me?page=0&size=10
+2026-09-26 02:23:35.888 [http-nio-8080-exec-3] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorizing method invocation ReflectiveMethodInvocation: public org.springframework.data.domain.Page com.ethioloadai.carrier.company.controller.CarrierCompanyController.mine(com.ethioloadai.user.entity.User,int,int); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:23:35.889 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Secured GET /notifications
+2026-09-26 02:23:35.891 [http-nio-8080-exec-3] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorized method invocation ReflectiveMethodInvocation: public org.springframework.data.domain.Page com.ethioloadai.carrier.company.controller.CarrierCompanyController.mine(com.ethioloadai.user.entity.User,int,int); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:23:35.894 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        cc1_0.id,
+        cc1_0.business_address,
+        cc1_0.business_registration_number,
+        cc1_0.city,
+        cc1_0.company_name,
+        cc1_0.created_at,
+        cc1_0.email,
+        cc1_0.legal_name,
+        cc1_0.owner_id,
+        cc1_0.phone,
+        cc1_0.review_message,
+        cc1_0.reviewed_at,
+        cc1_0.reviewed_by,
+        cc1_0.submitted_at,
+        cc1_0.tin_number,
+        cc1_0.updated_at,
+        cc1_0.verification_status 
+    from
+        carrier_companies cc1_0 
+    where
+        cc1_0.owner_id=? 
+    order by
+        cc1_0.created_at desc,
+        cc1_0.id desc 
+    offset
+        ? rows 
+    fetch
+        first ? rows only
+2026-09-26 02:24:06.487 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Securing POST /company-invitations/validate
+2026-09-26 02:24:06.489 [http-nio-8080-exec-10] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: POST /api/company-invitations/validate
+2026-09-26 02:24:06.490 [http-nio-8080-exec-10] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-09-26 02:24:06.490 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Secured POST /company-invitations/validate
+2026-09-26 02:24:06.497 [http-nio-8080-exec-10] ERROR c.e.exception.GlobalExceptionHandler - BaseException: Invitation is invalid or no longer available
+2026-09-26 02:24:20.432 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Securing GET /carrier-companies/me?page=0&size=10
+2026-09-26 02:24:20.434 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Securing GET /notifications
+2026-09-26 02:24:20.432 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Securing GET /notifications
+2026-09-26 02:24:20.434 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Securing GET /carrier-companies/15/documents
+2026-09-26 02:24:20.437 [http-nio-8080-exec-9] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/notifications
+2026-09-26 02:24:20.438 [http-nio-8080-exec-2] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/carrier-companies/15/documents
+2026-09-26 02:24:20.436 [http-nio-8080-exec-1] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/carrier-companies/me
+2026-09-26 02:24:20.437 [http-nio-8080-exec-6] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/notifications
+2026-09-26 02:24:20.449 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:24:20.461 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:24:20.461 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:24:20.476 [http-nio-8080-exec-6] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:24:20.512 [http-nio-8080-exec-9] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:24:20.526 [http-nio-8080-exec-2] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:24:20.563 [http-nio-8080-exec-1] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:24:20.571 [http-nio-8080-exec-6] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:24:20.589 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:24:20.591 [http-nio-8080-exec-6] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:24:20.591 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:24:20.591 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:24:20.604 [http-nio-8080-exec-9] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:24:20.604 [http-nio-8080-exec-2] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:24:20.604 [http-nio-8080-exec-6] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:24:20.607 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Secured GET /notifications
+2026-09-26 02:24:20.607 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Secured GET /notifications
+2026-09-26 02:24:20.609 [http-nio-8080-exec-1] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:24:20.610 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Secured GET /carrier-companies/15/documents
+2026-09-26 02:24:20.613 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Secured GET /carrier-companies/me?page=0&size=10
+2026-09-26 02:24:20.620 [http-nio-8080-exec-2] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorizing method invocation ReflectiveMethodInvocation: public java.util.List com.ethioloadai.carrier.company.controller.CarrierCompanyController.documents(java.lang.Long,com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:24:20.622 [http-nio-8080-exec-1] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorizing method invocation ReflectiveMethodInvocation: public org.springframework.data.domain.Page com.ethioloadai.carrier.company.controller.CarrierCompanyController.mine(com.ethioloadai.user.entity.User,int,int); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:24:20.624 [http-nio-8080-exec-2] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorized method invocation ReflectiveMethodInvocation: public java.util.List com.ethioloadai.carrier.company.controller.CarrierCompanyController.documents(java.lang.Long,com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:24:20.626 [http-nio-8080-exec-1] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorized method invocation ReflectiveMethodInvocation: public org.springframework.data.domain.Page com.ethioloadai.carrier.company.controller.CarrierCompanyController.mine(com.ethioloadai.user.entity.User,int,int); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:24:20.626 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        cc1_0.id,
+        cc1_0.business_address,
+        cc1_0.business_registration_number,
+        cc1_0.city,
+        cc1_0.company_name,
+        cc1_0.created_at,
+        cc1_0.email,
+        cc1_0.legal_name,
+        cc1_0.owner_id,
+        cc1_0.phone,
+        cc1_0.review_message,
+        cc1_0.reviewed_at,
+        cc1_0.reviewed_by,
+        cc1_0.submitted_at,
+        cc1_0.tin_number,
+        cc1_0.updated_at,
+        cc1_0.verification_status 
+    from
+        carrier_companies cc1_0 
+    where
+        cc1_0.id=?
+2026-09-26 02:24:20.631 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        cc1_0.id,
+        cc1_0.business_address,
+        cc1_0.business_registration_number,
+        cc1_0.city,
+        cc1_0.company_name,
+        cc1_0.created_at,
+        cc1_0.email,
+        cc1_0.legal_name,
+        cc1_0.owner_id,
+        cc1_0.phone,
+        cc1_0.review_message,
+        cc1_0.reviewed_at,
+        cc1_0.reviewed_by,
+        cc1_0.submitted_at,
+        cc1_0.tin_number,
+        cc1_0.updated_at,
+        cc1_0.verification_status 
+    from
+        carrier_companies cc1_0 
+    where
+        cc1_0.owner_id=? 
+    order by
+        cc1_0.created_at desc,
+        cc1_0.id desc 
+    offset
+        ? rows 
+    fetch
+        first ? rows only
+2026-09-26 02:24:20.638 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        ccd1_0.id,
+        ccd1_0.carrier_company_id,
+        ccd1_0.content_type,
+        ccd1_0.document_type,
+        ccd1_0.file_size,
+        ccd1_0.original_name,
+        ccd1_0.review_message,
+        ccd1_0.reviewed_at,
+        ccd1_0.reviewed_by,
+        ccd1_0.storage_key,
+        ccd1_0.uploaded_at,
+        ccd1_0.verification_status 
+    from
+        carrier_company_documents ccd1_0 
+    where
+        ccd1_0.carrier_company_id=? 
+    order by
+        ccd1_0.id
+2026-09-26 02:24:20.951 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Securing GET /carrier-companies/15
+2026-09-26 02:24:20.951 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Securing GET /carrier-companies/15/documents
+2026-09-26 02:24:20.952 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Securing GET /notifications
+2026-09-26 02:24:20.952 [http-nio-8080-exec-4] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/carrier-companies/15
+2026-09-26 02:24:20.953 [http-nio-8080-exec-5] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/carrier-companies/15/documents
+2026-09-26 02:24:20.953 [http-nio-8080-exec-7] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/notifications
+2026-09-26 02:24:20.955 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:24:20.955 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:24:20.955 [http-nio-8080-exec-7] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:24:20.959 [http-nio-8080-exec-7] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:24:20.959 [http-nio-8080-exec-5] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:24:20.959 [http-nio-8080-exec-4] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:24:20.961 [http-nio-8080-exec-7] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:24:20.961 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:24:20.961 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:24:20.965 [http-nio-8080-exec-7] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:24:20.970 [http-nio-8080-exec-4] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:24:20.971 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Secured GET /notifications
+2026-09-26 02:24:20.971 [http-nio-8080-exec-5] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:24:20.979 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Secured GET /carrier-companies/15
+2026-09-26 02:24:20.981 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Secured GET /carrier-companies/15/documents
+2026-09-26 02:24:20.983 [http-nio-8080-exec-4] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorizing method invocation ReflectiveMethodInvocation: public com.ethioloadai.carrier.company.dto.CarrierCompanyResponse com.ethioloadai.carrier.company.controller.CarrierCompanyController.get(java.lang.Long,com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:24:20.983 [http-nio-8080-exec-4] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorized method invocation ReflectiveMethodInvocation: public com.ethioloadai.carrier.company.dto.CarrierCompanyResponse com.ethioloadai.carrier.company.controller.CarrierCompanyController.get(java.lang.Long,com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:24:20.983 [http-nio-8080-exec-5] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorizing method invocation ReflectiveMethodInvocation: public java.util.List com.ethioloadai.carrier.company.controller.CarrierCompanyController.documents(java.lang.Long,com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:24:20.983 [http-nio-8080-exec-5] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorized method invocation ReflectiveMethodInvocation: public java.util.List com.ethioloadai.carrier.company.controller.CarrierCompanyController.documents(java.lang.Long,com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:24:20.983 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        cc1_0.id,
+        cc1_0.business_address,
+        cc1_0.business_registration_number,
+        cc1_0.city,
+        cc1_0.company_name,
+        cc1_0.created_at,
+        cc1_0.email,
+        cc1_0.legal_name,
+        cc1_0.owner_id,
+        cc1_0.phone,
+        cc1_0.review_message,
+        cc1_0.reviewed_at,
+        cc1_0.reviewed_by,
+        cc1_0.submitted_at,
+        cc1_0.tin_number,
+        cc1_0.updated_at,
+        cc1_0.verification_status 
+    from
+        carrier_companies cc1_0 
+    where
+        cc1_0.id=?
+2026-09-26 02:24:20.983 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        cc1_0.id,
+        cc1_0.business_address,
+        cc1_0.business_registration_number,
+        cc1_0.city,
+        cc1_0.company_name,
+        cc1_0.created_at,
+        cc1_0.email,
+        cc1_0.legal_name,
+        cc1_0.owner_id,
+        cc1_0.phone,
+        cc1_0.review_message,
+        cc1_0.reviewed_at,
+        cc1_0.reviewed_by,
+        cc1_0.submitted_at,
+        cc1_0.tin_number,
+        cc1_0.updated_at,
+        cc1_0.verification_status 
+    from
+        carrier_companies cc1_0 
+    where
+        cc1_0.id=?
+2026-09-26 02:24:21.003 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        ccd1_0.id,
+        ccd1_0.carrier_company_id,
+        ccd1_0.content_type,
+        ccd1_0.document_type,
+        ccd1_0.file_size,
+        ccd1_0.original_name,
+        ccd1_0.review_message,
+        ccd1_0.reviewed_at,
+        ccd1_0.reviewed_by,
+        ccd1_0.storage_key,
+        ccd1_0.uploaded_at,
+        ccd1_0.verification_status 
+    from
+        carrier_company_documents ccd1_0 
+    where
+        ccd1_0.carrier_company_id=? 
+    order by
+        ccd1_0.id
+2026-09-26 02:24:45.067 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Securing POST /carrier-companies/15/team/invitations
+2026-09-26 02:24:45.070 [http-nio-8080-exec-8] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: POST /api/carrier-companies/15/team/invitations
+2026-09-26 02:24:45.075 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:24:45.080 [http-nio-8080-exec-8] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:24:45.081 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:24:45.084 [http-nio-8080-exec-8] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:24:45.094 [http-nio-8080-exec-8] DEBUG o.s.security.web.FilterChainProxy - Secured POST /carrier-companies/15/team/invitations
+2026-09-26 02:24:45.094 [http-nio-8080-exec-8] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorizing method invocation ReflectiveMethodInvocation: public org.springframework.http.ResponseEntity com.ethioloadai.carrier.team.controller.CompanyTeamController.invite(java.lang.Long,com.ethioloadai.carrier.team.dto.InvitationRequest,com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.carrier.team.controller.CompanyTeamController]
+2026-09-26 02:24:45.094 [http-nio-8080-exec-8] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorized method invocation ReflectiveMethodInvocation: public org.springframework.http.ResponseEntity com.ethioloadai.carrier.team.controller.CompanyTeamController.invite(java.lang.Long,com.ethioloadai.carrier.team.dto.InvitationRequest,com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.carrier.team.controller.CompanyTeamController]
+2026-09-26 02:24:45.094 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        cc1_0.id,
+        cc1_0.business_address,
+        cc1_0.business_registration_number,
+        cc1_0.city,
+        cc1_0.company_name,
+        cc1_0.created_at,
+        cc1_0.email,
+        cc1_0.legal_name,
+        cc1_0.owner_id,
+        cc1_0.phone,
+        cc1_0.review_message,
+        cc1_0.reviewed_at,
+        cc1_0.reviewed_by,
+        cc1_0.submitted_at,
+        cc1_0.tin_number,
+        cc1_0.updated_at,
+        cc1_0.verification_status 
+    from
+        carrier_companies cc1_0 
+    where
+        cc1_0.id=? for no key update
+2026-09-26 02:24:45.111 [http-nio-8080-exec-8] DEBUG org.hibernate.SQL - 
+    select
+        cm1_0.id,
+        cm1_0.carrier_company_id,
+        cm1_0.created_at,
+        cm1_0.invited_by,
+        cm1_0.joined_at,
+        cm1_0.role,
+        cm1_0.role_changed_at,
+        cm1_0.role_changed_by,
+        cm1_0.status,
+        cm1_0.status_changed_at,
+        cm1_0.status_changed_by,
+        cm1_0.updated_at,
+        cm1_0.user_id 
+    from
+        company_memberships cm1_0 
+    where
+        cm1_0.carrier_company_id=? 
+        and cm1_0.user_id=?
+2026-09-26 02:24:45.111 [http-nio-8080-exec-8] ERROR c.e.exception.GlobalExceptionHandler - BaseException: Company owner access required
+2026-09-26 02:24:50.732 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Securing GET /notifications
+2026-09-26 02:24:50.735 [http-nio-8080-exec-3] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/notifications
+2026-09-26 02:24:50.742 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:24:50.746 [http-nio-8080-exec-3] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:24:50.746 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:24:50.746 [http-nio-8080-exec-3] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:24:50.756 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Secured GET /notifications
+2026-09-26 02:24:50.992 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Securing GET /notifications
+2026-09-26 02:24:50.992 [http-nio-8080-exec-10] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/notifications
+2026-09-26 02:24:51.008 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:24:51.010 [http-nio-8080-exec-10] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:24:51.010 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:24:51.023 [http-nio-8080-exec-10] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:24:51.028 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Secured GET /notifications
+2026-09-26 02:25:01.499 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Securing POST /company-invitations/validate
+2026-09-26 02:25:01.501 [http-nio-8080-exec-6] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: POST /api/company-invitations/validate
+2026-09-26 02:25:01.503 [http-nio-8080-exec-6] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-09-26 02:25:01.504 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Secured POST /company-invitations/validate
+2026-09-26 02:25:01.508 [http-nio-8080-exec-6] ERROR c.e.exception.GlobalExceptionHandler - BaseException: Invitation is invalid or no longer available
+2026-09-26 02:25:09.714 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Securing GET /carrier-companies/me?page=0&size=10
+2026-09-26 02:25:09.715 [http-nio-8080-exec-9] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/carrier-companies/me
+2026-09-26 02:25:09.722 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:25:09.732 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Securing GET /carrier-companies/15/documents
+2026-09-26 02:25:09.735 [http-nio-8080-exec-9] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:25:09.735 [http-nio-8080-exec-1] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/carrier-companies/15/documents
+2026-09-26 02:25:09.739 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:25:09.743 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:25:09.746 [http-nio-8080-exec-9] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:25:09.748 [http-nio-8080-exec-1] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:25:09.749 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:25:09.749 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Secured GET /carrier-companies/me?page=0&size=10
+2026-09-26 02:25:09.752 [http-nio-8080-exec-9] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorizing method invocation ReflectiveMethodInvocation: public org.springframework.data.domain.Page com.ethioloadai.carrier.company.controller.CarrierCompanyController.mine(com.ethioloadai.user.entity.User,int,int); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:25:09.753 [http-nio-8080-exec-9] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorized method invocation ReflectiveMethodInvocation: public org.springframework.data.domain.Page com.ethioloadai.carrier.company.controller.CarrierCompanyController.mine(com.ethioloadai.user.entity.User,int,int); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:25:09.753 [http-nio-8080-exec-1] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:25:09.758 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        cc1_0.id,
+        cc1_0.business_address,
+        cc1_0.business_registration_number,
+        cc1_0.city,
+        cc1_0.company_name,
+        cc1_0.created_at,
+        cc1_0.email,
+        cc1_0.legal_name,
+        cc1_0.owner_id,
+        cc1_0.phone,
+        cc1_0.review_message,
+        cc1_0.reviewed_at,
+        cc1_0.reviewed_by,
+        cc1_0.submitted_at,
+        cc1_0.tin_number,
+        cc1_0.updated_at,
+        cc1_0.verification_status 
+    from
+        carrier_companies cc1_0 
+    where
+        cc1_0.owner_id=? 
+    order by
+        cc1_0.created_at desc,
+        cc1_0.id desc 
+    offset
+        ? rows 
+    fetch
+        first ? rows only
+2026-09-26 02:25:09.760 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Secured GET /carrier-companies/15/documents
+2026-09-26 02:25:09.760 [http-nio-8080-exec-1] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorizing method invocation ReflectiveMethodInvocation: public java.util.List com.ethioloadai.carrier.company.controller.CarrierCompanyController.documents(java.lang.Long,com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:25:09.760 [http-nio-8080-exec-1] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorized method invocation ReflectiveMethodInvocation: public java.util.List com.ethioloadai.carrier.company.controller.CarrierCompanyController.documents(java.lang.Long,com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:25:09.766 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        cc1_0.id,
+        cc1_0.business_address,
+        cc1_0.business_registration_number,
+        cc1_0.city,
+        cc1_0.company_name,
+        cc1_0.created_at,
+        cc1_0.email,
+        cc1_0.legal_name,
+        cc1_0.owner_id,
+        cc1_0.phone,
+        cc1_0.review_message,
+        cc1_0.reviewed_at,
+        cc1_0.reviewed_by,
+        cc1_0.submitted_at,
+        cc1_0.tin_number,
+        cc1_0.updated_at,
+        cc1_0.verification_status 
+    from
+        carrier_companies cc1_0 
+    where
+        cc1_0.id=?
+2026-09-26 02:25:09.773 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        ccd1_0.id,
+        ccd1_0.carrier_company_id,
+        ccd1_0.content_type,
+        ccd1_0.document_type,
+        ccd1_0.file_size,
+        ccd1_0.original_name,
+        ccd1_0.review_message,
+        ccd1_0.reviewed_at,
+        ccd1_0.reviewed_by,
+        ccd1_0.storage_key,
+        ccd1_0.uploaded_at,
+        ccd1_0.verification_status 
+    from
+        carrier_company_documents ccd1_0 
+    where
+        ccd1_0.carrier_company_id=? 
+    order by
+        ccd1_0.id
+2026-09-26 02:25:28.029 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Securing GET /notifications
+2026-09-26 02:25:28.032 [http-nio-8080-exec-2] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/notifications
+2026-09-26 02:25:28.041 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:25:28.046 [http-nio-8080-exec-2] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:25:28.049 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:25:28.056 [http-nio-8080-exec-2] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:25:28.059 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Secured GET /notifications
+2026-09-26 02:25:35.766 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Securing GET /actuator/health
+2026-09-26 02:25:35.768 [http-nio-8080-exec-7] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/actuator/health
+2026-09-26 02:25:35.771 [http-nio-8080-exec-7] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-09-26 02:25:35.775 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Secured GET /actuator/health
+2026-09-26 02:26:30.865 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Securing GET /carrier-companies/15/documents
+2026-09-26 02:26:30.865 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Securing GET /notifications
+2026-09-26 02:26:30.866 [http-nio-8080-exec-5] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/notifications
+2026-09-26 02:26:30.866 [http-nio-8080-exec-4] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/carrier-companies/15/documents
+2026-09-26 02:26:30.871 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:26:30.871 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:26:30.881 [http-nio-8080-exec-5] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:26:30.881 [http-nio-8080-exec-4] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:26:30.887 [http-nio-8080-exec-5] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:26:30.890 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:26:30.891 [http-nio-8080-exec-5] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:26:30.894 [http-nio-8080-exec-4] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:26:30.894 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Secured GET /notifications
+2026-09-26 02:26:30.904 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Secured GET /carrier-companies/15/documents
+2026-09-26 02:26:30.904 [http-nio-8080-exec-4] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorizing method invocation ReflectiveMethodInvocation: public java.util.List com.ethioloadai.carrier.company.controller.CarrierCompanyController.documents(java.lang.Long,com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:26:30.909 [http-nio-8080-exec-4] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorized method invocation ReflectiveMethodInvocation: public java.util.List com.ethioloadai.carrier.company.controller.CarrierCompanyController.documents(java.lang.Long,com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:26:30.909 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        cc1_0.id,
+        cc1_0.business_address,
+        cc1_0.business_registration_number,
+        cc1_0.city,
+        cc1_0.company_name,
+        cc1_0.created_at,
+        cc1_0.email,
+        cc1_0.legal_name,
+        cc1_0.owner_id,
+        cc1_0.phone,
+        cc1_0.review_message,
+        cc1_0.reviewed_at,
+        cc1_0.reviewed_by,
+        cc1_0.submitted_at,
+        cc1_0.tin_number,
+        cc1_0.updated_at,
+        cc1_0.verification_status 
+    from
+        carrier_companies cc1_0 
+    where
+        cc1_0.id=?
+2026-09-26 02:26:30.909 [http-nio-8080-exec-4] DEBUG org.hibernate.SQL - 
+    select
+        ccd1_0.id,
+        ccd1_0.carrier_company_id,
+        ccd1_0.content_type,
+        ccd1_0.document_type,
+        ccd1_0.file_size,
+        ccd1_0.original_name,
+        ccd1_0.review_message,
+        ccd1_0.reviewed_at,
+        ccd1_0.reviewed_by,
+        ccd1_0.storage_key,
+        ccd1_0.uploaded_at,
+        ccd1_0.verification_status 
+    from
+        carrier_company_documents ccd1_0 
+    where
+        ccd1_0.carrier_company_id=? 
+    order by
+        ccd1_0.id
+2026-09-26 02:28:13.453 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Securing GET /notifications
+2026-09-26 02:28:13.455 [http-nio-8080-exec-3] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/notifications
+2026-09-26 02:28:13.457 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Securing GET /carrier-companies/15/documents
+2026-09-26 02:28:13.458 [http-nio-8080-exec-10] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/carrier-companies/15/documents
+2026-09-26 02:28:13.463 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:28:13.465 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:28:13.466 [http-nio-8080-exec-3] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:28:13.468 [http-nio-8080-exec-3] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:28:13.469 [http-nio-8080-exec-3] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:28:13.470 [http-nio-8080-exec-3] DEBUG o.s.security.web.FilterChainProxy - Secured GET /notifications
+2026-09-26 02:28:13.470 [http-nio-8080-exec-10] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:28:13.473 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:28:13.484 [http-nio-8080-exec-10] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:28:13.489 [http-nio-8080-exec-10] DEBUG o.s.security.web.FilterChainProxy - Secured GET /carrier-companies/15/documents
+2026-09-26 02:28:13.490 [http-nio-8080-exec-10] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorizing method invocation ReflectiveMethodInvocation: public java.util.List com.ethioloadai.carrier.company.controller.CarrierCompanyController.documents(java.lang.Long,com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:28:13.491 [http-nio-8080-exec-10] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorized method invocation ReflectiveMethodInvocation: public java.util.List com.ethioloadai.carrier.company.controller.CarrierCompanyController.documents(java.lang.Long,com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:28:13.493 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        cc1_0.id,
+        cc1_0.business_address,
+        cc1_0.business_registration_number,
+        cc1_0.city,
+        cc1_0.company_name,
+        cc1_0.created_at,
+        cc1_0.email,
+        cc1_0.legal_name,
+        cc1_0.owner_id,
+        cc1_0.phone,
+        cc1_0.review_message,
+        cc1_0.reviewed_at,
+        cc1_0.reviewed_by,
+        cc1_0.submitted_at,
+        cc1_0.tin_number,
+        cc1_0.updated_at,
+        cc1_0.verification_status 
+    from
+        carrier_companies cc1_0 
+    where
+        cc1_0.id=?
+2026-09-26 02:28:13.510 [http-nio-8080-exec-10] DEBUG org.hibernate.SQL - 
+    select
+        ccd1_0.id,
+        ccd1_0.carrier_company_id,
+        ccd1_0.content_type,
+        ccd1_0.document_type,
+        ccd1_0.file_size,
+        ccd1_0.original_name,
+        ccd1_0.review_message,
+        ccd1_0.reviewed_at,
+        ccd1_0.reviewed_by,
+        ccd1_0.storage_key,
+        ccd1_0.uploaded_at,
+        ccd1_0.verification_status 
+    from
+        carrier_company_documents ccd1_0 
+    where
+        ccd1_0.carrier_company_id=? 
+    order by
+        ccd1_0.id
+2026-09-26 02:30:22.201 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Securing GET /carrier-companies/15/documents
+2026-09-26 02:30:22.201 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Securing GET /notifications
+2026-09-26 02:30:22.202 [http-nio-8080-exec-9] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/carrier-companies/15/documents
+2026-09-26 02:30:22.202 [http-nio-8080-exec-6] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/notifications
+2026-09-26 02:30:22.206 [http-nio-8080-exec-6] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:30:22.206 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:30:22.220 [http-nio-8080-exec-6] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:30:22.230 [http-nio-8080-exec-6] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:30:22.235 [http-nio-8080-exec-6] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:30:22.239 [http-nio-8080-exec-9] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:30:22.242 [http-nio-8080-exec-6] DEBUG o.s.security.web.FilterChainProxy - Secured GET /notifications
+2026-09-26 02:30:22.243 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:30:22.267 [http-nio-8080-exec-9] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:30:22.281 [http-nio-8080-exec-9] DEBUG o.s.security.web.FilterChainProxy - Secured GET /carrier-companies/15/documents
+2026-09-26 02:30:22.281 [http-nio-8080-exec-9] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorizing method invocation ReflectiveMethodInvocation: public java.util.List com.ethioloadai.carrier.company.controller.CarrierCompanyController.documents(java.lang.Long,com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:30:22.281 [http-nio-8080-exec-9] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorized method invocation ReflectiveMethodInvocation: public java.util.List com.ethioloadai.carrier.company.controller.CarrierCompanyController.documents(java.lang.Long,com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:30:22.281 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        cc1_0.id,
+        cc1_0.business_address,
+        cc1_0.business_registration_number,
+        cc1_0.city,
+        cc1_0.company_name,
+        cc1_0.created_at,
+        cc1_0.email,
+        cc1_0.legal_name,
+        cc1_0.owner_id,
+        cc1_0.phone,
+        cc1_0.review_message,
+        cc1_0.reviewed_at,
+        cc1_0.reviewed_by,
+        cc1_0.submitted_at,
+        cc1_0.tin_number,
+        cc1_0.updated_at,
+        cc1_0.verification_status 
+    from
+        carrier_companies cc1_0 
+    where
+        cc1_0.id=?
+2026-09-26 02:30:22.296 [http-nio-8080-exec-9] DEBUG org.hibernate.SQL - 
+    select
+        ccd1_0.id,
+        ccd1_0.carrier_company_id,
+        ccd1_0.content_type,
+        ccd1_0.document_type,
+        ccd1_0.file_size,
+        ccd1_0.original_name,
+        ccd1_0.review_message,
+        ccd1_0.reviewed_at,
+        ccd1_0.reviewed_by,
+        ccd1_0.storage_key,
+        ccd1_0.uploaded_at,
+        ccd1_0.verification_status 
+    from
+        carrier_company_documents ccd1_0 
+    where
+        ccd1_0.carrier_company_id=? 
+    order by
+        ccd1_0.id
+2026-09-26 02:33:07.549 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Securing GET /notifications
+2026-09-26 02:33:07.551 [http-nio-8080-exec-1] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/notifications
+2026-09-26 02:33:07.551 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Securing GET /carrier-companies/15/documents
+2026-09-26 02:33:07.554 [http-nio-8080-exec-2] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/carrier-companies/15/documents
+2026-09-26 02:33:07.555 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:33:07.555 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        count(*) 
+    from
+        jwt_revoked_tokens rt1_0 
+    where
+        rt1_0.token_hash=?
+2026-09-26 02:33:07.564 [http-nio-8080-exec-1] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:33:07.566 [http-nio-8080-exec-1] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:33:07.567 [http-nio-8080-exec-2] DEBUG c.e.s.jwt.JwtAuthenticationFilter - Valid JWT resolved username: this11is11start@gmail.com
+2026-09-26 02:33:07.570 [http-nio-8080-exec-1] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:33:07.570 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        u1_0.id,
+        u1_0.created_at,
+        u1_0.email,
+        u1_0.fleet_owner_id,
+        u1_0.full_name,
+        u1_0.is_active,
+        u1_0.latitude,
+        u1_0.location,
+        u1_0.longitude,
+        u1_0.password,
+        u1_0.phone,
+        u1_0.remember_token,
+        u1_0.role,
+        u1_0.updated_at,
+        u1_0.verification_status 
+    from
+        users u1_0 
+    where
+        u1_0.email=? 
+        or u1_0.phone=?
+2026-09-26 02:33:07.588 [http-nio-8080-exec-1] DEBUG o.s.security.web.FilterChainProxy - Secured GET /notifications
+2026-09-26 02:33:07.592 [http-nio-8080-exec-2] DEBUG c.e.s.jwt.JwtAuthenticationFilter - SecurityContext populated for user: this11is11start@gmail.com
+2026-09-26 02:33:07.606 [http-nio-8080-exec-2] DEBUG o.s.security.web.FilterChainProxy - Secured GET /carrier-companies/15/documents
+2026-09-26 02:33:07.621 [http-nio-8080-exec-2] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorizing method invocation ReflectiveMethodInvocation: public java.util.List com.ethioloadai.carrier.company.controller.CarrierCompanyController.documents(java.lang.Long,com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:33:07.626 [http-nio-8080-exec-2] DEBUG o.s.s.a.m.AuthorizationManagerBeforeMethodInterceptor - Authorized method invocation ReflectiveMethodInvocation: public java.util.List com.ethioloadai.carrier.company.controller.CarrierCompanyController.documents(java.lang.Long,com.ethioloadai.user.entity.User); target is of class [com.ethioloadai.carrier.company.controller.CarrierCompanyController]
+2026-09-26 02:33:07.628 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        cc1_0.id,
+        cc1_0.business_address,
+        cc1_0.business_registration_number,
+        cc1_0.city,
+        cc1_0.company_name,
+        cc1_0.created_at,
+        cc1_0.email,
+        cc1_0.legal_name,
+        cc1_0.owner_id,
+        cc1_0.phone,
+        cc1_0.review_message,
+        cc1_0.reviewed_at,
+        cc1_0.reviewed_by,
+        cc1_0.submitted_at,
+        cc1_0.tin_number,
+        cc1_0.updated_at,
+        cc1_0.verification_status 
+    from
+        carrier_companies cc1_0 
+    where
+        cc1_0.id=?
+2026-09-26 02:33:07.632 [http-nio-8080-exec-2] DEBUG org.hibernate.SQL - 
+    select
+        ccd1_0.id,
+        ccd1_0.carrier_company_id,
+        ccd1_0.content_type,
+        ccd1_0.document_type,
+        ccd1_0.file_size,
+        ccd1_0.original_name,
+        ccd1_0.review_message,
+        ccd1_0.reviewed_at,
+        ccd1_0.reviewed_by,
+        ccd1_0.storage_key,
+        ccd1_0.uploaded_at,
+        ccd1_0.verification_status 
+    from
+        carrier_company_documents ccd1_0 
+    where
+        ccd1_0.carrier_company_id=? 
+    order by
+        ccd1_0.id
+2026-09-26 06:28:47.391 [HikariPool-1 housekeeper] WARN  com.zaxxer.hikari.pool.HikariPool - HikariPool-1 - Thread starvation or clock leap detected (housekeeper delta=3h11m18s162ms385µs800ns).
+2026-09-26 06:29:34.295 [http-nio-8080-exec-7] DEBUG o.s.security.web.FilterChainProxy - Securing GET /carrier-companies/15
+2026-09-26 06:29:34.295 [http-nio-8080-exec-5] DEBUG o.s.security.web.FilterChainProxy - Securing GET /carrier-companies/15/documents
+2026-09-26 06:29:34.295 [http-nio-8080-exec-4] DEBUG o.s.security.web.FilterChainProxy - Securing GET /notifications
+2026-09-26 06:29:34.298 [http-nio-8080-exec-7] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/carrier-companies/15
+2026-09-26 06:29:34.298 [http-nio-8080-exec-5] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/carrier-companies/15/documents
+2026-09-26 06:29:34.299 [http-nio-8080-exec-4] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT filter processing: GET /api/notifications
+2026-09-26 06:29:34.305 [http-nio-8080-exec-5] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT present but failed validation for: GET /api/carrier-companies/15/documents
+2026-09-26 06:29:34.305 [http-nio-8080-exec-7] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT present but failed validation for: GET /api/carrier-companies/15
+2026-09-26 06:29:34.305 [http-nio-8080-exec-4] DEBUG c.e.s.jwt.JwtAuthenticationFilter - JWT present but failed validation for: GET /api/notifications
+2026-09-26 06:29:34.307 [http-nio-8080-exec-5] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-09-26 06:29:34.308 [http-nio-8080-exec-7] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext
+2026-09-26 06:29:34.308 [http-nio-8080-exec-4] DEBUG o.s.s.w.a.AnonymousAuthenticationFilter - Set SecurityContextHolder to anonymous SecurityContext

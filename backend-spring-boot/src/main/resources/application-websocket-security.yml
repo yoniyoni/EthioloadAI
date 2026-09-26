@@ -1,0 +1,87 @@
+# WebSocket Security Configuration
+# This file contains security settings for WebSocket infrastructure
+
+websocket:
+  security:
+    # Rate limiting configuration
+    rate-limit:
+      messages-per-minute: 60          # Max messages per user per minute
+      subscriptions-per-minute: 10     # Max subscription requests per user per minute
+      location-updates-per-minute: 120 # Max location updates per trip per minute
+      window-duration: PT1M            # Rate limit window duration (1 minute)
+      penalty-duration: PT5M           # Rate limit penalty duration (5 minutes)
+    
+    # Connection limits
+    connection-limit:
+      max-connections-per-user: 3      # Max concurrent connections per user
+      max-connections-per-ip: 10       # Max concurrent connections per IP
+      max-total-connections: 1000      # Max total concurrent connections
+      idle-timeout: PT30M              # Connection idle timeout (30 minutes)
+    
+    # Security policies
+    security-policy:
+      allowed-origins:                 # CORS origins for WebSocket connections
+        - "http://localhost:3000"      # React development server
+        - "http://localhost:8080"      # Vue.js development server
+        - "https://app.ethioload.ai"   # Production frontend
+        - "https://fleet.ethioload.ai" # Fleet management dashboard
+      minimum-role: "DRIVER"           # Minimum role required for WebSocket access
+      
+      # Role-based topic access control
+      role-topic-access:
+        ADMIN:
+          - "*"                        # Admin can access all topics
+        FLEET_OWNER:
+          - "fleet.*"                  # Fleet management topics
+          - "trip.*"                   # Trip tracking topics
+          - "vehicle.*"                # Vehicle status topics
+        DRIVER:
+          - "trip.*"                   # Trip-related topics
+          - "*.driver.*"               # Driver-specific topics
+        SHIPPER:
+          - "trip.*"                   # Trip tracking topics
+          - "*.shipper.*"              # Shipper-specific topics
+      
+      # IP-based access control (disabled by default)
+      enable-ip-whitelist: false
+      allowed-ip-addresses: []
+      
+      # Geographic access control (disabled by default)
+      enable-geolocation-control: false
+      allowed-countries:
+        - "ET"                         # Ethiopia
+    
+    # Audit logging configuration
+    audit-logging:
+      enabled: true                    # Enable audit logging
+      log-connections: true            # Log connection events
+      log-subscriptions: true          # Log subscription events
+      log-messages: false              # Log message events (can be verbose)
+      log-security-violations: true    # Log security violations
+      log-rate-limit-violations: true  # Log rate limit violations
+      retention-period: P90D           # Audit log retention (90 days)
+
+# Spring Boot Actuator for monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,websocket-security
+  endpoint:
+    health:
+      show-details: when-authorized
+    websocket-security:
+      enabled: true
+
+# Logging configuration for WebSocket security
+logging:
+  level:
+    com.ethioloadai.websocket.security: DEBUG
+    com.ethioloadai.websocket.interceptor: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/websocket-security.log
+    max-size: 10MB
+    max-history: 30
