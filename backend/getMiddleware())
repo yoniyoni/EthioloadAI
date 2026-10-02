@@ -1,0 +1,70 @@
+<READ>
+
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\VehicleController;
+use App\Http\Controllers\Api\CargoRequestController;
+use App\Http\Controllers\Api\BookingController;
+use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\TripController;
+use App\Http\Controllers\Api\AiController;
+use App\Http\Controllers\Api\UserController;
+use App\Http\Middleware\AdminMiddleware;
+
+Route::post('/register', [AuthController::class, 'register']);
+Route::post('/login', [AuthController::class, 'login']);
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/me', [AuthController::class, 'me']);
+
+    Route::post('/vehicle/register', [VehicleController::class, 'register']);
+    Route::patch('/vehicles/{vehicle}/location', [VehicleController::class, 'updateLocation']);
+    Route::get('/vehicle/nearby', [VehicleController::class, 'nearby']);
+    Route::post('/cargo/create', [CargoRequestController::class, 'store']);
+    Route::post('/booking/create', [BookingController::class, 'store']);
+
+    Route::apiResource('users', UserController::class)->except(['create', 'edit'])->middleware(AdminMiddleware::class);
+    Route::apiResource('vehicles', VehicleController::class)->except(['create', 'edit']);
+    Route::apiResource('cargo-requests', CargoRequestController::class)->except(['create', 'edit']);
+    Route::apiResource('bookings', BookingController::class)->except(['create', 'edit']);
+    
+    // Payments
+    Route::post('/payments', [PaymentController::class, 'store']);
+    Route::get('/payments/{booking_id}', [PaymentController::class, 'show']);
+
+    // Trips
+    Route::post('/trips', [TripController::class, 'store']);
+    Route::get('/trips/{id}', [TripController::class, 'show']);
+    Route::patch('/trips/{id}/status', [TripController::class, 'updateStatus']);
+    Route::patch('/trips/{id}/location', [TripController::class, 'updateLocation']);
+
+    // AI Engine Proxy Endpoints
+    Route::post('/ai/recommend-truck', [AiController::class, 'recommendTruck']);
+    Route::post('/ai/backhaul-opportunities', [AiController::class, 'backhaulOpportunities']);
+    Route::post('/ai/predict-price', [AiController::class, 'predictPrice']);
+    Route::post('/ai/predict-empty-return', [AiController::class, 'predictEmptyReturn']);
+    Route::post('/ai/optimize-route', [AiController::class, 'optimizeRoute']);
+});
+
+   Psy\Exception\ParseErrorException 
+
+  PHP Parse error: Syntax error, unexpected ';' on line 1
+
+  at vendor\psy\psysh\src\Exception\ParseErrorException.php:44
+     40▕      * @param \PhpParser\Error $e
+     41▕      */
+     42▕     public static function fromParseError(\PhpParser\Error $e): self
+     43▕     {
+  ➜  44▕         return new self($e->getRawMessage(), $e->getAttributes());
+     45▕     }
+     46▕ }
+     47▕
+
+  1   vendor\psy\psysh\src\CodeCleaner.php:657
+      Psy\Exception\ParseErrorException::fromParseError(Object(PhpParser\Error))
+
+  2   vendor\psy\psysh\src\CodeCleaner.php:273
+      Psy\CodeCleaner::parse("<?php dump(app('router')-;
+")
+
