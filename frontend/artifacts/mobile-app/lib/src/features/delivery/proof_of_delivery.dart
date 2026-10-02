@@ -1,10 +1,11 @@
 /// Phase 7 — Proof of Delivery model for the Flutter driver app.
 ///
-/// Maps to [ProofOfDeliveryResponse] returned by:
+/// Maps to the backend ProofOfDeliveryResponse returned by:
 ///   POST /proof-of-delivery/trips/{tripId}/proof  — submit proof
 ///   GET  /proof-of-delivery/trips/{tripId}/proof  — get proof for trip
 ///   GET  /proof-of-delivery/{proofId}             — get by ID
 ///   POST /proof-of-delivery/{proofId}/verify      — shipper verifies/rejects
+library;
 
 class ProofOfDelivery {
   final int id;

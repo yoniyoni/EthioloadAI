@@ -109,7 +109,7 @@ public class CompanyInvitationService {
   var company = companies.findById(invitation.getCarrierCompanyId()).orElseThrow(CompanyTeamException::invalidToken);
   access.approved(company);
   return new InvitationPreview(true, company.getCompanyName(), invitation.getInvitedRole(),
-      invitation.getInvitedEmail(), invitation.getExpiresAt());
+      invitation.getInvitedEmail(), invitation.getExpiresAt(), users.existsByEmail(invitation.getInvitedEmail()));
  }
 
  @Transactional

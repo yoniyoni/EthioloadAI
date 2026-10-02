@@ -1,10 +1,9 @@
-import 'dart:io';
+import 'package:image_picker/image_picker.dart' show XFile;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import 'package:logger/logger.dart';
 
 import '../../data/api/api_client.dart';
-import '../dispatch/dispatch_assignment.dart';
 import 'proof_of_delivery.dart';
 
 /// Phase 7 — Repository for driver delivery operations.
@@ -36,6 +35,21 @@ class DeliveryRepository {
     _logger.d('DeliveryRepository.markArrived($tripId)');
     return await _api.post<Map<String, dynamic>>('/trips/$tripId/arrive');
   }
+  Future<Map<String, dynamic>> getTrip(int tripId) => _api.get<Map<String, dynamic>>('/trips/$tripId');
+
+  /// Resume the booking's trip, including after a restart, or create it once.
+  Future<int> openBookingTrip(int bookingId) async {
+    for (var page = 0; ; page++) {
+      final result = await _api.get<Map<String, dynamic>>('/trips',
+        queryParameters: {'page': page, 'size': 100});
+      for (final trip in result['content'] as List) {
+        if (trip['booking']?['id'] == bookingId) return trip['id'] as int;
+      }
+      if (result['last'] == true) break;
+    }
+    final trip = await _api.post<Map<String, dynamic>>('/trips', data: {'bookingId': bookingId});
+    return trip['id'] as int;
+  }
 
   // ── Proof of Delivery ─────────────────────────────────────────────────────
 
@@ -43,21 +57,27 @@ class DeliveryRepository {
   /// [file] is the image or PDF file selected by the driver.
   Future<ProofOfDelivery> submitProof(
     int tripId,
-    File file, {
+    XFile file, {
     String? recipientName,
     String? note,
   }) async {
-    _logger.d('DeliveryRepository.submitProof(tripId=$tripId, file=${file.path})');
+    _logger.d('DeliveryRepository.submitProof(tripId=$tripId)');
 
-    final fileName = file.path.split(Platform.pathSeparator).last;
+    const types = {'jpg':'image/jpeg','jpeg':'image/jpeg','png':'image/png','webp':'image/webp','pdf':'application/pdf'};
+    final mime = types[file.name.split('.').last.toLowerCase()] ??
+        (types.containsValue(file.mimeType) ? file.mimeType : null);
+    if (mime == null) throw ApiException(message: 'Choose a JPEG, PNG, WebP or PDF file.');
+    final fileName = types.containsKey(file.name.split('.').last.toLowerCase())
+        ? file.name : 'proof.${types.entries.firstWhere((e) => e.value == mime).key}';
+    if (await file.length() > 10 * 1024 * 1024) throw ApiException(message: 'Maximum proof size is 10 MB.');
     final formData = FormData.fromMap({
-      'file': await MultipartFile.fromFile(file.path, filename: fileName),
+      'file': MultipartFile.fromBytes(await file.readAsBytes(), filename: fileName, contentType: DioMediaType.parse(mime)),
       if (recipientName != null && recipientName.isNotEmpty)
         'recipientName': recipientName,
       if (note != null && note.isNotEmpty) 'note': note,
     });
 
-    final data = await _api.postFormData<Map<String, dynamic>>(
+    final data = await _api.upload(
       '/proof-of-delivery/trips/$tripId/proof',
       formData,
     );

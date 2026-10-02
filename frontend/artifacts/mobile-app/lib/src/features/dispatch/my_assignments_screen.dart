@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../delivery/delivery_repository.dart';
 
 import 'dispatch_assignment.dart';
 import 'dispatch_repository.dart';
@@ -180,7 +181,7 @@ class _AssignmentCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: colorScheme.surfaceVariant,
+                        color: colorScheme.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -306,6 +307,18 @@ class _AssignmentDetailScreenState
       setState(() { _errorMessage = _parseError(e); });
     } finally {
       if (mounted) setState(() { _isLoading = false; });
+    }
+  }
+
+  Future<void> _openTrip(int bookingId) async {
+    setState(() { _isLoading = true; _errorMessage = null; });
+    try {
+      final tripId = await ref.read(deliveryRepositoryProvider).openBookingTrip(bookingId);
+      if (mounted) await context.push('/driver/trips/$tripId/active');
+    } catch (e) {
+      if (mounted) setState(() => _errorMessage = _parseError(e));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -492,6 +505,12 @@ class _AssignmentDetailScreenState
                 ),
               ],
 
+              if (assignment.bookingId != null)
+                FilledButton.icon(
+                  onPressed: _isLoading ? null : () => _openTrip(assignment.bookingId!),
+                  icon: const Icon(Icons.local_shipping),
+                  label: const Text('Open Trip'),
+                ),
               if (_errorMessage != null) ...[
                 const SizedBox(height: 16),
                 Container(

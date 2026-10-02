@@ -72,7 +72,7 @@ public class Trip {
     private List<Map<String, Object>> routeData = new ArrayList<>();
 
     @Convert(converter = TripStatusConverter.class)
-    @Column(name = "trip_status", nullable = false, length = 20)
+    @Column(name = "trip_status", nullable = false, length = 40)
     @Builder.Default
     private TripStatus tripStatus = TripStatus.ONGOING;
 

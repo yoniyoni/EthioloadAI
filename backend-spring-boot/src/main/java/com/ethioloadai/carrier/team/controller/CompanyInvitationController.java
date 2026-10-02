@@ -16,6 +16,12 @@ import org.springframework.web.bind.annotation.*;
 public class CompanyInvitationController {
  private final CompanyInvitationService invitations;
  private final CompanyMembershipService memberships;
+ private final InvitationRegistrationService registration;
+ @PostMapping("/company-invitations/register")
+ public ResponseEntity<InvitationRegistrationService.Result> register(
+   @jakarta.validation.Valid @RequestBody InvitationRegistrationRequest request) {
+  return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(registration.register(request));
+ }
  @PostMapping("/company-invitations/validate") @Operation(summary="Public token validation with limited metadata")
  public ResponseEntity<InvitationPreview> validate(@RequestBody InvitationTokenRequest request) {
   return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(invitations.validate(request.getToken()));

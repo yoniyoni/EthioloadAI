@@ -14,8 +14,10 @@ import '../../features/shipper/freight_detail_screen.dart';
 import '../../features/shipper/shipper_bid_selection_screen.dart';
 import '../../features/shipper/tracking_screen.dart';
 import '../../features/driver/driver_dashboard_screen.dart';
+import '../../features/dispatch/my_assignments_screen.dart';
 import '../../features/driver/driver_bids_screen.dart';
 import '../../features/driver/active_trip_screen.dart';
+import '../../features/delivery/active_trip_screen.dart' as delivery;
 // Fleet owner
 import '../../features/fleet/fleet_dashboard_screen.dart';
 import '../../features/fleet/company_registration_screen.dart';
@@ -72,7 +74,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/splash',
     refreshListenable: notifier,
-    redirect: (context, state) {
+    redirect: (context, state) async {
+      await ref.read(authInitializationProvider.future);
       final isLoggedIn = notifier.isAuthenticated;
       final role = notifier.role;
       final path = state.matchedLocation;
@@ -121,6 +124,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      GoRoute(path: '/driver/trips/:tripId/active', builder: (_, state) => delivery.ActiveTripScreen(tripId: int.parse(state.pathParameters['tripId']!))),
+      GoRoute(path: '/driver/assignments', builder: (_, __) => const MyAssignmentsScreen()),
+      GoRoute(path: '/driver/assignments/:id', builder: (_, state) => AssignmentDetailScreen(dispatchId: int.parse(state.pathParameters['id']!))),
       GoRoute(path: '/fleet/companies', builder: (_, __) => const CompanyRegistrationScreen()),
       GoRoute(path: '/fleet/companies/:id', builder: (_, state) => CompanyRegistrationScreen(key: ValueKey(state.pathParameters['id']), companyId: state.pathParameters['id'])),
       // ── Public ────────────────────────────────────────────────────
@@ -295,7 +301,6 @@ Widget _wrap(Widget child, {bool isDriver = false, String role = ''}) {
   // Fleet owner nav
   if (role == 'fleet_owner') {
     return _NavScaffold(
-      child: child,
       tabs: const [
         _Tab(icon: Icons.dashboard,      labelKey: 'nav.fleet',    path: '/fleet'),
         _Tab(icon: Icons.people,         labelKey: 'nav.drivers',  path: '/fleet/drivers'),
@@ -304,12 +309,12 @@ Widget _wrap(Widget child, {bool isDriver = false, String role = ''}) {
         _Tab(icon: Icons.history,        labelKey: 'nav.history', path: '/history'),
         _Tab(icon: Icons.person,         labelKey: 'nav.profile',  path: '/profile'),
       ],
+      child: child,
     );
   }
   // Driver nav
   if (isDriver) {
     return _NavScaffold(
-      child: child,
       tabs: const [
         _Tab(icon: Icons.dashboard,       labelKey: 'nav.jobs',     path: '/driver'),
         _Tab(icon: Icons.receipt_long,    labelKey: 'nav.bookings', path: '/my-bookings'),
@@ -319,11 +324,11 @@ Widget _wrap(Widget child, {bool isDriver = false, String role = ''}) {
         _Tab(icon: Icons.psychology,      labelKey: 'nav.ai',       path: '/ai-tools'),
         _Tab(icon: Icons.person,          labelKey: 'nav.profile',  path: '/profile'),
       ],
+      child: child,
     );
   }
   // Shipper nav (default)
   return _NavScaffold(
-    child: child,
     tabs: const [
       _Tab(icon: Icons.home,           labelKey: 'nav.home',     path: '/shipper'),
       _Tab(icon: Icons.local_shipping, labelKey: 'nav.cargo',    path: '/freight'),
@@ -333,6 +338,7 @@ Widget _wrap(Widget child, {bool isDriver = false, String role = ''}) {
       _Tab(icon: Icons.psychology,     labelKey: 'nav.ai',       path: '/ai-tools'),
       _Tab(icon: Icons.person,         labelKey: 'nav.profile',  path: '/profile'),
     ],
+    child: child,
   );
 }
 

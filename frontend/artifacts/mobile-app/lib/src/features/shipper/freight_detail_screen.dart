@@ -1713,9 +1713,20 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
           setState(() => _submitting = false);
           return;
         }
+        final approved = vehicles.where((v) => (v.approvalStatus ?? '').toUpperCase() == 'APPROVED').toList();
+        if (approved.isEmpty && vehicles.any((v) => (v.approvalStatus ?? '').toUpperCase() != 'APPROVED')) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Your vehicle is under review. An approved vehicle is required to place bids.'),
+            backgroundColor: kAmber,
+          ));
+          setState(() => _submitting = false);
+          return;
+        }
+        final selectedVehicle = approved.isNotEmpty ? approved.first : vehicles.first;
+
         await ref.read(bidRepositoryProvider).place(
               cargoId: widget.cargo.id,
-              vehicleId: vehicles.first.id,
+              vehicleId: selectedVehicle.id,
               amount: amount,
               note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
             );

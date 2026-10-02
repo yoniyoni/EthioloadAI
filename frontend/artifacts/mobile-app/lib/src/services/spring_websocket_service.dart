@@ -42,7 +42,7 @@ class SpringWebSocketService {
     final token = await _storage.read(key: 'auth_token');
     if (token == null || token.isEmpty || _disposed) return;
 
-    final uri = Uri.parse('${kWebSocketBaseUrl}${_endpoint!}').replace(
+    final uri = Uri.parse('$kWebSocketBaseUrl${_endpoint!}').replace(
       queryParameters: {'token': token},
     );
     final channel = WebSocketChannel.connect(uri);

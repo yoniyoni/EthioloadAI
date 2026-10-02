@@ -50,6 +50,13 @@ class Phase6DispatchIntegrationTest extends DispatchTestSupport {
     @Autowired CarrierDriverRepository carrierDriverRepo;
     @Autowired VehicleRepository vehicleRepository;
 
+    @Test
+    @DisplayName("Mobile driver inbox uses one API context prefix")
+    void mobileInboxUsesContextRelativeRoute() throws Exception {
+        mvc.perform(get("/driver/assignments").header("Authorization", auth(abcDriverA)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$").isArray());
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     // 1. ROLE MATRIX — who may dispatch
     // ══════════════════════════════════════════════════════════════════════════

@@ -25,7 +25,7 @@ import { useState } from 'react'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 
 export function Layout({ children }: { children: ReactNode }) {
-  const { user, logout, isAuthenticated } = useAuth()
+  const { user, logout, isAuthenticated, memberships, isLoading } = useAuth()
   const { t } = useLanguage()
   const [location, setLocation] = useLocation()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -53,7 +53,8 @@ export function Layout({ children }: { children: ReactNode }) {
       icon: TruckIcon,
       show: isAuthenticated && user?.role === 'fleet_owner',
     },
-    { label: 'My companies', href: '/fleet/companies', icon: Users, show: isAuthenticated && user?.role === 'fleet_owner' },
+    { label: 'My companies', href: '/fleet/companies', icon: Users, show: isAuthenticated && !isLoading && (memberships.length === 0 || memberships.some(m => m.role === 'CARRIER_OWNER')) },
+    ...(!isLoading ? memberships.map(m => ({label: m.role === 'DISPATCHER' ? 'Dispatch workspace' : m.role === 'FLEET_MANAGER' ? 'Fleet workspace' : 'Company workspace', href: `/company/${m.carrierCompanyId}`, icon: Users, show: isAuthenticated})) : []),
     { label: 'Company reviews', href: '/admin/companies', icon: Users, show: isAuthenticated && user?.role === 'admin' },
     { label: t('nav.freight'), href: '/freight', icon: Package, show: true },
     {

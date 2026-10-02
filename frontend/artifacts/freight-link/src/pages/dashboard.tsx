@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/auth-context'
 import { useLanguage } from '@/lib/i18n/language-context'
 import { api, auth } from '@/lib/api'
 import Fleet from '@/pages/fleet'
+import CompanyWorkspace from '@/pages/company-workspace'
 import { Link } from 'wouter'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -77,7 +78,7 @@ function StatCard({
 }
 
 export default function Dashboard() {
-  const { user } = useAuth()
+  const { user, memberships } = useAuth()
   const { t } = useLanguage()
   const role = user?.role
 
@@ -177,7 +178,8 @@ export default function Dashboard() {
   const shipperDataError = role === 'shipper' && (freightError || bookingError || tripsError)
   const apps = appsData?.applications ?? []
 
-  if (role === 'fleet_owner') return <Fleet />
+  if (memberships.length > 0) return <CompanyWorkspace id={String(memberships[0].carrierCompanyId)} />
+  if (role === 'fleet_owner') return <div className='p-6'><Link href='/fleet/companies'>Manage your carrier company application</Link></div>
 
   return (
     <div className='container mx-auto max-w-6xl px-4 py-8'>

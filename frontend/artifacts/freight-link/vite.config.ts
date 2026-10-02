@@ -3,7 +3,6 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
-import { mailerPlugin } from "./vite-plugin-mailer";
 
 export default defineConfig(async ({ mode }) => {
   // loadEnv reads .env, .env.local, .env.[mode], .env.[mode].local
@@ -18,7 +17,7 @@ export default defineConfig(async ({ mode }) => {
   }
 
   const basePath = env.BASE_PATH ?? process.env.BASE_PATH ?? "/";
-  const apiTarget = env.VITE_API_TARGET ?? "http://backend.test";
+  const apiTarget = env.VITE_API_TARGET ?? "http://127.0.0.1:8080";
 
   return {
   base: basePath,
@@ -26,7 +25,6 @@ export default defineConfig(async ({ mode }) => {
     react(),
     tailwindcss(),
     runtimeErrorOverlay(),
-    mailerPlugin(),
     ...(process.env.NODE_ENV !== "production" &&
     process.env.REPL_ID !== undefined
       ? [

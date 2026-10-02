@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { auth } from "@/lib/api";
+import { pendingInvitation } from "@/lib/invitation-session";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,7 +29,7 @@ export default function Login() {
       login(data.token, data.user);
       toast({ title: t("auth.loginTitle"), description: data.user.full_name ?? data.user.name });
       const role = (data.user.role ?? "").toLowerCase();
-      setLocation(sessionStorage.getItem("freightlink_pending_invitation") ? "/invitations/accept" :
+      setLocation(pendingInvitation() ? "/invitations/accept" :
         role === 'admin' ? '/admin' : '/dashboard');
     } catch (err: any) {
       toast({ title: t("auth.login") + " " + t("common.error"), description: err.message, variant: "destructive" });

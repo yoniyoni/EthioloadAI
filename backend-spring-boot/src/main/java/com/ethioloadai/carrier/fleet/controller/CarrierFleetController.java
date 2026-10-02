@@ -53,7 +53,7 @@ public class CarrierFleetController {
     // ══════════════════════════════════════════════════════════════════════════
 
     @PostMapping("/drivers")
-    @PreAuthorize("@companySecurity.canManageFleet(#companyId, authentication)")
+    @PreAuthorize("@companySecurity.canOperateFleet(#companyId, authentication)")
     @Operation(summary = "Add a DRIVER user to the company fleet")
     public ResponseEntity<CarrierDriverResponse> addDriver(
             @PathVariable Long companyId,
@@ -87,7 +87,7 @@ public class CarrierFleetController {
     }
 
     @PatchMapping("/drivers/{carrierDriverId}")
-    @PreAuthorize("@companySecurity.canManageFleet(#companyId, authentication)")
+    @PreAuthorize("@companySecurity.canOperateFleet(#companyId, authentication)")
     @Operation(summary = "Update mutable driver fields (notes, manual availability)")
     public ResponseEntity<CarrierDriverResponse> updateDriver(
             @PathVariable Long companyId,
@@ -98,7 +98,7 @@ public class CarrierFleetController {
     }
 
     @PostMapping("/drivers/{carrierDriverId}/activate")
-    @PreAuthorize("@companySecurity.canManageFleet(#companyId, authentication)")
+    @PreAuthorize("@companySecurity.canOperateFleet(#companyId, authentication)")
     @Operation(summary = "Re-activate an INACTIVE driver")
     public ResponseEntity<CarrierDriverResponse> activateDriver(
             @PathVariable Long companyId,
@@ -108,7 +108,7 @@ public class CarrierFleetController {
     }
 
     @PostMapping("/drivers/{carrierDriverId}/deactivate")
-    @PreAuthorize("@companySecurity.canManageFleet(#companyId, authentication)")
+    @PreAuthorize("@companySecurity.canOperateFleet(#companyId, authentication)")
     @Operation(summary = "Suspend a driver (INACTIVE). Ends any active assignment.")
     public ResponseEntity<CarrierDriverResponse> deactivateDriver(
             @PathVariable Long companyId,
@@ -118,7 +118,7 @@ public class CarrierFleetController {
     }
 
     @DeleteMapping("/drivers/{carrierDriverId}")
-    @PreAuthorize("@companySecurity.canManageFleet(#companyId, authentication)")
+    @PreAuthorize("@companySecurity.canOperateFleet(#companyId, authentication)")
     @Operation(summary = "Remove a driver from the company (REMOVED). Preserves history. Does NOT delete the user account.")
     public ResponseEntity<CarrierDriverResponse> removeDriver(
             @PathVariable Long companyId,
@@ -141,7 +141,7 @@ public class CarrierFleetController {
     // ══════════════════════════════════════════════════════════════════════════
 
     @PostMapping("/vehicles")
-    @PreAuthorize("@companySecurity.canManageFleet(#companyId, authentication)")
+    @PreAuthorize("@companySecurity.canOperateFleet(#companyId, authentication)")
     @Operation(summary = "Register a new vehicle under the company")
     public ResponseEntity<CompanyVehicleResponse> registerVehicle(
             @PathVariable Long companyId,
@@ -174,7 +174,7 @@ public class CarrierFleetController {
     }
 
     @PatchMapping("/vehicles/{vehicleId}")
-    @PreAuthorize("@companySecurity.canManageFleet(#companyId, authentication)")
+    @PreAuthorize("@companySecurity.canOperateFleet(#companyId, authentication)")
     @Operation(summary = "Update mutable vehicle fields")
     public ResponseEntity<CompanyVehicleResponse> updateVehicle(
             @PathVariable Long companyId,
@@ -185,7 +185,7 @@ public class CarrierFleetController {
     }
 
     @PatchMapping("/vehicles/{vehicleId}/availability")
-    @PreAuthorize("@companySecurity.canManageFleet(#companyId, authentication)")
+    @PreAuthorize("@companySecurity.canOperateFleet(#companyId, authentication)")
     @Operation(summary = "Manually set vehicle availability (e.g. MAINTENANCE, UNAVAILABLE)")
     public ResponseEntity<CompanyVehicleResponse> setVehicleAvailability(
             @PathVariable Long companyId,
@@ -210,7 +210,7 @@ public class CarrierFleetController {
     // ══════════════════════════════════════════════════════════════════════════
 
     @PostMapping("/assignments")
-    @PreAuthorize("@companySecurity.canManageFleet(#companyId, authentication)")
+    @PreAuthorize("@companySecurity.canOperateFleet(#companyId, authentication)")
     @Operation(summary = "Assign a driver to a vehicle. Ends any prior active assignment for the driver/vehicle.")
     public ResponseEntity<AssignmentResponse> assign(
             @PathVariable Long companyId,
@@ -242,7 +242,7 @@ public class CarrierFleetController {
     }
 
     @PostMapping("/assignments/{assignmentId}/end")
-    @PreAuthorize("@companySecurity.canManageFleet(#companyId, authentication)")
+    @PreAuthorize("@companySecurity.canOperateFleet(#companyId, authentication)")
     @Operation(summary = "End an active assignment and return driver/vehicle to AVAILABLE")
     public ResponseEntity<AssignmentResponse> endAssignment(
             @PathVariable Long companyId,

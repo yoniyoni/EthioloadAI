@@ -5,7 +5,7 @@ import '../../data/repositories/repositories.dart';
 
 /// AiToolsScreen — exposes all 5 AI engine endpoints in one UI.
 class AiToolsScreen extends ConsumerStatefulWidget {
-  const AiToolsScreen({Key? key}) : super(key: key);
+  const AiToolsScreen({super.key});
 
   @override
   ConsumerState<AiToolsScreen> createState() => _AiToolsScreenState();
@@ -85,7 +85,9 @@ class _RecommendTabState extends ConsumerState<_RecommendTab> {
   Future<void> _submit() async {
     if (_pickupCtrl.text.isEmpty ||
         _destCtrl.text.isEmpty ||
-        _weightCtrl.text.isEmpty) return;
+        _weightCtrl.text.isEmpty) {
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -213,7 +215,9 @@ class _PriceTabState extends ConsumerState<_PriceTab> {
   Future<void> _submit() async {
     if (_pickupCtrl.text.isEmpty ||
         _destCtrl.text.isEmpty ||
-        _weightCtrl.text.isEmpty) return;
+        _weightCtrl.text.isEmpty) {
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -411,9 +415,9 @@ class _EmptyReturnTabState extends ConsumerState<_EmptyReturnTab> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: riskColor.withOpacity(0.07),
+                color: riskColor.withValues(alpha: 0.07),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: riskColor.withOpacity(0.3)),
+                border: Border.all(color: riskColor.withValues(alpha: 0.3)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -477,7 +481,7 @@ class _DropdownRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       decoration: InputDecoration(
         labelText: label,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
@@ -507,7 +511,7 @@ class _TruckCard extends StatelessWidget {
         border: Border.all(color: Colors.grey[200]!),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 4,
               offset: const Offset(0, 2)),
         ],

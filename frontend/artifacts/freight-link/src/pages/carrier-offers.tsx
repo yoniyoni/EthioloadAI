@@ -246,7 +246,8 @@ function CarrierOfferPortal({
     onError: (e: Error) => toast({ title: "Withdraw failed", description: e.message, variant: "destructive" }),
   });
 
-  const isCommercialRole = user?.role === "shipper"; // platform role for carrier owners/dispatchers
+  const { memberships } = useAuth();
+  const isCommercialRole = memberships.some(m => m.carrierCompanyId === companyId && ["CARRIER_OWNER", "DISPATCHER"].includes(m.role));
   const myTurn = (o: CarrierOffer) => o.nextActor === "CARRIER";
 
   return (
@@ -778,7 +779,7 @@ function OfferCard({
  *   /carrier-offers/company/:companyId          — carrier portal (company's offers)
  *   /carrier-offers/company/:companyId/freight/:freightId — carrier submitting on a freight
  */
-export default function CarrierOffersPage() {
+export default function CarrierOffersPage(_props: {companyId?: string; freightId?: string}) {
   const params = useParams<{
     freightId?: string;
     companyId?: string;

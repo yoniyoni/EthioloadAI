@@ -14,6 +14,7 @@ import Home from "@/pages/home";
 import Login from "@/pages/login";
 import Register from "@/pages/register";
 import InvitationAccept from "@/pages/invitation-accept";
+import CompanyWorkspace from "@/pages/company-workspace";
 import Dashboard from "@/pages/dashboard";
 import FreightList from "@/pages/freight-list";
 import FreightDetail from "@/pages/freight-detail";
@@ -38,6 +39,8 @@ import CarrierCompanies from "@/pages/carrier-companies";
 import AdminCompanies from "@/pages/admin-companies";
 import CarrierOffers from "@/pages/carrier-offers";
 import CarrierDispatch from "@/pages/carrier-dispatch";
+import ProofVerification from "@/pages/proof-verification";
+import CarrierSettlement from "@/pages/carrier-settlement";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -48,6 +51,7 @@ function Router() {
         <Route path="/login" component={Login} />
         <Route path="/register" component={Register} />
         <Route path="/invitations/accept" component={InvitationAccept} />
+        <Route path="/company/:id">{params => <ProtectedRoute><CompanyWorkspace id={params.id} /></ProtectedRoute>}</Route>
 
         <Route path="/freight/new">
           <ProtectedRoute allowedRoles={["shipper", "admin"]}>
@@ -99,8 +103,8 @@ function Router() {
           </ProtectedRoute>
         </Route>
 
-        <Route path="/fleet/companies/:id">{params => <ProtectedRoute allowedRoles={["fleet_owner"]}><CarrierCompanies key={params.id} id={params.id} /></ProtectedRoute>}</Route>
-        <Route path="/fleet/companies"><ProtectedRoute allowedRoles={["fleet_owner"]}><CarrierCompanies /></ProtectedRoute></Route>
+        <Route path="/fleet/companies/:id">{params => <ProtectedRoute><CarrierCompanies key={params.id} id={params.id} /></ProtectedRoute>}</Route>
+        <Route path="/fleet/companies"><ProtectedRoute><CarrierCompanies /></ProtectedRoute></Route>
         <Route path="/admin/companies"><ProtectedRoute allowedRoles={["admin"]}><AdminCompanies /></ProtectedRoute></Route>
 
         {/* Phase 5 — Carrier Offer routes */}
@@ -125,6 +129,9 @@ function Router() {
             </ProtectedRoute>
           )}
         </Route>
+        <Route path="/freight/:freightId/trips/:tripId/proof"><ProtectedRoute><ProofVerification /></ProtectedRoute></Route>
+        <Route path="/carrier/:companyId/settlements/:id"><ProtectedRoute><CarrierSettlement /></ProtectedRoute></Route>
+        <Route path="/carrier/:companyId/settlements"><ProtectedRoute><CarrierSettlement /></ProtectedRoute></Route>
         {/* Phase 6 — Carrier Dispatch routes */}
         <Route path="/carrier-dispatch/company/:companyId">
           {params => (
@@ -141,17 +148,17 @@ function Router() {
 
         <Route path="/fleet">
           <ProtectedRoute allowedRoles={["fleet_owner"]}>
-            <Fleet />
+            <Dashboard />
           </ProtectedRoute>
         </Route>
         <Route path="/fleet/drivers">
           <ProtectedRoute allowedRoles={["fleet_owner"]}>
-            <Fleet />
+            <Dashboard />
           </ProtectedRoute>
         </Route>
         <Route path="/fleet/vehicles">
           <ProtectedRoute allowedRoles={["fleet_owner"]}>
-            <Fleet />
+            <Dashboard />
           </ProtectedRoute>
         </Route>
 

@@ -46,13 +46,27 @@ export default function ProofVerification() {
   const [, setLocation] = useLocation();
   const [rejectionReason, setRejectionReason] = useState("");
   const [showRejectForm, setShowRejectForm] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  async function downloadProof() {
+    if (!proof) return;
+    setDownloading(true);
+    try {
+      const blob = await api.getBlob(`/proof-of-delivery/${proof.id}/download`);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url; link.download = proof.fileName; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      toast({title: "Download failed", description: e instanceof Error ? e.message : "Try again.", variant: "destructive"});
+    } finally { setDownloading(false); }
+  }
 
   // ── Load proof ────────────────────────────────────────────────────────────
   const { data: proof, isLoading, error } = useQuery({
     queryKey: ["proof", "trip", tripId],
     queryFn: () => api.get<ProofOfDeliveryResponse>(`/proof-of-delivery/trips/${tripId}/proof`),
     enabled: !!tripId,
-    refetchInterval: (data) => data?.status === "SUBMITTED" ? 15_000 : false,
+    refetchInterval: (query) => query.state.data?.status === "SUBMITTED" ? 15_000 : false,
   });
 
   // ── Verify mutation ───────────────────────────────────────────────────────
@@ -136,21 +150,20 @@ export default function ProofVerification() {
       {/* Download proof file */}
       <Card>
         <CardContent className="pt-6">
-          <a
-            href={`/api/proof-of-delivery/${proof.id}/download`}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            onClick={() => void downloadProof()}
+            disabled={downloading}
             className="flex items-center gap-2 text-primary hover:underline"
           >
             <FileImage className="h-5 w-5" />
             View / Download Proof File
             <Download className="h-4 w-4 ml-auto" />
-          </a>
+          </button>
         </CardContent>
       </Card>
 
       {/* Actions — only for SUBMITTED proofs and the shipper */}
-      {proof.status === "SUBMITTED" && user?.role === "SHIPPER" && (
+      {proof.status === "SUBMITTED" && user?.role === "shipper" && (
         <Card>
           <CardHeader><CardTitle className="text-base">Verify or Reject</CardTitle></CardHeader>
           <CardContent className="space-y-4">

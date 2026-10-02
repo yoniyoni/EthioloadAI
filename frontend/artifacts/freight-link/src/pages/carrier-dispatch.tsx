@@ -21,6 +21,7 @@
  */
 
 import { useState } from "react";
+import { useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/auth-context";
@@ -167,8 +168,7 @@ function DispatchDialog({ freight, companyId, onSuccess }: DispatchDialogProps) 
   const { data: driversPage } = useQuery({
     queryKey: ["company-drivers", companyId],
     queryFn: () =>
-      api.get(`/carrier-companies/${companyId}/fleet/drivers?status=ACTIVE`)
-         .then(r => r.data),
+      api.get<{content: Driver[]}>(`/carrier-companies/${companyId}/fleet/drivers?status=ACTIVE`),
     enabled: open,
   });
 
@@ -176,15 +176,13 @@ function DispatchDialog({ freight, companyId, onSuccess }: DispatchDialogProps) 
   const { data: vehiclesPage } = useQuery({
     queryKey: ["company-vehicles", companyId],
     queryFn: () =>
-      api.get(`/carrier-companies/${companyId}/fleet/vehicles`)
-         .then(r => r.data),
+      api.get<{content: Vehicle[]}>(`/carrier-companies/${companyId}/fleet/vehicles`),
     enabled: open,
   });
 
   const createMutation = useMutation({
     mutationFn: (payload: { driverUserId: number; vehicleId: number; notes?: string }) =>
-      api.post(`/carrier-companies/${companyId}/freight/${freight.freightId}/dispatch`, payload)
-         .then(r => r.data),
+      api.post(`/carrier-companies/${companyId}/freight/${freight.freightId}/dispatch`, payload),
     onSuccess: () => {
       toast({ title: "Dispatch created", description: "Driver has been notified." });
       queryClient.invalidateQueries({ queryKey: ["awarded-freights", companyId] });
@@ -212,8 +210,8 @@ function DispatchDialog({ freight, companyId, onSuccess }: DispatchDialogProps) 
     });
   };
 
-  const drivers: Driver[] = driversPage?.content ?? driversPage ?? [];
-  const vehicles: Vehicle[] = vehiclesPage?.content ?? vehiclesPage ?? [];
+  const drivers: Driver[] = driversPage?.content ?? [];
+  const vehicles: Vehicle[] = vehiclesPage?.content ?? [];
 
   const eligibleDrivers = drivers.filter(
     d => d.availability !== "ON_TRIP" && d.status === "ACTIVE"
@@ -340,8 +338,7 @@ function HistoryDialog({ freight, companyId }: HistoryDialogProps) {
   const { data: history, isLoading } = useQuery<DispatchAssignment[]>({
     queryKey: ["freight-dispatches", companyId, freight.freightId],
     queryFn: () =>
-      api.get(`/carrier-companies/${companyId}/freight/${freight.freightId}/dispatches`)
-         .then(r => r.data),
+      api.get<DispatchAssignment[]>(`/carrier-companies/${companyId}/freight/${freight.freightId}/dispatches`),
     enabled: open,
   });
 
@@ -403,16 +400,13 @@ function HistoryDialog({ freight, companyId }: HistoryDialogProps) {
 // ── Main Page ────────────────────────────────────────────────────────────────
 
 export default function CarrierDispatchPage() {
-  const { user } = useAuth();
+  const { user, memberships } = useAuth();
+  const params = useParams<{companyId?: string}>();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   // Resolve company ID from the user's active membership
-  const { data: membership } = useQuery({
-    queryKey: ["my-membership"],
-    queryFn: () =>
-      api.get("/company-memberships/me").then(r => r.data),
-  });
+  const membership = params.companyId ? memberships.find(m => m.carrierCompanyId === Number(params.companyId)) : memberships[0];
 
   const companyId: number | null = membership?.carrierCompanyId ?? null;
 
@@ -424,13 +418,13 @@ export default function CarrierDispatchPage() {
   } = useQuery<AwardedFreight[]>({
     queryKey: ["awarded-freights", companyId],
     queryFn: () =>
-      api.get(`/carrier-companies/${companyId}/awarded-freights`).then(r => r.data),
+      api.get<AwardedFreight[]>(`/carrier-companies/${companyId}/awarded-freights`),
     enabled: !!companyId,
   });
 
   const cancelMutation = useMutation({
     mutationFn: (dispatchId: number) =>
-      api.post(`/carrier-companies/${companyId}/dispatches/${dispatchId}/cancel`).then(r => r.data),
+      api.post(`/carrier-companies/${companyId}/dispatches/${dispatchId}/cancel`),
     onSuccess: () => {
       toast({ title: "Dispatch cancelled", description: "Resources have been released." });
       queryClient.invalidateQueries({ queryKey: ["awarded-freights", companyId] });

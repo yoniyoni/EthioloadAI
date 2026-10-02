@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 
 import 'delivery_repository.dart';
 import 'proof_of_delivery.dart';
+import '../../services/location_service.dart';
 
 /// Phase 7 — Active Trip screen for the driver.
 ///
@@ -33,7 +32,8 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
   bool _loading = false;
   String? _errorMessage;
   ProofOfDelivery? _proof;
-  File? _selectedFile;
+  XFile? _selectedFile;
+  bool _started = false;
 
   final _recipientController = TextEditingController();
   final _noteController = TextEditingController();
@@ -41,11 +41,24 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
   @override
   void initState() {
     super.initState();
-    _tripStatus = 'ONGOING'; // initial assumed state
+    _loadTrip();
+  }
+
+  Future<void> _loadTrip() async {
+    setState(() => _loading = true);
+    try {
+      final trip = await ref.read(deliveryRepositoryProvider).getTrip(widget.tripId);
+      if (!mounted) return;
+      setState(() { _tripStatus = (trip['tripStatus'] as String).toUpperCase(); _started = trip['startTime'] != null; });
+      if (_started && _tripStatus == 'ONGOING') await _startTracking();
+      if (_tripStatus == 'DELIVERY_PENDING_VERIFICATION') await _refreshProofStatus();
+    } catch (e) { if (mounted) setState(() => _errorMessage = e.toString()); }
+    finally { if (mounted) setState(() => _loading = false); }
   }
 
   @override
   void dispose() {
+    LocationService.stopTracking();
     _recipientController.dispose();
     _noteController.dispose();
     super.dispose();
@@ -57,12 +70,14 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
     setState(() { _loading = true; _errorMessage = null; });
     try {
       final result = await ref.read(deliveryRepositoryProvider).startTrip(widget.tripId);
-      setState(() { _tripStatus = result['tripStatus'] as String? ?? 'ONGOING'; });
+      if (!mounted) return;
+      setState(() { _tripStatus = (result['tripStatus'] as String? ?? 'ONGOING').toUpperCase(); _started = true; });
       _showSnack('Trip started! Drive safely.');
+      await _startTracking();
     } catch (e) {
-      setState(() { _errorMessage = e.toString(); });
+      if (mounted) setState(() { _errorMessage = e.toString(); });
     } finally {
-      setState(() { _loading = false; });
+      if (mounted) setState(() { _loading = false; });
     }
   }
 
@@ -70,12 +85,14 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
     setState(() { _loading = true; _errorMessage = null; });
     try {
       final result = await ref.read(deliveryRepositoryProvider).markArrived(widget.tripId);
+      LocationService.stopTracking();
+      if (!mounted) return;
       setState(() { _tripStatus = result['tripStatus'] as String? ?? 'ARRIVED'; });
       _showSnack('Arrival confirmed!');
     } catch (e) {
-      setState(() { _errorMessage = e.toString(); });
+      if (mounted) setState(() { _errorMessage = e.toString(); });
     } finally {
-      setState(() { _loading = false; });
+      if (mounted) setState(() { _loading = false; });
     }
   }
 
@@ -83,8 +100,13 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.camera, imageQuality: 80);
     if (picked != null) {
-      setState(() { _selectedFile = File(picked.path); });
+      if (mounted) setState(() { _selectedFile = picked; });
     }
+  }
+
+  Future<void> _startTracking() async {
+    final available = await LocationService.startTracking(ref, tripId: widget.tripId);
+    if (mounted && !available) _showSnack('Enable location permission and GPS to share trip progress.');
   }
 
   Future<void> _submitProof() async {
@@ -104,15 +126,16 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
             ? null
             : _noteController.text.trim(),
       );
+      if (!mounted) return;
       setState(() {
         _proof = proof;
         _tripStatus = 'DELIVERY_PENDING_VERIFICATION';
       });
       _showSnack('Proof submitted! Awaiting shipper verification.');
     } catch (e) {
-      setState(() { _errorMessage = e.toString(); });
+      if (mounted) setState(() { _errorMessage = e.toString(); });
     } finally {
-      setState(() { _loading = false; });
+      if (mounted) setState(() { _loading = false; });
     }
   }
 
@@ -120,15 +143,16 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
     setState(() { _loading = true; _errorMessage = null; });
     try {
       final proof = await ref.read(deliveryRepositoryProvider).getProofForTrip(widget.tripId);
+      if (!mounted) return;
       setState(() {
         _proof = proof;
         if (proof.isVerified) _tripStatus = 'COMPLETED';
         if (proof.isRejected) _tripStatus = 'ARRIVED'; // resubmit
       });
     } catch (e) {
-      setState(() { _errorMessage = e.toString(); });
+      if (mounted) setState(() { _errorMessage = e.toString(); });
     } finally {
-      setState(() { _loading = false; });
+      if (mounted) setState(() { _loading = false; });
     }
   }
 
@@ -169,6 +193,7 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
   Widget _buildActionSection() {
     switch (_tripStatus?.toUpperCase()) {
       case 'ONGOING':
+        if (_started) return _ActionCard(icon: Icons.drive_eta, title: 'En Route', subtitle: 'Confirm arrival at the delivery destination.', buttonLabel: 'Mark Arrived', buttonColor: Colors.orange, onPressed: _markArrived);
         return _ActionCard(
           icon: Icons.play_circle_outline,
           title: 'Start Your Trip',
@@ -197,19 +222,12 @@ class _ActiveTripScreenState extends ConsumerState<ActiveTripScreen> {
 
       case 'COMPLETED':
         return _CompletedCard(
-          onRate: () => context.push('/driver/trips/${widget.tripId}/rate'),
+          onRate: () => context.push('/my-bookings'),
           onHome: () => context.go('/driver/assignments'),
         );
 
       default:
-        return _ActionCard(
-          icon: Icons.drive_eta,
-          title: 'En Route',
-          subtitle: 'You are currently travelling to the destination.',
-          buttonLabel: 'Mark Arrived',
-          buttonColor: Colors.orange,
-          onPressed: _markArrived,
-        );
+        return OutlinedButton(onPressed: _loadTrip, child: const Text('Reload trip'));
     }
   }
 
@@ -238,9 +256,9 @@ class _StatusBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.4)),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Row(
         children: [
@@ -302,7 +320,7 @@ class _ActionCard extends StatelessWidget {
 }
 
 class _ProofUploadSection extends StatelessWidget {
-  final File? selectedFile;
+  final XFile? selectedFile;
   final TextEditingController recipientController;
   final TextEditingController noteController;
   final VoidCallback onPickFile;

@@ -29,7 +29,7 @@ export const statusLabel: Record<CompanyStatus, string> = {
 };
 export const statusHelp: Record<CompanyStatus, string> = {
   DRAFT: "Complete your company details and upload all three documents, then submit for review. You can save and return later.",
-  PENDING: "Your application is with the admin team. Details and documents are locked while it is reviewed. Refresh this page to check for updates.",
+  PENDING: "Your application is with the admin team. Details and documents are locked while it is reviewed. This page checks for status updates automatically.",
   APPROVED: "Your company registration is approved. You can now invite fleet managers and dispatchers.",
   REJECTED: "This application was rejected and cannot be edited. Read the review feedback below.",
   MORE_INFORMATION_REQUIRED: "Read the admin feedback, update your details or replace documents, then submit again.",

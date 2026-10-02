@@ -260,7 +260,7 @@ class _DispatchSheetState extends ConsumerState<_DispatchSheet> {
   late Map<String, dynamic> _selectedDriver;
   late Map<String, dynamic> _selectedVehicle;
   final _priceCtrl = TextEditingController();
-  bool _loading = false;
+  final bool _loading = false;
 
   @override
   void initState() {
@@ -484,7 +484,7 @@ class _ReassignButton extends ConsumerStatefulWidget {
 }
 
 class _ReassignButtonState extends ConsumerState<_ReassignButton> {
-  bool _loading = false;
+  final bool _loading = false;
 
   Future<void> _reassign() async {
     final dash = ref.read(fleetDashboardProvider).valueOrNull;
@@ -522,7 +522,7 @@ class _ReassignButtonState extends ConsumerState<_ReassignButton> {
       ),
     );
 
-    if (confirmed != true || chosen == null) return;
+    if (!mounted || confirmed != true || chosen == null) return;
 
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
       content: Text('Fleet booking reassignment is not available in the current Spring contract.'),

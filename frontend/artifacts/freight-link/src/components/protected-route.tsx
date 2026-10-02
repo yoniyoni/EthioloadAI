@@ -19,7 +19,7 @@ export function ProtectedRoute({
   children: React.ReactNode;
   allowedRoles?: string[];
 }) {
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { isAuthenticated, isLoading, user, membershipError, refreshMemberships } = useAuth();
   const [location, setLocation] = useLocation();
 
   // A driver whose account is not yet verified (KYC pending) must not access
@@ -65,6 +65,8 @@ export function ProtectedRoute({
   if (!isAuthenticated || (allowedRoles && user && !allowedRoles.includes(user.role))) {
     return null;
   }
+
+  if (membershipError) return <div role="alert" className="p-6 space-y-3"><p>{membershipError}</p><button className="underline" onClick={() => void refreshMemberships().catch(() => {})}>Retry company access</button></div>;
 
   // Show a clear pending-approval wall for unverified drivers rather than
   // blank content on driver workspace routes. Unverified drivers ARE allowed

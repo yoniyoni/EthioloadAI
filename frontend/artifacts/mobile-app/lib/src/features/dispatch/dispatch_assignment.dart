@@ -1,10 +1,11 @@
 /// Phase 6 — Dispatch assignment model for the Flutter driver app.
 ///
-/// Maps to the [DispatchAssignmentResponse] JSON returned by:
+/// Maps to the backend DispatchAssignmentResponse JSON returned by:
 ///   GET  /api/driver/assignments
 ///   GET  /api/driver/assignments/{id}
 ///   POST /api/driver/assignments/{id}/accept
 ///   POST /api/driver/assignments/{id}/reject
+library;
 
 class DispatchAssignment {
   final int id;

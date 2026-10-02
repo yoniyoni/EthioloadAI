@@ -1,6 +1,8 @@
 package com.ethioloadai.carrier.team.service;
 
 import com.ethioloadai.carrier.team.entity.CompanyRole;
+import com.ethioloadai.carrier.company.repository.CarrierCompanyRepository;
+import com.ethioloadai.carrier.company.entity.VerificationStatus;
 import com.ethioloadai.carrier.team.entity.MembershipStatus;
 import com.ethioloadai.carrier.team.exception.CompanyTeamException;
 import com.ethioloadai.carrier.team.repository.CompanyMembershipRepository;
@@ -46,6 +48,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class CompanySecurityService {
 
     private final CompanyMembershipRepository memberships;
+    private final CarrierCompanyRepository companies;
 
     // ── @PreAuthorize-compatible methods (take Authentication) ─────────────────
 
@@ -78,6 +81,13 @@ public class CompanySecurityService {
         if (caller == null) return false;
         return hasActiveRole(companyId, caller.getId(), CompanyRole.FLEET_MANAGER)
                 || hasActiveRole(companyId, caller.getId(), CompanyRole.CARRIER_OWNER);
+    }
+
+    /** Fleet writes require both a management membership and company approval. */
+    public boolean canOperateFleet(Long companyId, Authentication auth) {
+        return canManageFleet(companyId, auth) && companies.findById(companyId)
+                .map(company -> company.getVerificationStatus() == VerificationStatus.APPROVED)
+                .orElse(false);
     }
 
     /**

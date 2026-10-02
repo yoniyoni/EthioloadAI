@@ -86,7 +86,9 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen> {
               if (b.isTripOngoing) return 0;
               if (b.bookingStatus == 'pending' ||
                   b.bookingStatus == 'accepted' ||
-                  b.bookingStatus == 'delivered') return 1;
+                  b.bookingStatus == 'delivered') {
+                return 1;
+              }
               return 2;
             }
 
@@ -657,9 +659,9 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
 
                 // ── Role-based action buttons ──────────────────────
                 if (_busy)
-                  Center(
+                  const Center(
                     child: Padding(
-                      padding: const EdgeInsets.all(8),
+                      padding: EdgeInsets.all(8),
                       child: CircularProgressIndicator(
                         color: kAmber,
                         strokeWidth: 2.5,
@@ -717,7 +719,7 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
           _PriceSummaryCard(booking: b, forDriver: true),
           const SizedBox(height: 10),
           if (_tripStarted) ...[
-            _InfoBanner(
+            const _InfoBanner(
               icon: Icons.local_shipping_rounded,
               message: 'Trip is in progress — deliver the cargo.',
               color: kGreen,
@@ -781,7 +783,7 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _InfoBanner(
+          const _InfoBanner(
             icon: Icons.local_shipping_rounded,
             message: 'Cargo delivered! Record how payment was made.',
             color: kAmber,
@@ -815,7 +817,7 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
             _PaymentMethodBadge(method: b.paymentMethod!),
             const SizedBox(height: 8),
           ],
-          _InfoBanner(
+          const _InfoBanner(
             icon: Icons.celebration_rounded,
             message: 'Payment received — booking complete!',
             color: kSuccess,
@@ -826,7 +828,7 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
 
     // ── SHIPPER: pending → waiting for driver ────────────────────────────
     if (!isDriver && status == 'pending') {
-      return _InfoBanner(
+      return const _InfoBanner(
         icon: Icons.schedule_rounded,
         message: 'Waiting for driver to accept this booking...',
         color: kAmber,
@@ -850,7 +852,7 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
           ],
           _PriceSummaryCard(booking: b, forDriver: false),
           const SizedBox(height: 8),
-          _InfoBanner(
+          const _InfoBanner(
             icon: Icons.local_shipping_outlined,
             message: 'Driver is on the way — payment is collected after delivery.',
             color: kAmber,
@@ -926,7 +928,7 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
             _PaymentMethodBadge(method: b.paymentMethod!),
             const SizedBox(height: 8),
           ],
-          _InfoBanner(
+          const _InfoBanner(
             icon: Icons.check_circle_rounded,
             message: 'Payment confirmed — thank you!',
             color: kSuccess,

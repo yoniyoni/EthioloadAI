@@ -6,7 +6,7 @@ import '../../data/models/models.dart';
 
 /// FreightListScreen - Browse and filter available freight
 class FreightListScreen extends ConsumerStatefulWidget {
-  const FreightListScreen({Key? key}) : super(key: key);
+  const FreightListScreen({super.key});
 
   @override
   ConsumerState<FreightListScreen> createState() => _FreightListScreenState();
@@ -56,15 +56,15 @@ class _FreightListScreenState extends ConsumerState<FreightListScreen> {
               children: [
                 // Search Bar
                 Padding(
-                  padding: EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(16),
                   child: TextField(
                     controller: searchController,
                     decoration: InputDecoration(
                       hintText: 'Search by route or cargo...',
-                      prefixIcon: Icon(Icons.search),
+                      prefixIcon: const Icon(Icons.search),
                       suffixIcon: searchController.text.isNotEmpty
                           ? IconButton(
-                              icon: Icon(Icons.clear),
+                              icon: const Icon(Icons.clear),
                               onPressed: () {
                                 searchController.clear();
                                 setState(() {});
@@ -74,7 +74,7 @@ class _FreightListScreenState extends ConsumerState<FreightListScreen> {
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     ),
                     onChanged: (value) {
                       setState(() {});
@@ -84,7 +84,7 @@ class _FreightListScreenState extends ConsumerState<FreightListScreen> {
 
                 // Filter Chips
                 Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
@@ -94,19 +94,19 @@ class _FreightListScreenState extends ConsumerState<FreightListScreen> {
                           isSelected: selectedFilter == 'all',
                           onTap: () => setState(() => selectedFilter = 'all'),
                         ),
-                        SizedBox(width: 8),
+                        const SizedBox(width: 8),
                         _FilterChip(
                           label: 'Posted',
                           isSelected: selectedFilter == 'posted',
                           onTap: () => setState(() => selectedFilter = 'posted'),
                         ),
-                        SizedBox(width: 8),
+                        const SizedBox(width: 8),
                         _FilterChip(
                           label: 'Assigned',
                           isSelected: selectedFilter == 'matched',
                           onTap: () => setState(() => selectedFilter = 'matched'),
                         ),
-                        SizedBox(width: 8),
+                        const SizedBox(width: 8),
                         _FilterChip(
                           label: 'Completed',
                           isSelected: selectedFilter == 'completed',
@@ -117,16 +117,16 @@ class _FreightListScreenState extends ConsumerState<FreightListScreen> {
                   ),
                 ),
 
-                SizedBox(height: 16),
+                const SizedBox(height: 16),
 
                 // Cargo List
                 filtered.isEmpty
                     ? Padding(
-                        padding: EdgeInsets.all(32),
+                        padding: const EdgeInsets.all(32),
                         child: Column(
                           children: [
                             Icon(Icons.inbox, size: 64, color: Colors.grey[400]),
-                            SizedBox(height: 16),
+                            const SizedBox(height: 16),
                             Text(
                               'No cargo requests found',
                               style: TextStyle(
@@ -139,11 +139,11 @@ class _FreightListScreenState extends ConsumerState<FreightListScreen> {
                         ),
                       )
                     : Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Column(
                           children: filtered.map((cargo) {
                             return Padding(
-                              padding: EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.only(bottom: 12),
                               child: _CargoCard(
                                 cargo: cargo,
                                 onTap: () => context.go('/freight/${cargo.id}'),
@@ -153,7 +153,7 @@ class _FreightListScreenState extends ConsumerState<FreightListScreen> {
                         ),
                       ),
 
-                SizedBox(height: 24),
+                const SizedBox(height: 24),
               ],
             ),
           );
@@ -199,7 +199,7 @@ class _FilterChip extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected ? Colors.blue : Colors.grey[200],
           borderRadius: BorderRadius.circular(20),

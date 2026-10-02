@@ -1,120 +1,96 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { auth } from "@/lib/api";
+﻿import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from "react";
+import { useRef } from "react";
+import { api, auth, ApiError, getToken } from "@/lib/api";
 import { queryClient } from "@/lib/query-client";
-
+import { pendingInvitation } from "@/lib/invitation-session";
 export interface User {
-  id: number;
-  name: string;
-  email: string;
-  phone: string;
-  role: string;
-  isVerified?: boolean;
-  avatarUrl?: string | null;
-  address?: string | null;
-  businessName?: string | null;
-  preferredLanguage?: string;
-  createdAt?: string;
-  updatedAt?: string;
+  id: number; name: string; email: string; phone: string; role: string;
+  isVerified?: boolean; avatarUrl?: string | null; address?: string | null;
+  businessName?: string | null; preferredLanguage?: string; createdAt?: string; updatedAt?: string;
 }
-
-interface AuthState {
-  user: User | null;
-  token: string | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
+export interface Membership { id: number; carrierCompanyId: number; role: string; status: string }
+interface AuthContextType {
+  user: User | null; token: string | null; isAuthenticated: boolean; isLoading: boolean;
+  memberships: Membership[]; refreshMemberships: () => Promise<void>;
+  membershipError: string;
+  login: (token: string, user: User) => void; logout: () => void;
 }
-
-interface AuthContextType extends AuthState {
-  login: (token: string, user: User) => void;
-  logout: () => void;
-}
-
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
 const AUTH_KEY = "freightlink_auth";
-
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AuthState>({
-    user: null,
-    token: null,
-    isAuthenticated: false,
-    isLoading: true,
-  });
-
-  useEffect(() => {
+function normalize(raw: User): User {
+  const r = raw as User & { full_name?: string; verification_status?: boolean | number };
+  return {...r, name:r.name ?? r.full_name ?? "Unknown", role:(r.role ?? "").toLowerCase(), isVerified:r.isVerified ?? Boolean(r.verification_status)};
+}
+export function AuthProvider({children}: {children: ReactNode}) {
+  const [user,setUser] = useState<User|null>(null);
+  const [token,setToken] = useState<string|null>(null);
+  const [isLoading,setLoading] = useState(true);
+  const [memberships,setMemberships] = useState<Membership[]>([]);
+  const [membershipLoading,setMembershipLoading] = useState(false);
+  const [membershipError,setMembershipError] = useState("");
+  const membershipRequest = useRef(0);
+  const membershipReady = useRef(false);
+  const refreshMemberships = useCallback(async () => {
+    const currentToken = getToken();
+    const request = ++membershipRequest.current;
+    if (!currentToken) return;
+    if (!membershipReady.current) setMembershipLoading(true);
+    setMembershipError("");
     try {
-      const stored = localStorage.getItem(AUTH_KEY);
-      if (stored) {
-        const { token, user } = JSON.parse(stored);
-        if (token && user) {
-          setState({ user, token, isAuthenticated: true, isLoading: false });
-          return;
-        }
+      const page = await api.get<{content:Membership[]}>("/company-memberships/me?size=100");
+      if (request === membershipRequest.current && currentToken === getToken()) {
+        setMemberships(page.content.filter(m=>m.status === "ACTIVE"));
+        membershipReady.current = true;
       }
-    } catch (e) {
-      console.error("Failed to parse auth state", e);
+    } catch (error) {
+      if (request === membershipRequest.current && currentToken === getToken()) {
+        setMembershipError("Unable to load company access. Please retry.");
+      }
+      throw error;
+    } finally {
+      if (request === membershipRequest.current) setMembershipLoading(false);
     }
-    setState((s) => ({ ...s, isLoading: false }));
-  }, []);
-
-  const login = (token: string, rawUser: User) => {
-    // Spring Boot UserResponse returns: full_name, verification_status, is_active.
-    // Role is returned as uppercase enum (ADMIN, DRIVER, SHIPPER, FLEET_OWNER).
-    // The frontend interface uses: name, isVerified, and lowercase role strings.
-    // Normalize both field name variants so stored state is consistent.
-    const r = rawUser as User & { full_name?: string; verification_status?: boolean | number };
-    const user: User = {
-      ...r,
-      name: r.name ?? r.full_name ?? "Unknown",
-      // Normalize role to lowercase so all UI role comparisons work uniformly
-      role: (r.role ?? "").toLowerCase(),
-      isVerified: r.isVerified ?? Boolean(r.verification_status),
-    };
-    localStorage.setItem(AUTH_KEY, JSON.stringify({ token, user }));
-    queryClient.clear();
-    setState({ user, token, isAuthenticated: true, isLoading: false });
+  },[]);
+  const clear = useCallback(() => {
+    ++membershipRequest.current; membershipReady.current = false; setMembershipLoading(false); setMembershipError("");
+    localStorage.removeItem(AUTH_KEY); queryClient.clear(); setUser(null); setToken(null); setMemberships([]);
+  },[]);
+  useEffect(()=>{
+    let active = true;
+    const restoredToken = getToken();
+    (async()=>{
+      try {
+        const stored=JSON.parse(localStorage.getItem(AUTH_KEY)||"null");
+        if (!stored?.token || stored.token.startsWith("mock.")) { clear(); return; }
+        const current=normalize(await auth.get<User>("/auth/me"));
+        if (!active || stored.token !== getToken()) return;
+        localStorage.setItem(AUTH_KEY,JSON.stringify({token:stored.token,user:current}));
+        setUser(current);setToken(stored.token);
+        await refreshMemberships();
+      } catch(e) { if(active && restoredToken === getToken() && e instanceof ApiError && e.status===401) clear(); }
+      finally { if(active) setLoading(false); }
+    })();
+    return ()=>{active=false;};
+  },[clear,refreshMemberships]);
+  const login=(nextToken:string,raw:User)=>{
+    membershipReady.current = false;
+    const current=normalize(raw);
+    localStorage.setItem(AUTH_KEY,JSON.stringify({token:nextToken,user:current}));
+    queryClient.clear();setUser(current);setToken(nextToken);setMemberships([]);setLoading(false);
+    void refreshMemberships().catch(()=>{});
   };
-
-  const logout = () => {
-    // Fire-and-forget server logout. Spring Boot invalidates the token server-side.
-    // We do NOT await this — local session is cleared regardless of network outcome.
-    auth.post("/auth/logout", {}).catch(() => {
-      // Server logout failed (network error, already expired, etc.).
-      // Local session is still cleared below — this is intentional.
-    });
-    queryClient.clear();
-    localStorage.removeItem(AUTH_KEY);
-    setState({ user: null, token: null, isAuthenticated: false, isLoading: false });
-  };
-
-  // ── 401 / unauthorized event from api.ts ─────────────────────────────────
-  // When any fetch receives HTTP 401, api.ts dispatches "freightlink:unauthorized".
-  // We listen here, clear local auth state, and redirect to /login.
-  // window.location.replace is used so the back button does not loop back.
-  useEffect(() => {
-    const handle = () => {
-      // Clear stored session, clear React Query cache, and redirect to login.
-      // window.location.replace avoids adding a history entry (no back-button loop).
-      queryClient.clear();
-      localStorage.removeItem(AUTH_KEY);
-      setState({ user: null, token: null, isAuthenticated: false, isLoading: false });
-      window.location.replace("/login");
-    };
-    window.addEventListener("freightlink:unauthorized", handle);
-    return () => window.removeEventListener("freightlink:unauthorized", handle);
-  }, []); // runs once — setState is stable
-
-  return (
-    <AuthContext.Provider value={{ ...state, login, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  const logout=()=>{ void auth.post("/auth/logout",{}).catch(()=>{});clear(); };
+  useEffect(()=>{
+    const handle=()=>{clear();window.location.replace(pendingInvitation()?"/login?invitation=1":"/login");};
+    window.addEventListener("freightlink:unauthorized",handle);
+    return ()=>window.removeEventListener("freightlink:unauthorized",handle);
+  },[clear]);
+  useEffect(()=>{
+    if(!token)return;
+    const reload=()=>{void refreshMemberships().catch(()=>{});};
+    window.addEventListener("focus",reload);
+    return ()=>window.removeEventListener("focus",reload);
+  },[token,refreshMemberships]);
+  return <AuthContext.Provider value={{user,token,isAuthenticated:!!user && !!token,isLoading:isLoading || membershipLoading,memberships,membershipError,refreshMemberships,login,logout}}>{children}</AuthContext.Provider>;
 }
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
-}
+export function useAuth(){const context=useContext(AuthContext);if(!context)throw new Error("useAuth requires AuthProvider");return context;}

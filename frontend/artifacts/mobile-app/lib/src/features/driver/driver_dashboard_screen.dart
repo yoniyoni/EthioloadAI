@@ -127,6 +127,7 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
 
             // ── My Bids & Offers quick-link ───────────────────────────
             _MyBidsBanner(onTap: () => context.go('/driver/bids')),
+            TextButton.icon(onPressed: () => context.go('/driver/assignments'), icon: const Icon(Icons.assignment), label: const Text('Company assignments')),
             const SizedBox(height: 20),
 
             // ── Jobs needing action ───────────────────────────────────
@@ -1266,16 +1267,33 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
         if (!mounted) return;
         if (vehicles.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('common.failed'.tr()),
+            content: const Text('Please register a vehicle before placing a bid.'),
             backgroundColor: Colors.red,
+            action: SnackBarAction(
+              label: 'Documents',
+              textColor: Colors.white,
+              onPressed: () => context.push('/driver-documents'),
+            ),
           ));
           setState(() => _submitting = false);
           return;
         }
+
+        final approved = vehicles.where((v) => (v.approvalStatus ?? '').toUpperCase() == 'APPROVED').toList();
+        if (approved.isEmpty && vehicles.any((v) => (v.approvalStatus ?? '').toUpperCase() != 'APPROVED')) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Your vehicle is under review. An approved vehicle is required to place bids.'),
+            backgroundColor: Colors.orange,
+          ));
+          setState(() => _submitting = false);
+          return;
+        }
+        final selectedVehicle = approved.isNotEmpty ? approved.first : vehicles.first;
+
         if (_isIntracity) {
           await ref.read(bidRepositoryProvider).placeWithDatetime(
                 cargoId: widget.cargo.id,
-                vehicleId: vehicles.first.id,
+                vehicleId: selectedVehicle.id,
                 amount: amount,
                 note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
                 availableDatetime: _availableDatetime,
@@ -1283,7 +1301,7 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
         } else {
           await ref.read(bidRepositoryProvider).place(
                 cargoId: widget.cargo.id,
-                vehicleId: vehicles.first.id,
+                vehicleId: selectedVehicle.id,
                 amount: amount,
                 note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
               );
@@ -1303,9 +1321,9 @@ class _PlaceBidSheetState extends ConsumerState<_PlaceBidSheet> {
       }
     } catch (e) {
       if (mounted) {
+        String msg = e.toString().replaceFirst(RegExp(r'^(Exception|ApiException):\s*'), '');
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('common.error_prefix'
-              .tr(namedArgs: {'msg': e.toString()})),
+          content: Text(msg),
           backgroundColor: Colors.red,
         ));
       }

@@ -64,7 +64,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Permit preflight OPTIONS globally so CORS preflight is never blocked by security
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/company-invitations/validate").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/company-invitations/validate", "/company-invitations/register").permitAll()
                         // Primary auth routes (with context-path /api, Spring Security sees these without the prefix)
                         .requestMatchers("/auth/register", "/auth/login").permitAll()
                         // Mobile compatibility routes (MobileAuthCompatibilityController at root)

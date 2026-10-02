@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
 import { auth, api } from "@/lib/api";
+import { pendingInvitation } from "@/lib/invitation-session";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -146,7 +147,7 @@ export default function Register() {
   const [form, setForm] = useState({ name: "", email: "", phone: "", password: "", role: "shipper" });
   const [invitedEmail, setInvitedEmail] = useState("");
   useEffect(() => {
-    const token = sessionStorage.getItem("freightlink_pending_invitation");
+    const token = pendingInvitation();
     if (!token) return;
     let active = true;
     api.post<{ email: string }>("/company-invitations/validate", { token })
@@ -186,13 +187,13 @@ export default function Register() {
           return phone;
         })(),
         password: form.password,
-        role: form.role,
+        role: pendingInvitation() ? "shipper" : form.role,
       });
       login(data.token, data.user);
       const role = (data.user.role ?? form.role).toLowerCase();
       toast({ title: "Account created!", description: "Welcome aboard." });
 
-      if (sessionStorage.getItem("freightlink_pending_invitation") && role !== "driver") {
+      if (pendingInvitation()) {
         setLocation("/invitations/accept");
       } else if (role === "driver") {
         // Driver must complete document upload before entering the platform.
@@ -397,6 +398,7 @@ export default function Register() {
                     <Label htmlFor="role" className="text-sm font-medium">Account Type</Label>
                     <select
                       id="role"
+                      disabled={!!invitedEmail}
                       value={form.role}
                       onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
                       className="flex h-11 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"

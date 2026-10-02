@@ -7,7 +7,7 @@ import '../../data/repositories/repositories.dart';
 
 /// ProfileScreen — user profile and settings.
 class ProfileScreen extends ConsumerWidget {
-  const ProfileScreen({Key? key}) : super(key: key);
+  const ProfileScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -302,13 +302,17 @@ class ProfileScreen extends ConsumerWidget {
                   fullName: nameCtrl.text.trim(), phone: phoneCtrl.text.trim());
                 await ref.read(authNotifierProvider.notifier).refreshProfile();
                 if (ctx.mounted) Navigator.pop(ctx);
-                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('Profile updated for ${updated.fullName}')),
                 );
+                }
               } catch (e) {
-                if (ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(
+                if (ctx.mounted) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
                   SnackBar(content: Text('Profile update failed: $e')),
                 );
+                }
               }
             },
             child: const Text('Save'),

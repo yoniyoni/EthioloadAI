@@ -6,6 +6,7 @@ import '../data/api/api_client.dart';
 
 class LocationService {
   static Timer? _timer;
+  static int _trackingGeneration = 0;
   static bool _batteryWarnShown = false;
 
   /// Returns true the first time an intracity tracking session starts,
@@ -20,29 +21,35 @@ class LocationService {
   // Call when driver logs in or a trip starts.
   // serviceType: 'intercity' → 25-min interval (default)
   //              'intracity' → 5-min interval
-  static Future<void> startTracking(
+  static Future<bool> startTracking(
     WidgetRef ref, {
     String serviceType = 'intercity',
+    int? tripId,
   }) async {
-    final interval = serviceType == 'intracity'
+    stopTracking();
+    final generation = _trackingGeneration;
+    final api = ref.read(apiClientProvider);
+    final interval = tripId != null ? const Duration(seconds: 30) : serviceType == 'intracity'
         ? const Duration(minutes: 5)
         : const Duration(minutes: 25);
 
     final position = await _requestAndGet();
+    if (generation != _trackingGeneration) return false;
     if (position != null) {
-      await _push(ref, position);
+      await _push(api, position, tripId);
     }
-
-    _timer?.cancel();
+    if (generation != _trackingGeneration) return false;
     _timer = Timer.periodic(interval, (_) async {
       final pos = await getCurrentPosition();
-      if (pos != null) {
-        await _push(ref, pos);
+      if (pos != null && generation == _trackingGeneration) {
+        await _push(api, pos, tripId);
       }
     });
+    return position != null;
   }
 
   static void stopTracking() {
+    _trackingGeneration++;
     _timer?.cancel();
     _timer = null;
   }
@@ -64,10 +71,10 @@ class LocationService {
     }
   }
 
-  static Future<void> _push(WidgetRef ref, Position pos) async {
+  static Future<void> _push(ApiClient api, Position pos, int? tripId) async {
     try {
-      await ref.read(apiClientProvider).post<void>(
-        '/vehicles/driver/location',
+      await api.post<void>(
+        tripId == null ? '/vehicles/driver/location' : '/trips/$tripId/gps',
         data: {'latitude': pos.latitude, 'longitude': pos.longitude},
       );
     } catch (_) {

@@ -9,6 +9,7 @@
 ///
 /// This is intentionally simple (no real hashing, no JWT) — it exists purely
 /// to let the UI be exercised without a running backend.
+library;
 
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';

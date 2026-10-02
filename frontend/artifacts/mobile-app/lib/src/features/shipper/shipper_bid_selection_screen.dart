@@ -458,7 +458,7 @@ class _BidCardState extends ConsumerState<_BidCard> {
   @override
   Widget build(BuildContext context) {
     final b = widget.bid;
-    final isFixed = widget.priceType?.toLowerCase() == 'fixed';
+    final isFixed = widget.priceType.toLowerCase() == 'fixed';
     final hasDriverCounter = b.needsShipperAction && !isFixed;
 
     return Container(

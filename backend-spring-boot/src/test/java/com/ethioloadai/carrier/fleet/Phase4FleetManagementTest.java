@@ -22,6 +22,21 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 class Phase4FleetManagementTest extends FleetTestSupport {
 
+    @Test
+    void unapprovedCompanyCannotWriteFleetEvenWithActiveManagementMembership() throws Exception {
+        for (var state : com.ethioloadai.carrier.company.entity.VerificationStatus.values()) {
+            if (state == com.ethioloadai.carrier.company.entity.VerificationStatus.APPROVED) continue;
+            var company = companies.findById(abcCompanyId).orElseThrow();
+            company.setVerificationStatus(state);
+            companies.saveAndFlush(company);
+            mvc.perform(post(fleet(abcCompanyId) + "/drivers")
+                    .header("Authorization", auth(abcFm))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"driverUserId\":" + abcDriver1.getId() + "}"))
+                .andExpect(status().isForbidden());
+        }
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     // 1. Carrier Driver — basics
     // ══════════════════════════════════════════════════════════════════════════

@@ -20,7 +20,7 @@ String _roleDestination(String role) {
 }
 
 class SplashScreen extends ConsumerStatefulWidget {
-  const SplashScreen({Key? key}) : super(key: key);
+  const SplashScreen({super.key});
 
   @override
   ConsumerState<SplashScreen> createState() => _SplashScreenState();
@@ -36,8 +36,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   Future<void> _navigateToNext() async {
     await Future.delayed(const Duration(seconds: 3));
     if (!mounted) return;
-    final authNotifier = ref.read(authNotifierProvider.notifier);
-    await authNotifier.checkAuthStatus();
+    await ref.read(authInitializationProvider.future);
     if (!mounted) return;
     final authState = ref.read(authNotifierProvider);
     if (authState.isAuthenticated) {
@@ -92,11 +91,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                   color: Colors.white.withValues(alpha: 0.7)),
             ),
             const SizedBox(height: 48),
-            SizedBox(
+            const SizedBox(
               width: 32,
               height: 32,
               child: CircularProgressIndicator(
-                valueColor: const AlwaysStoppedAnimation<Color>(kAmber),
+                valueColor: AlwaysStoppedAnimation<Color>(kAmber),
                 strokeWidth: 2.5,
               ),
             ),
@@ -108,7 +107,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
 }
 
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({Key? key}) : super(key: key);
+  const LoginScreen({super.key});
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -312,7 +311,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 }
 
 class RegisterScreen extends ConsumerStatefulWidget {
-  const RegisterScreen({Key? key}) : super(key: key);
+  const RegisterScreen({super.key});
 
   @override
   ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
@@ -435,7 +434,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              value: selectedRole,
+              initialValue: selectedRole,
               decoration: InputDecoration(
                 labelText: 'auth.account_type'.tr(),
                 prefixIcon: const Icon(Icons.business_outlined,

@@ -201,10 +201,10 @@ class _ProgressBanner extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              const Icon(Icons.verified_rounded, color: _success, size: 28),
-              const SizedBox(width: 12),
-              const Expanded(
+            const Row(children: [
+              Icon(Icons.verified_rounded, color: _success, size: 28),
+              SizedBox(width: 12),
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -261,11 +261,11 @@ class _ProgressBanner extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              const Icon(Icons.hourglass_top_rounded,
+            const Row(children: [
+              Icon(Icons.hourglass_top_rounded,
                   color: _amberText, size: 28),
-              const SizedBox(width: 12),
-              const Expanded(
+              SizedBox(width: 12),
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

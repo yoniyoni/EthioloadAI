@@ -1,5 +1,5 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform, kReleaseMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logger/logger.dart';
@@ -10,16 +10,22 @@ import 'package:logger/logger.dart';
 const String _kApiBaseUrlOverride = String.fromEnvironment('API_BASE_URL');
 
 String get kBaseUrl {
-  if (_kApiBaseUrlOverride.isNotEmpty) return _kApiBaseUrlOverride;
+  return resolveApiBaseUrl(override: _kApiBaseUrlOverride, web: kIsWeb,
+    platform: defaultTargetPlatform, release: kReleaseMode, origin: Uri.base);
+}
 
-  // Spring Boot runs at port 8080 with context-path /api.
-  // Android emulators reach the host through 10.0.2.2. Physical Android
-  // devices should use --dart-define=API_BASE_URL=http://<lan-ip>:8080/api.
-  if (kIsWeb) {
-    return 'http://127.0.0.1:8080/api';
+String resolveApiBaseUrl({required String override, required bool web,
+  required TargetPlatform platform, required bool release, required Uri origin}) {
+  if (override.isNotEmpty) {
+    final uri = Uri.parse(override);
+    if (!['http', 'https'].contains(uri.scheme) || uri.host.isEmpty || uri.hasQuery || uri.hasFragment || uri.userInfo.isNotEmpty) {
+      throw ArgumentError('API_BASE_URL must be an HTTP(S) URL including the API context path.');
+    }
+    return override.replaceFirst(RegExp(r'/+$'), '');
   }
-
-  return 'http://10.0.2.2:8080/api';
+  if (web) return origin.resolve('/api').toString();
+  if (release) throw StateError('Configure API_BASE_URL for a native release build.');
+  return platform == TargetPlatform.android ? 'http://10.0.2.2:8080/api' : 'http://127.0.0.1:8080/api';
 }
 
 String get kWebSocketBaseUrl =>
@@ -38,7 +44,7 @@ class ApiInterceptor extends Interceptor {
   ) async {
     logger.i('→ ${options.method} ${options.path}');
     final token = await secureStorage.read(key: 'auth_token');
-    if (token != null) {
+    if (token != null && !['/auth/login', '/auth/register'].contains(options.path)) {
       options.headers['Authorization'] = 'Bearer $token';
     }
     options.headers['Accept'] = 'application/json';
@@ -94,11 +100,13 @@ class ApiClient {
   final Dio dio;
   final Logger logger;
   final FlutterSecureStorage secureStorage;
+  final void Function()? onSessionCleared;
 
   ApiClient({
     required this.dio,
     required this.logger,
     required this.secureStorage,
+    this.onSessionCleared,
   });
 
   // ── Token helpers ─────────────────────────────────────────────────────────
@@ -108,7 +116,10 @@ class ApiClient {
 
   Future<String?> getToken() => secureStorage.read(key: 'auth_token');
 
-  Future<void> deleteToken() => secureStorage.delete(key: 'auth_token');
+  Future<void> deleteToken() async {
+    await secureStorage.delete(key: 'auth_token');
+    onSessionCleared?.call();
+  }
 
   // ── HTTP helpers ──────────────────────────────────────────────────────────
 
@@ -258,11 +269,13 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
+final sessionClearedProvider = StateProvider<int>((ref) => 0);
 final apiClientProvider = Provider<ApiClient>((ref) {
   final dio = ref.read(dioProvider); // read, not watch — Dio is a singleton
   return ApiClient(
     dio: dio,
     logger: Logger(),
     secureStorage: const FlutterSecureStorage(),
+    onSessionCleared: () => ref.read(sessionClearedProvider.notifier).state++,
   );
 });

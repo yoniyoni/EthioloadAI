@@ -155,7 +155,7 @@ public class DispatchController {
      * Driver's assignment inbox — all assignments directed to this driver.
      * Only the authenticated DRIVER's own assignments are returned (IDOR-safe).
      */
-    @GetMapping("/api/driver/assignments")
+    @GetMapping({"/driver/assignments", "/api/driver/assignments"})
     @PreAuthorize("hasRole('DRIVER')")
     @Operation(summary = "Driver: list own dispatch assignments (inbox)")
     public ResponseEntity<List<DispatchAssignmentResponse>> getMyAssignments(
@@ -167,7 +167,7 @@ public class DispatchController {
      * Driver views a specific assignment.
      * Returns 404 if the assignment belongs to a different driver.
      */
-    @GetMapping("/api/driver/assignments/{dispatchId}")
+    @GetMapping({"/driver/assignments/{dispatchId}", "/api/driver/assignments/{dispatchId}"})
     @PreAuthorize("hasRole('DRIVER')")
     @Operation(summary = "Driver: get a specific assignment detail")
     public ResponseEntity<DispatchAssignmentResponse> getMyAssignment(
@@ -180,7 +180,7 @@ public class DispatchController {
      * Driver accepts a dispatch assignment.
      * Atomically creates a Booking and transitions to DRIVER_ACCEPTED.
      */
-    @PostMapping("/api/driver/assignments/{dispatchId}/accept")
+    @PostMapping({"/driver/assignments/{dispatchId}/accept", "/api/driver/assignments/{dispatchId}/accept"})
     @PreAuthorize("hasRole('DRIVER')")
     @Operation(summary = "Driver: accept a dispatch assignment")
     public ResponseEntity<DispatchAssignmentResponse> acceptAssignment(
@@ -194,7 +194,7 @@ public class DispatchController {
      * Releases resources; carrier can redispatch to another driver.
      * Commercial carrier award is NOT affected.
      */
-    @PostMapping("/api/driver/assignments/{dispatchId}/reject")
+    @PostMapping({"/driver/assignments/{dispatchId}/reject", "/api/driver/assignments/{dispatchId}/reject"})
     @PreAuthorize("hasRole('DRIVER')")
     @Operation(summary = "Driver: reject a dispatch assignment")
     public ResponseEntity<DispatchAssignmentResponse> rejectAssignment(

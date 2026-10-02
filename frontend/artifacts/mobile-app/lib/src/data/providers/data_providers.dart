@@ -51,9 +51,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       final user = await _repo.me();
       state = state.copyWith(user: user, isLoading: false, clearError: true);
-    } catch (_) {
-      await _repo.logout();
-      state = const AuthState();
+    } catch (e) {
+      if (e is ApiException && e.statusCode == 401) {
+        await logout();
+      } else {
+        state = AuthState(error: e.toString());
+      }
     }
   }
 
@@ -80,7 +83,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         clearError: true,
       );
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = AuthState(error: e.toString());
     }
   }
 
@@ -95,25 +98,33 @@ class AuthNotifier extends StateNotifier<AuthState> {
         clearError: true,
       );
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = AuthState(error: e.toString());
     }
   }
 
   Future<void> logout() async {
-    await _repo.logout();
-    state = const AuthState();
+    try { await _repo.logout(); } catch (_) { /* Clear local state even when offline. */ }
+    finally { state = const AuthState(); }
   }
 
   Future<void> refreshProfile() async {
     final user = await _repo.me();
     state = state.copyWith(user: user, clearError: true);
   }
+  void expireSession() { state = const AuthState(); }
 }
 
 // Use ref.read — auth repository should never cause cascading rebuilds
 final authNotifierProvider =
     StateNotifierProvider<AuthNotifier, AuthState>((ref) {
-  return AuthNotifier(ref.read(authRepositoryProvider));
+  final notifier = AuthNotifier(ref.read(authRepositoryProvider));
+  ref.listen<int>(sessionClearedProvider, (_, __) => notifier.expireSession());
+  return notifier;
+});
+
+/// Shared startup barrier: deep links must not redirect before stored auth loads.
+final authInitializationProvider = FutureProvider<void>((ref) async {
+  await ref.read(authNotifierProvider.notifier).checkAuthStatus();
 });
 
 // ── Cargo providers ───────────────────────────────────────────────────────

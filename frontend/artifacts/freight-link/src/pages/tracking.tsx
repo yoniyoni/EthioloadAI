@@ -329,6 +329,8 @@ export default function Tracking() {
       </Link>
 
       <Card className="border-border/60 rounded-xl overflow-hidden">
+        {isOwner && tripId && ["DELIVERY_PENDING_VERIFICATION", "COMPLETED"].includes(tripDetail?.tripStatus?.toUpperCase()) &&
+          <Link className="block p-4 text-primary underline" href={`/freight/${freightId}/trips/${tripId}/proof`}>Review proof of delivery</Link>}
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">

@@ -1,151 +1,33 @@
-import 'package:dio/dio.dart' as dio_pkg;
-import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:dio/dio.dart' as dio_pkg;
 import '../api/api_client.dart';
 import '../models/models.dart';
-import 'mock_auth_store.dart';
-import 'vite_auth_client.dart';
-
-// ── Auth ──────────────────────────────────────────────────────────────────
-
-/// Returns true when the exception signals the backend is simply not reachable
-/// (network layer failure or 5xx server error).
-bool _isBackendUnavailable(Object e) {
-  if (e is ApiException) {
-    final msg = e.message.toLowerCase();
-    if (msg.contains('xmlhttprequest') ||
-        msg.contains('unable to connect') ||
-        msg.contains('network') ||
-        msg.contains('connection') ||
-        msg.contains('failed to connect') ||
-        msg.contains('socket') ||
-        msg.contains('connection refused') ||
-        msg.contains('os error')) return true;
-    final code = e.statusCode;
-    if (code != null && code >= 500) return true;
-  }
-  // DioException with no response = network-layer failure
-  if (e is dio_pkg.DioException && e.response == null) return true;
-  return false;
-}
 
 class AuthRepository {
   final ApiClient _api;
-  final MockAuthStore _mock;
-  final ViteAuthClient _vite;
-
-  AuthRepository(this._api)
-      : _mock = MockAuthStore(const FlutterSecureStorage()),
-        _vite = ViteAuthClient(const FlutterSecureStorage());
-
-  Future<AuthResponse> register({
-    required String fullName,
-    required String email,
-    required String phone,
-    required String password,
-    required String role,
-  }) async {
-    // 1. Try Spring Boot backend
-    try {
-      final response = await _api.post<AuthResponse>(
-        '/auth/register',
-        data: {
-          'fullName': fullName,
-          'email': email,
-          'phone': phone,
-          'password': password,
-          'role': role,
-        },
-        fromJson: (json) => AuthResponse.fromJson(json as Map<String, dynamic>),
-      );
-      await _api.saveToken(response.token);
-      return response;
-    } catch (e) {
-      if (!_isBackendUnavailable(e)) rethrow;
-    }
-
-    // 2. Try Vite server (shared across all browsers)
-    try {
-      debugPrint('[EthioLoad] Spring Boot unreachable — trying Vite server for register.');
-      return await _vite.register(
-        fullName: fullName, email: email, phone: phone,
-        password: password, role: role,
-      );
-    } catch (e) {
-      if (e is ApiException) rethrow; // real error (duplicate email, etc.)
-      debugPrint('[EthioLoad] Vite server unreachable — falling back to local store.');
-    }
-
-    // 3. Last resort: local SecureStorage mock
-    return _mock.register(
-      fullName: fullName, email: email, phone: phone,
-      password: password, role: role,
-    );
+  AuthRepository(this._api);
+  Future<AuthResponse> register({required String fullName, required String email,
+    required String phone, required String password, required String role}) async {
+    final response = await _api.post<AuthResponse>('/auth/register', data: {
+      'fullName': fullName, 'email': email.trim().toLowerCase(), 'phone': phone,
+      'password': password, 'role': role,
+    }, fromJson: (json) => AuthResponse.fromJson(json as Map<String, dynamic>));
+    await _api.saveToken(response.token);
+    return response;
   }
-
-  Future<AuthResponse> login({
-    required String identifier,
-    required String password,
-  }) async {
-    // 1. Try Spring Boot backend
-    try {
-      final response = await _api.post<AuthResponse>(
-        '/auth/login',
-        data: {'identifier': identifier, 'password': password},
-        fromJson: (json) => AuthResponse.fromJson(json as Map<String, dynamic>),
-      );
-      await _api.saveToken(response.token);
-      return response;
-    } catch (e) {
-      if (!_isBackendUnavailable(e)) rethrow;
-    }
-
-    // 2. Try Vite server (shared — works if registered from any browser)
-    try {
-      debugPrint('[EthioLoad] Spring Boot unreachable — trying Vite server for login.');
-      return await _vite.login(identifier: identifier, password: password);
-    } catch (e) {
-      if (e is ApiException) rethrow; // real error (wrong password, not found)
-      debugPrint('[EthioLoad] Vite server unreachable — falling back to local store.');
-    }
-
-    // 3. Last resort: local SecureStorage mock
-    return _mock.login(identifier: identifier, password: password);
+  Future<AuthResponse> login({required String identifier, required String password}) async {
+    final response = await _api.post<AuthResponse>('/auth/login',
+      data: {'identifier': identifier.trim(), 'password': password},
+      fromJson: (json) => AuthResponse.fromJson(json as Map<String, dynamic>));
+    await _api.saveToken(response.token);
+    return response;
   }
-
   Future<void> logout() async {
-    try {
-      await _api.post<void>('/auth/logout'); // POST /api/auth/logout
-    } catch (_) {
-    } finally {
-      await _api.deleteToken();
-    }
+    try { await _api.post<void>('/auth/logout'); }
+    finally { await _api.deleteToken(); }
   }
-
-  Future<User> me() async {
-    // GET /api/auth/me
-    try {
-      return await _api.get<User>('/auth/me',
-          fromJson: (json) => User.fromJson(json as Map<String, dynamic>));
-    } catch (e) {
-      if (_isBackendUnavailable(e)) {
-        final token = await _api.getToken();
-        if (token != null) {
-          // Try Vite server first (token may have been issued by it)
-          final viteUser = await _vite.me(token);
-          if (viteUser != null) return viteUser;
-          // Fall back to local mock store
-          if (token.startsWith('mock.')) {
-            final mockUser = await _mock.tryRestoreUser(token);
-            if (mockUser != null) return mockUser;
-          }
-        }
-      }
-      rethrow;
-    }
-  }
-
+  Future<User> me() => _api.get<User>('/auth/me',
+    fromJson: (json) => User.fromJson(json as Map<String, dynamic>));
   Future<String?> getStoredToken() => _api.getToken();
 
   Future<User> updateProfile({
@@ -939,18 +821,25 @@ class DocumentRepository {
         message: 'Failed to load documents', statusCode: response.statusCode);
   }
 
-  // ✓ POST /driver/documents  (multipart)
+  // POST /driver/documents/upload (web and native multipart bytes).
   Future<DriverDocument> upload({
     required String documentType,
-    required String filePath,
+    required List<int> fileBytes,
     required String fileName,
   }) async {
+    if (fileBytes.isEmpty || fileBytes.length > 5 * 1024 * 1024) {
+      throw ApiException(message: 'Choose a non-empty file no larger than 5 MB.');
+    }
+    final mime = {'pdf': 'application/pdf', 'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg', 'png': 'image/png'}[fileName.split('.').last.toLowerCase()];
+    if (mime == null) throw ApiException(message: 'Choose a JPG, PNG or PDF file.');
     final formData = dio_pkg.FormData.fromMap({
-      'document_type': documentType,
-      'file': await dio_pkg.MultipartFile.fromFile(filePath, filename: fileName),
+      'documentType': documentType.toUpperCase(),
+      'file': dio_pkg.MultipartFile.fromBytes(fileBytes, filename: fileName,
+        contentType: dio_pkg.DioMediaType.parse(mime)),
     });
     final response = await _api.dio.post(
-      '/driver/documents',
+      '/driver/documents/upload',
       data: formData,
       options: dio_pkg.Options(contentType: 'multipart/form-data'),
     );
@@ -960,7 +849,8 @@ class DocumentRepository {
       return DriverDocument.fromJson(data as Map<String, dynamic>);
     }
     throw ApiException(
-        message: 'Upload failed', statusCode: response.statusCode);
+        message: response.data is Map ? response.data['message']?.toString() ?? 'Upload failed' : 'Upload failed',
+        statusCode: response.statusCode);
   }
 }
 

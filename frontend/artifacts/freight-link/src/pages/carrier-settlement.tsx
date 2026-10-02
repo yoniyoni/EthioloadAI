@@ -35,7 +35,7 @@ export default function CarrierSettlement() {
 // ── Settlement list ───────────────────────────────────────────────────────────
 
 function SettlementList({ companyId }: { companyId: number }) {
-  const { data: settlements, isLoading, refetch } = useQuery({
+  const { data: settlements, isLoading, refetch, error } = useQuery({
     queryKey: ["settlements", "carrier", companyId],
     queryFn: () => api.get<SettlementResponse[]>(`/settlements/carrier/${companyId}`),
   });
@@ -49,7 +49,7 @@ function SettlementList({ companyId }: { companyId: number }) {
         </Button>
       </div>
 
-      {isLoading ? (
+      {error ? <p role="alert">Unable to load settlements: {error.message}</p> : isLoading ? (
         Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)
       ) : !settlements?.length ? (
         <Card>

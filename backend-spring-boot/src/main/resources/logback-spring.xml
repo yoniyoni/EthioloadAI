@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
     <springProperty scope="context" name="APP_NAME" source="spring.application.name"/>
-    <springProperty scope="context" name="LOG_FILE" source="logging.file.name" defaultValue="/var/log/ethioloadai/application.log"/>
+    <springProperty scope="context" name="LOG_FILE" source="logging.file.name" defaultValue="logs/application.log"/>
 
     <property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"/>
 

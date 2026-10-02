@@ -7,6 +7,7 @@
 ///
 /// Used when Spring Boot (port 8080) is unavailable so any account registered
 /// in a browser is also accessible from the Flutter web preview.
+library;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;

@@ -64,6 +64,18 @@ Future<GoRouter> showCompany(WidgetTester tester, CompanyTestApi api, String pat
   return router;
 }
 
+Future<void> reveal(WidgetTester tester, Finder target) async {
+  FocusManager.instance.primaryFocus?.unfocus();
+  tester.testTextInput.hide();
+  await tester.pumpAndSettle();
+  if (target.evaluate().isEmpty) {
+    await tester.scrollUntilVisible(target, 300, scrollable: find.byType(Scrollable).first);
+  } else {
+    await tester.ensureVisible(target);
+  }
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('owner can resume an existing company application from the list', (tester) async {
     final api = CompanyTestApi();
@@ -78,20 +90,21 @@ void main() {
     final api = CompanyTestApi();
     final router = await showCompany(tester, api, '/fleet/companies/new');
     await tester.enterText(find.byType(TextFormField).first, 'New Logistics');
-    await tester.ensureVisible(find.text('Save and continue'));
+    await reveal(tester, find.text('Save and continue'));
     await tester.tap(find.text('Save and continue'));
     await tester.pumpAndSettle();
     expect(api.lastSaved?['companyName'], 'New Logistics');
     expect(api.lastSaved?['tinNumber'], isNull);
     expect(api.lastSaved?.containsKey('ownerId'), isFalse);
     expect(router.routeInformationProvider.value.uri.path, '/fleet/companies/51');
+    await reveal(tester, find.text('2. Company documents'));
     expect(find.text('2. Company documents'), findsOneWidget);
   });
 
   testWidgets('incomplete documents block submission', (tester) async {
     final api = CompanyTestApi();
     await showCompany(tester, api, '/fleet/companies/51');
-    await tester.ensureVisible(find.text('Submit for review'));
+    await reveal(tester, find.text('Submit for review'));
     final button = tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Submit for review'));
     expect(button.onPressed, isNull);
     expect(api.submissions, 0);
@@ -100,10 +113,11 @@ void main() {
   testWidgets('complete application submits and locks editing', (tester) async {
     final api = CompanyTestApi()..completeDocuments();
     await showCompany(tester, api, '/fleet/companies/51');
-    await tester.ensureVisible(find.text('Submit for review'));
+    await reveal(tester, find.text('Submit for review'));
     await tester.tap(find.text('Submit for review'));
     await tester.pumpAndSettle();
     expect(api.submissions, 1);
+    await tester.scrollUntilVisible(find.text('Under review'), -300, scrollable: find.byType(Scrollable).first);
     expect(find.text('Under review'), findsOneWidget);
     expect(find.text('Edit company details'), findsNothing);
     expect(find.text('Replace document'), findsNothing);
@@ -114,11 +128,11 @@ void main() {
     api.company = {...api.company, 'verificationStatus': 'MORE_INFORMATION_REQUIRED', 'reviewMessage': 'Correct your address.'};
     await showCompany(tester, api, '/fleet/companies/51');
     expect(find.text('Admin feedback: Correct your address.'), findsOneWidget);
-    await tester.ensureVisible(find.text('Edit company details'));
+    await reveal(tester, find.text('Edit company details'));
     await tester.tap(find.text('Edit company details')); await tester.pumpAndSettle();
     final address = find.byWidgetPredicate((widget) => widget is TextFormField && widget.controller?.text == 'Bole Road');
-    await tester.ensureVisible(address); await tester.enterText(address, 'Updated address');
-    await tester.ensureVisible(find.text('Save and continue')); await tester.tap(find.text('Save and continue')); await tester.pumpAndSettle();
+    await reveal(tester, address); await tester.enterText(address, 'Updated address');
+    await reveal(tester, find.text('Save and continue')); await tester.tap(find.text('Save and continue')); await tester.pumpAndSettle();
     expect(api.lastSaved?['businessAddress'], 'Updated address');
     expect(api.lastSaved?['legalName'], 'Test Logistics PLC');
     expect(api.lastSaved?.length, 8);
@@ -129,7 +143,7 @@ void main() {
     final api = CompanyTestApi()..completeDocuments();
     api.submitError = 'Company details are incomplete';
     await showCompany(tester, api, '/fleet/companies/51');
-    await tester.ensureVisible(find.text('Submit for review')); await tester.tap(find.text('Submit for review')); await tester.pumpAndSettle();
+    await reveal(tester, find.text('Submit for review')); await tester.tap(find.text('Submit for review')); await tester.pumpAndSettle();
     expect(find.text('Company details are incomplete'), findsOneWidget);
     expect(api.company['verificationStatus'], 'DRAFT');
   });

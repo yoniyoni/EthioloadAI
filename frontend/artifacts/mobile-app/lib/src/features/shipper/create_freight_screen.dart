@@ -254,8 +254,8 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (_) => Center(child: EthioCard(child: Padding(
-            padding: const EdgeInsets.all(24),
+        builder: (_) => const Center(child: EthioCard(child: Padding(
+            padding: EdgeInsets.all(24),
             child: CircularProgressIndicator(color: kGreen)))),
       );
       await ref.read(cargoRepositoryProvider).create(
@@ -310,8 +310,8 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (_) => Center(child: EthioCard(child: Padding(
-            padding: const EdgeInsets.all(24),
+        builder: (_) => const Center(child: EthioCard(child: Padding(
+            padding: EdgeInsets.all(24),
             child: CircularProgressIndicator(color: kGreen)))),
       );
       await ref.read(cargoRepositoryProvider).createIntracity(
@@ -369,7 +369,7 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
       body: Column(
         children: [
           _StepIndicator(current: currentStep, steps: steps),
-          Divider(height: 1, color: kBorder),
+          const Divider(height: 1, color: kBorder),
 
           Expanded(
             child: _serviceType == 'intracity'
@@ -477,7 +477,7 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
 
           // Navigation buttons
           Container(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: kSurface,
               border: Border(top: BorderSide(color: kBorder)),
             ),
@@ -489,7 +489,7 @@ class _CreateFreightScreenState extends ConsumerState<CreateFreightScreen> {
                     onPressed: _back,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: kGreen,
-                      side: BorderSide(color: kGreen),
+                      side: const BorderSide(color: kGreen),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
@@ -570,7 +570,7 @@ class _ServiceTypeSelector extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: kGreen.withValues(alpha: 0.2))),
           child: Row(children: [
-            Icon(Icons.info_outline, color: kGreen, size: 16),
+            const Icon(Icons.info_outline, color: kGreen, size: 16),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -789,7 +789,7 @@ class _ModeButton extends StatelessWidget {
         ),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           if (loading)
-            SizedBox(
+            const SizedBox(
               width: 14,
               height: 14,
               child: CircularProgressIndicator(
@@ -914,11 +914,11 @@ class _DropdownWithOtherState extends State<_DropdownWithOther> {
         fillColor: kSurface,
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: kBorder),
+          borderSide: const BorderSide(color: kBorder),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: kGreen, width: 1.5),
+          borderSide: const BorderSide(color: kGreen, width: 1.5),
         ),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
@@ -953,7 +953,7 @@ class _DropdownWithOtherState extends State<_DropdownWithOther> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         DropdownButtonFormField<String>(
-          value: _dropdownValue,
+          initialValue: _dropdownValue,
           hint: Text(widget.hint, style: GoogleFonts.inter(color: kTextMuted)),
           isExpanded: true,
           decoration: _inputDeco.copyWith(
@@ -985,7 +985,7 @@ class _DropdownWithOtherState extends State<_DropdownWithOther> {
             decoration: _inputDeco.copyWith(
               hintText: widget.otherHint,
               hintStyle: GoogleFonts.inter(color: kTextMuted),
-              prefixIcon: Icon(Icons.edit_location_alt_outlined,
+              prefixIcon: const Icon(Icons.edit_location_alt_outlined,
                   color: kGreen, size: 20),
             ),
             style: GoogleFonts.inter(fontSize: 14),
@@ -1094,7 +1094,7 @@ class _Step1 extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: kGreen.withValues(alpha: 0.3))),
             child: Row(children: [
-              Icon(Icons.route, color: kGreen, size: 18),
+              const Icon(Icons.route, color: kGreen, size: 18),
               const SizedBox(width: 8),
               Expanded(
                 child: Text('$pickupLocation → $deliveryLocation',
@@ -1140,10 +1140,10 @@ class _Step2 extends StatelessWidget {
         fillColor: kSurface,
         enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: kBorder)),
+            borderSide: const BorderSide(color: kBorder)),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: kGreen, width: 1.5)),
+            borderSide: const BorderSide(color: kGreen, width: 1.5)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       );
 
@@ -1230,10 +1230,10 @@ class _Step3 extends StatelessWidget {
         fillColor: kSurface,
         enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: kBorder)),
+            borderSide: const BorderSide(color: kBorder)),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: kGreen, width: 1.5)),
+            borderSide: const BorderSide(color: kGreen, width: 1.5)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       );
 
@@ -1292,7 +1292,7 @@ class _Step3 extends StatelessWidget {
               firstDate: DateTime.now(),
               lastDate: DateTime.now().add(const Duration(days: 90)),
               builder: (ctx, child) => Theme(
-                data: Theme.of(ctx).copyWith(colorScheme: ColorScheme.light(primary: kGreen)),
+                data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.light(primary: kGreen)),
                 child: child!,
               ),
             );
@@ -1300,7 +1300,7 @@ class _Step3 extends StatelessWidget {
           },
           decoration: _inputDeco(
             hint: 'Tap to select date',
-            prefixIcon: Icon(Icons.calendar_today_outlined, color: kGreen, size: 20),
+            prefixIcon: const Icon(Icons.calendar_today_outlined, color: kGreen, size: 20),
           ),
           style: GoogleFonts.inter(fontSize: 14),
         ),
@@ -1313,7 +1313,7 @@ class _Step3 extends StatelessWidget {
               border: Border.all(color: kGreen.withValues(alpha: 0.25))),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              Icon(Icons.psychology_outlined, color: kGreen, size: 18),
+              const Icon(Icons.psychology_outlined, color: kGreen, size: 18),
               const SizedBox(width: 6),
               Text('AI Price Suggestion',
                   style: GoogleFonts.inter(fontWeight: FontWeight.bold, color: kGreen)),
@@ -1321,7 +1321,7 @@ class _Step3 extends StatelessWidget {
             const SizedBox(height: 10),
             if (priceLoading)
               Row(children: [
-                SizedBox(width: 18, height: 18,
+                const SizedBox(width: 18, height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2, color: kGreen)),
                 const SizedBox(width: 10),
                 Text('Calculating route price...',
@@ -1435,7 +1435,7 @@ class _Step4 extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: kAmber.withValues(alpha: 0.4))),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Icon(Icons.info_outline, color: kAmber, size: 18),
+            const Icon(Icons.info_outline, color: kAmber, size: 18),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -1490,10 +1490,10 @@ class _IntraStep1 extends StatelessWidget {
         filled: true,
         fillColor: kSurface,
         enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: kBorder)),
+            borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: kBorder)),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: kGreen, width: 1.5)),
+            borderSide: const BorderSide(color: kGreen, width: 1.5)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       );
 
@@ -1543,10 +1543,10 @@ class _IntraStep1 extends StatelessWidget {
         Text('City', style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: city,
+          initialValue: city,
           hint: Text('location.select_city'.tr(), style: GoogleFonts.inter(color: kTextMuted)),
           isExpanded: true,
-          decoration: _deco(prefix: Icon(Icons.location_city_outlined, color: kGreen, size: 20)),
+          decoration: _deco(prefix: const Icon(Icons.location_city_outlined, color: kGreen, size: 20)),
           items: cities.map((c) => DropdownMenuItem(
                 value: c, child: Text(c, style: GoogleFonts.inter(fontSize: 14)))).toList(),
           onChanged: (v) { if (v != null) onCity(v); },
@@ -1563,7 +1563,7 @@ class _IntraStep1 extends StatelessWidget {
             hint: gpsPickupMode
                 ? 'Add a landmark (e.g. Near Piassa)'
                 : 'e.g. Bole, Piazza, Kazanchis',
-            prefix: Icon(Icons.trip_origin, color: kGreen, size: 20),
+            prefix: const Icon(Icons.trip_origin, color: kGreen, size: 20),
           ),
           style: GoogleFonts.inter(fontSize: 14),
         ),
@@ -1615,7 +1615,7 @@ class _IntraStep1 extends StatelessWidget {
           controller: dropoffCtrl,
           decoration: _deco(
             hint: 'e.g. CMC, Megenagna, Sarbet',
-            prefix: Icon(Icons.location_on_outlined, color: kGreen, size: 20),
+            prefix: const Icon(Icons.location_on_outlined, color: kGreen, size: 20),
           ),
           style: GoogleFonts.inter(fontSize: 14),
         ),
@@ -1628,7 +1628,7 @@ class _IntraStep1 extends StatelessWidget {
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: kGreen.withValues(alpha: 0.3))),
             child: Row(children: [
-              Icon(Icons.route, color: kGreen, size: 18),
+              const Icon(Icons.route, color: kGreen, size: 18),
               const SizedBox(width: 8),
               Expanded(child: Text('$city · ${pickupCtrl.text} → ${dropoffCtrl.text}',
                   style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kGreen, fontSize: 13))),
@@ -1662,10 +1662,10 @@ class _IntraStep2 extends StatelessWidget {
         filled: true,
         fillColor: kSurface,
         enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: kBorder)),
+            borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: kBorder)),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: kGreen, width: 1.5)),
+            borderSide: const BorderSide(color: kGreen, width: 1.5)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       );
 
@@ -1696,7 +1696,7 @@ class _IntraStep2 extends StatelessWidget {
               firstDate: DateTime.now(),
               lastDate: DateTime.now().add(const Duration(days: 90)),
               builder: (ctx, child) => Theme(
-                data: Theme.of(ctx).copyWith(colorScheme: ColorScheme.light(primary: kGreen)),
+                data: Theme.of(ctx).copyWith(colorScheme: const ColorScheme.light(primary: kGreen)),
                 child: child!,
               ),
             );
@@ -1704,7 +1704,7 @@ class _IntraStep2 extends StatelessWidget {
           },
           decoration: _deco(
             hint: 'Tap to select moving date',
-            prefix: Icon(Icons.calendar_today_outlined, color: kGreen, size: 20),
+            prefix: const Icon(Icons.calendar_today_outlined, color: kGreen, size: 20),
           ),
           controller: TextEditingController(text: preferredDate ?? ''),
           style: GoogleFonts.inter(fontSize: 14),
@@ -1714,10 +1714,10 @@ class _IntraStep2 extends StatelessWidget {
             style: GoogleFonts.inter(fontWeight: FontWeight.w600, color: kTextPrimary)),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: vehicleType,
+          initialValue: vehicleType,
           hint: Text('Any available vehicle', style: GoogleFonts.inter(color: kTextMuted)),
           isExpanded: true,
-          decoration: _deco(prefix: Icon(Icons.airport_shuttle_outlined, color: kGreen, size: 20)),
+          decoration: _deco(prefix: const Icon(Icons.airport_shuttle_outlined, color: kGreen, size: 20)),
           items: [
             const DropdownMenuItem<String>(value: null, child: Text('Any available vehicle')),
             ...vehicleTypes.map((t) => DropdownMenuItem(
@@ -1784,7 +1784,7 @@ class _IntraStep3Review extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: kAmber.withValues(alpha: 0.4))),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Icon(Icons.info_outline, color: kAmber, size: 18),
+            const Icon(Icons.info_outline, color: kAmber, size: 18),
             const SizedBox(width: 10),
             Expanded(child: Text(
               'Drivers in your city will bid on this request. No AI price for intra-city moves. Platform commission: 10%.',

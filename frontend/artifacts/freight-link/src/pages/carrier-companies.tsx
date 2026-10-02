@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, CheckCircle2, Clock, FileText, Loader2, Mail, Send, UserCheck } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { api } from "@/lib/api";
-import { sendInvitationEmail } from "@/lib/brevo-email";
+import { CompanyTeam } from "@/components/company-team";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,254 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { blankCompany, companyFields, companyPayload, downloadCompanyDocument, requiredCompanyDocs, statusHelp, statusLabel, type Company, type CompanyDocument, type CompanyForm, type CompanyPage } from "@/lib/carrier-companies";
 
-// ── Mock invitation store ─────────────────────────────────────────────────────
-// Persists invitations in localStorage so they survive page refreshes and
-// can be looked up when the invitee clicks the accept link.
-export const MOCK_INVITATIONS_KEY = "freightlink_mock_invitations";
-
-export type MockInvitation = {
-  id: number;
-  companyId: number;
-  companyName: string;
-  email: string;
-  role: string;
-  /** Raw token embedded in the accept URL fragment — never sent to any server. */
-  token: string;
-  sentAt: string;
-  /** ISO string — 24 h from sentAt */
-  expiresAt: string;
-  status: "pending" | "accepted";
-};
-
-export function getMockInvitations(): MockInvitation[] {
-  try { return JSON.parse(localStorage.getItem(MOCK_INVITATIONS_KEY) ?? "[]"); }
-  catch { return []; }
-}
-export function saveMockInvitations(inv: MockInvitation[]): void {
-  localStorage.setItem(MOCK_INVITATIONS_KEY, JSON.stringify(inv));
-}
-
-/**
- * Create (or replace) a pending invitation in the mock store.
- * The token encodes enough info for validate/accept without a database.
- */
-export function createMockInvitation(
-  companyId: number,
-  companyName: string,
-  email: string,
-  role: string,
-): MockInvitation {
-  const all = getMockInvitations();
-  // Revoke any prior pending invite for the same company+email
-  const kept = all.filter(i => !(i.companyId === companyId && i.email === email.toLowerCase().trim()));
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
-  // Token is a base64-encoded JSON payload — compact and URL-safe enough for a hash fragment
-  const payload = { companyId, email: email.toLowerCase().trim(), role, ts: now.getTime() };
-  const token = btoa(JSON.stringify(payload)).replace(/=/g, "");
-  const inv: MockInvitation = {
-    id: now.getTime(),
-    companyId,
-    companyName,
-    email: email.toLowerCase().trim(),
-    role,
-    token,
-    sentAt: now.toISOString(),
-    expiresAt,
-    status: "pending",
-  };
-  kept.push(inv);
-  saveMockInvitations(kept);
-  return inv;
-}
-
-// ── Invite Team Card ──────────────────────────────────────────────────────────
-function InviteTeamCard({
-  companyId,
-  companyName,
-  busy,
-  inviteEmail,
-  setInviteEmail,
-  inviteRole,
-  setInviteRole,
-  perform,
-  setNotice,
-  toast,
-}: {
-  companyId: number;
-  companyName: string;
-  busy: boolean;
-  inviteEmail: string;
-  setInviteEmail: (v: string) => void;
-  inviteRole: string;
-  setInviteRole: (v: string) => void;
-  perform: (work: () => Promise<void>) => Promise<void>;
-  setNotice: (v: string) => void;
-  toast: ReturnType<typeof useToast>["toast"];
-}) {
-  const [sent, setSent] = useState<MockInvitation[]>(() =>
-    getMockInvitations().filter(i => i.companyId === companyId),
-  );
-  const [sendingEmail, setSendingEmail] = useState(false);
-
-  const roleLabel = (r: string) =>
-    r === "FLEET_MANAGER" ? "Fleet Manager" : r === "DISPATCHER" ? "Dispatcher" : r;
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const email = inviteEmail.trim();
-
-    await perform(async () => {
-      let inv: MockInvitation | null = null;
-      let usedBackend = false;
-
-      // ── 1. Try Spring Boot backend first ──────────────────────────────────
-      try {
-        await api.post(`/carrier-companies/${companyId}/team/invitations`, {
-          email,
-          role: inviteRole,
-        });
-        usedBackend = true;
-        // Backend handles email sending itself — create a local record for the UI list only
-        inv = createMockInvitation(companyId, companyName, email, inviteRole);
-      } catch {
-        // Backend unavailable — fall through to client-side email
-      }
-
-      // ── 2. If backend was unavailable, create token + send email via Brevo ─
-      if (!usedBackend) {
-        inv = createMockInvitation(companyId, companyName, email, inviteRole);
-        const acceptUrl =
-          `${window.location.origin}/invitations/accept#token=${inv.token}`;
-
-        setSendingEmail(true);
-        try {
-          await sendInvitationEmail(
-            email,
-            companyName,
-            roleLabel(inviteRole),
-            acceptUrl,
-            inv.expiresAt,
-          );
-        } catch (emailErr: any) {
-          // Email send failed — still keep the local record but warn the user
-          toast({
-            title: "Invitation saved but email failed",
-            description:
-              emailErr?.message ??
-              "The invitation was created but we could not send the email. " +
-              "Share the accept link manually.",
-            variant: "destructive",
-          });
-          setSent(getMockInvitations().filter(i => i.companyId === companyId));
-          setInviteEmail("");
-          setSendingEmail(false);
-          return;
-        } finally {
-          setSendingEmail(false);
-        }
-      }
-
-      // ── 3. Success ─────────────────────────────────────────────────────────
-      setSent(getMockInvitations().filter(i => i.companyId === companyId));
-      setInviteEmail("");
-      const msg = `Invitation email sent to ${email} as ${roleLabel(inviteRole)}.`;
-      setNotice(msg);
-      toast({ title: "✉️ Invitation sent!", description: msg });
-    });
-  };
-
-  const isWorking = busy || sendingEmail;
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Mail className="h-5 w-5" /> Invite your team
-        </CardTitle>
-        <p className="text-sm text-muted-foreground">
-          An invitation email will be sent via Brevo. The recipient must accept
-          using the invited address.
-        </p>
-      </CardHeader>
-      <CardContent className="space-y-5">
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <div>
-            <Label htmlFor="invite-email">Employee email</Label>
-            <Input
-              id="invite-email"
-              type="email"
-              required
-              maxLength={255}
-              placeholder="employee@company.com"
-              value={inviteEmail}
-              disabled={isWorking}
-              onChange={e => setInviteEmail(e.target.value)}
-              className="mt-1"
-            />
-          </div>
-          <div>
-            <Label htmlFor="invite-role">Company role</Label>
-            <select
-              id="invite-role"
-              className="block w-full rounded-md border bg-background p-3 mt-1 text-sm"
-              value={inviteRole}
-              disabled={isWorking}
-              onChange={e => setInviteRole(e.target.value)}
-            >
-              <option value="FLEET_MANAGER">Fleet Manager</option>
-              <option value="DISPATCHER">Dispatcher</option>
-            </select>
-          </div>
-          <Button disabled={isWorking} className="w-full sm:w-auto">
-            {isWorking
-              ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{sendingEmail ? "Sending email…" : "Saving…"}</>
-              : <><Send className="mr-2 h-4 w-4" />Send Invitation</>}
-          </Button>
-        </form>
-
-        {/* Sent invitations list */}
-        {sent.length > 0 && (
-          <div className="border-t pt-4 space-y-2">
-            <p className="text-sm font-semibold text-muted-foreground">Sent invitations</p>
-            {sent.map(inv => {
-              const expired = new Date(inv.expiresAt) < new Date();
-              const statusColor =
-                inv.status === "accepted"
-                  ? "border-emerald-300 text-emerald-700"
-                  : expired
-                  ? "border-red-200 text-red-500"
-                  : "border-amber-300 text-amber-700";
-              const StatusIcon =
-                inv.status === "accepted" ? UserCheck : Clock;
-              return (
-                <div
-                  key={inv.id}
-                  className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm gap-2"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Mail className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    <span className="font-medium truncate">{inv.email}</span>
-                    <Badge variant="outline" className="text-xs shrink-0">
-                      {roleLabel(inv.role)}
-                    </Badge>
-                  </div>
-                  <Badge variant="outline" className={`text-xs shrink-0 flex items-center gap-1 ${statusColor}`}>
-                    <StatusIcon className="h-3 w-3" />
-                    {inv.status === "accepted" ? "Accepted" : expired ? "Expired" : "Pending"}
-                  </Badge>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
 export default function CarrierCompanies({ id }: { id?: string }) {
-  const { user } = useAuth();
+  const { user, refreshMemberships } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const client = useQueryClient();
@@ -274,7 +28,8 @@ export default function CarrierCompanies({ id }: { id?: string }) {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("FLEET_MANAGER");
   const companies = useQuery({ queryKey: ["carrier-companies", user?.id, page], queryFn: () => api.get<CompanyPage>(`/carrier-companies/me?page=${page}&size=10`), enabled: !id });
-  const detail = useQuery({ queryKey: ["carrier-company", user?.id, id], queryFn: () => api.get<Company>(`/carrier-companies/${id}`), enabled: !!id && !isNew, refetchOnWindowFocus: false });
+  const detail = useQuery({ queryKey: ["carrier-company", user?.id, id], queryFn: () => api.get<Company>(`/carrier-companies/${id}`), enabled: !!id && !isNew, refetchOnWindowFocus: true,
+    refetchInterval: query => query.state.data?.verificationStatus === "PENDING" ? 3000 : false });
   const docs = useQuery({ queryKey: ["carrier-company-documents", user?.id, id], queryFn: () => api.get<CompanyDocument[]>(`/carrier-companies/${id}/documents`), enabled: !!id && !isNew });
   const company = detail.data;
   const editable = isNew || company?.verificationStatus === "DRAFT" || company?.verificationStatus === "MORE_INFORMATION_REQUIRED";
@@ -300,6 +55,7 @@ export default function CarrierCompanies({ id }: { id?: string }) {
     event.preventDefault();
     await perform(async () => {
       const saved = isNew ? await api.post<Company>("/carrier-companies", companyPayload(form)) : await api.put<Company>(`/carrier-companies/${id}`, companyPayload(form));
+      if (isNew) await refreshMemberships();
       client.setQueryData(["carrier-company", user?.id, String(saved.id)], saved);
       await client.invalidateQueries({ queryKey: ["carrier-companies"] });
       setStep(2); setNotice("Company details saved. Next, upload your documents.");
@@ -327,7 +83,7 @@ export default function CarrierCompanies({ id }: { id?: string }) {
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2"><Building2 className="shrink-0" />{!id ? "My companies" : isNew ? "Register your fleet company" : company?.companyName ?? "Company application"}</h1>
         <p className="mt-2 text-muted-foreground">Your owner account is ready. Company registration is a separate application.</p></div>
-      <Link href={id ? "/fleet/companies" : "/fleet"} className="text-sm underline">{id ? "All my companies" : "Fleet workspace"}</Link>
+      <Link href={id ? "/fleet/companies" : "/dashboard"} className="text-sm underline">{id ? "All my companies" : "My dashboard"}</Link>
     </div>
     {error && <p role="alert" className="rounded-lg border border-destructive/30 p-4 text-destructive">{error}</p>}
     {notice && <p role="status" className="rounded-lg bg-muted p-4">{notice}</p>}
@@ -357,7 +113,7 @@ export default function CarrierCompanies({ id }: { id?: string }) {
           {requiredCompanyDocs.map(({ type, label }) => { const doc = docs.data?.find(d => d.documentType === type); return <div key={type} className="rounded-lg border p-4 space-y-3"><h3 className="font-semibold flex gap-2 items-center">{doc ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <FileText className="h-4 w-4" />}{label}</h3>{doc ? <><p className="break-all text-sm">{doc.originalName}</p><Button variant="outline" size="sm" disabled={busy} onClick={() => perform(() => downloadCompanyDocument(company.id, doc))}>Download document</Button></> : <p className="text-sm text-muted-foreground">Required before submission</p>}{editable && <div><Label htmlFor={type}>{doc ? "Replace document" : "Upload document"}</Label><Input className="mt-1" id={type} type="file" accept=".pdf,.jpg,.jpeg,.png" disabled={busy || !docs.data} onChange={e => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void upload(type, file); }} /></div>}</div>; })}
           {editable && <div className="border-t pt-4 space-y-3"><p className="text-sm">{completeDetails ? "Company details complete." : "Complete the missing company details before submitting."} {completeDocs ? "All required documents uploaded." : "Upload all three required documents."}</p><Button disabled={busy || !completeDetails || !completeDocs || docs.isError} onClick={submit}>{busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{company.verificationStatus === "MORE_INFORMATION_REQUIRED" ? "Resubmit for review" : "Submit for review"}</Button><p className="text-sm text-muted-foreground">Submitting locks this application until the admin completes the review or requests changes.</p></div>}
         </CardContent></Card>}
-        {company?.verificationStatus === "APPROVED" && <InviteTeamCard companyId={company.id} companyName={company.companyName} busy={busy} inviteEmail={inviteEmail} setInviteEmail={setInviteEmail} inviteRole={inviteRole} setInviteRole={setInviteRole} perform={perform} setNotice={setNotice} toast={toast} />}
+        {company?.verificationStatus === "APPROVED" && company.ownerId === user?.id && <><Link className="underline" href={`/company/${company.id}`}>Open company dashboard</Link><CompanyTeam companyId={company.id} /></>}
       </>}
     </>}
   </main>;

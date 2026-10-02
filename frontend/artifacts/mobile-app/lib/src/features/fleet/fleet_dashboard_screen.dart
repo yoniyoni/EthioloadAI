@@ -379,7 +379,9 @@ class _FleetAddVehicleScreenState
 
   Future<void> _submit() async {
     if (_plateCtrl.text.isEmpty || _capacityCtrl.text.isEmpty ||
-        _vehicleCategory == null) return;
+        _vehicleCategory == null) {
+      return;
+    }
     setState(() => _loading = true);
     try {
       final driverId = int.tryParse(_driverIdCtrl.text.trim());
@@ -457,7 +459,7 @@ class _FleetAddVehicleScreenState
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            value: _types.contains(_truckType) ? _truckType : _types.first,
+            initialValue: _types.contains(_truckType) ? _truckType : _types.first,
             decoration: InputDecoration(
               labelText: 'Vehicle Type',
               prefixIcon: const Icon(Icons.local_shipping_outlined),
@@ -497,7 +499,7 @@ class _FleetAddVehicleScreenState
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            value: _city,
+            initialValue: _city,
             decoration: InputDecoration(
               labelText: 'Current City',
               prefixIcon: const Icon(Icons.location_city_outlined),
