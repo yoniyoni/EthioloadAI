@@ -1,0 +1,2 @@
+ALTER TABLE driver_documents ADD COLUMN IF NOT EXISTS mime_type VARCHAR(100) NOT NULL DEFAULT 'application/octet-stream';
+ALTER TABLE driver_documents ADD COLUMN IF NOT EXISTS file_size BIGINT NOT NULL DEFAULT 0;

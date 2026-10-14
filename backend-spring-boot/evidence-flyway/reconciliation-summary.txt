@@ -1,0 +1,12 @@
+﻿READ-ONLY EVIDENCE PACKAGE STATUS
+Generated: 
+2026-09-06T19:29:00.0640282+03:00
+
+Local migration files: V1-V22, V40-V43, V45-V54
+Applied in database but missing locally: V23-V39, V44
+Local but not applied: V54
+Duplicate successful history: V23-V39 (second installation sequence)
+V44 description: allow canonical bid foreign key
+V44 recorded checksum: -649180504
+Database backup/export status: BLOCKED - PostgreSQL client tools and non-interactive auth are unavailable in this agent process
+No database or application changes performed.

@@ -1,0 +1,47 @@
+spring:
+  config:
+    # The mounted directory must contain SPRING_DATASOURCE_PASSWORD and JWT_SECRET files.
+    import: "configtree:/run/secrets/"
+  mail:
+    username: ""
+    password: ""
+  datasource:
+    url: ${E2E_DATASOURCE_URL:jdbc:postgresql://127.0.0.1:15433/ethioloadai_e2e}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  flyway:
+    enabled: true
+  sql:
+    init:
+      mode: never
+
+flyway:
+  custom:
+    enabled: false
+
+app:
+  demo-seed:
+    enabled: ${APP_DEMO_SEED_ENABLED:false}
+
+e2e:
+  datasource:
+    mode: ${E2E_DATASOURCE_MODE:}
+  demo:
+    admin-password: ${E2E_DEMO_ADMIN_PASSWORD:}
+    shipper-password: ${E2E_DEMO_SHIPPER_PASSWORD:}
+    driver-password: ${E2E_DEMO_DRIVER_PASSWORD:}
+
+carrier:
+  invitations:
+    email-from: ""
+
+ai-engine:
+  enabled: false
+
+routing:
+  external-services:
+    enabled: false
+
+cors:
+  allowed-origins: http://localhost:5173,http://127.0.0.1:8765

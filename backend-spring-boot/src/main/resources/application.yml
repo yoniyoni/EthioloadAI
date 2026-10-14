@@ -1,0 +1,171 @@
+spring:
+  mail:
+    host: ${SMTP_HOST:smtp-relay.brevo.com}
+    port: ${SMTP_PORT:465}
+    username: ${SMTP_USER:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.ssl.enable: ${SMTP_SECURE:true}
+      mail.smtp.ssl.checkserveridentity: true
+      mail.smtp.starttls.enable: false
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
+      mail.debug: false
+  application:
+    name: ethioloadai-backend
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  flyway:
+    postgresql:
+      # V16 creates indexes concurrently; use a session lock to avoid blocking them.
+      transactional-lock: false
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    open-in-view: false
+
+  jackson:
+    # Accept both UPPERCASE and lowercase enum values from clients (Flutter sends lowercase).
+    mapper:
+      accept-case-insensitive-enums: true
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+  task:
+    execution:
+      pool:
+        core-size: 5
+        max-size: 10
+        queue-capacity: 100
+
+# Applies to application/json and application/*+json requests only.
+# Deployment ingress/proxy request-size limits require separate runtime verification.
+app:
+  request-body:
+    max-json-size: 1MB
+
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    context-path: /api
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION:900000}       # 15 minutes in milliseconds
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}  # 7 days in milliseconds
+  header: Authorization
+  prefix: Bearer
+
+# CORS Configuration
+# Override allowed-origins in production via the CORS_ALLOWED_ORIGINS environment variable.
+# Accepts a comma-separated list: CORS_ALLOWED_ORIGINS=https://app.example.com,https://admin.example.com
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:8080}
+
+# AI Engine Configuration
+ai-engine:
+  url: ${AI_ENGINE_URL:http://localhost:8000}
+  timeout: 5000
+  enabled: ${AI_ENGINE_ENABLED:true}
+
+# External Service Configuration
+osrm:
+  base-url: http://router.project-osrm.org
+  timeout: 5000
+  route-cache-ttl: 3600
+  nearest-cache-ttl: 1800
+
+nominatim:
+  base-url: https://nominatim.openstreetmap.org
+  user-agent: EthioLoadAI/1.0
+  timeout: 5000
+  country-code: et
+  search-cache-ttl: 86400
+  reverse-cache-ttl: 21600
+
+# Management / Actuator
+management:
+  health:
+    # SMTP is optional until configured; it must not take unrelated application health down.
+    mail:
+      enabled: false
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    tags:
+      application: ethioloadai-backend
+    export:
+      prometheus:
+        enabled: true
+
+# OpenAPI / SpringDoc
+# swagger-ui.enabled defaults to true here (useful in dev/staging).
+# The production profile (application-prod.yml) disables it.
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+  show-actuator: true
+
+carrier:
+  invitations:
+    expiry-hours: ${INVITATION_EXPIRY_HOURS:24}
+    cooldown-seconds: ${INVITATION_COOLDOWN_SECONDS:60}
+    max-per-hour: ${INVITATION_MAX_PER_HOUR:20}
+    frontend-base-url: ${FRONTEND_BASE_URL:}
+    email-from: ${EMAIL_FROM:}
+
+# Authentication rate limiting
+# The Spring login limiter is process-local defense in depth. It is not shared across
+# application instances, and the current registration endpoint has no application-level
+# IP limiter; the rate-limit.registration values below are not wired to registration.
+# Production deployment requirement (not enforced by this application configuration):
+# the trusted edge/gateway/WAF must rate-limit login and registration before forwarding
+# requests to Spring Boot, using the connection/source IP rather than arbitrary
+# client-supplied forwarding headers. It must strip/overwrite untrusted forwarding
+# headers and provide shared enforcement across all Spring Boot instances. Verify this
+# at the deployed ingress before treating production IP enforcement as complete.
+rate-limit:
+  login:
+    identifier-capacity: 5
+    identifier-refill-seconds: 60
+    source-capacity: 30
+    source-refill-seconds: 5
+  registration:
+    capacity: 10
+    refill-tokens: 10
+    refill-duration-seconds: 3600
+  api:
+    capacity: 100
+    refill-tokens: 100
+    refill-duration-seconds: 60
+
+# Logging
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  level:
+    com.ethioloadai: DEBUG
+    org.springframework.security: INFO
+    org.hibernate.SQL: DEBUG

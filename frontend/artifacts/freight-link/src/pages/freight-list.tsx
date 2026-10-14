@@ -1,0 +1,272 @@
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
+import { api } from "@/lib/api";
+import { useAuth } from "@/contexts/auth-context";
+import { useLanguage } from "@/lib/i18n/language-context";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { MapPin, Package, Scale, Calendar, Plus, Search, ArrowRight, Navigation, ChevronLeft, ChevronRight } from "lucide-react";
+
+const STATUS_COLORS: Record<string, string> = {
+  posted: "bg-blue-50 text-blue-700 border-blue-200",
+  matched: "bg-sky-50 text-sky-700 border-sky-200",
+  in_transit: "bg-purple-50 text-purple-700 border-purple-200",
+  delivered: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  completed: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  cancelled: "bg-red-50 text-red-700 border-red-200",
+};
+
+const CARGO_TYPES = ["grain", "cement", "construction", "perishables", "electronics", "livestock", "fuel", "general", "other"];
+
+const STATUS_KEYS: Record<string, string> = {
+  posted: "freight.posted",
+  matched: "freight.matched",
+  in_transit: "freight.inTransit",
+  delivered: "freight.completed",
+  completed: "freight.completed",
+  cancelled: "freight.cancelled",
+};
+
+export default function FreightList() {
+  const { isAuthenticated, user } = useAuth();
+  const { t } = useLanguage();
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [cargoFilter, setCargoFilter] = useState("all");
+  const [page, setPage] = useState(0);
+
+  const shipperView = user?.role === "shipper";
+  const driverView  = user?.role === "driver";
+
+  const params = new URLSearchParams({ size: "20", page: String(page) });
+  const shipperParams = new URLSearchParams({ size: "20", page: String(page) });
+  if (statusFilter === "all") {
+    ["posted", "matched", "in_transit"].forEach(status => shipperParams.append("status", status));
+  } else {
+    shipperParams.set("status", statusFilter);
+  }
+  if (cargoFilter !== "all") shipperParams.set("materialType", cargoFilter);
+  if (search) shipperParams.set("search", search);
+
+  // Drivers browsing the marketplace should only see POSTED freight that is
+  // open for bidding. Shippers and admins can filter freely.
+  if (driverView && statusFilter === "all") {
+    params.set("status", "posted");
+  } else if (statusFilter !== "all") {
+    params.set("status", statusFilter);
+  }
+  // Spring Boot uses materialType, not cargoType
+  if (cargoFilter !== "all") params.set("materialType", cargoFilter);
+
+  const { data, isLoading, isError } = useQuery<any>({
+    // Include the user role so that a role switch (e.g. driver → shipper) never
+    // serves a cached Page object to code that expects a plain array.
+    queryKey: ["freight", user?.role, statusFilter, cargoFilter, search, page],
+    queryFn: () => shipperView
+      ? api.get<{ content: any[]; totalElements: number; totalPages: number; number: number }>(`/freight/my-freights/page?${shipperParams}`)
+      : api.get<{ content: any[]; totalElements: number; totalPages: number; number: number }>(`/freight?${params}`),
+    refetchInterval: 30_000,
+  });
+
+  const rawFreight: any[] = Array.isArray((data as any)?.content)
+    ? (data as any).content
+    : [];
+
+  const totalElements: number = (data as any)?.totalElements ?? 0;
+
+  // Normalise Spring Boot field names for display: destination→deliveryLocation, materialType→cargoType
+  const freight = (Array.isArray(rawFreight) ? rawFreight : [])
+    .map((f: any) => ({
+      ...f,
+      deliveryLocation: f.deliveryLocation ?? f.destination,
+      cargoType:        f.cargoType        ?? f.materialType,
+    }))
+    .filter((f: any) => {
+      if (shipperView || !search) return true;
+      const q = search.toLowerCase();
+      return (
+        f.pickupLocation?.toLowerCase().includes(q) ||
+        f.deliveryLocation?.toLowerCase().includes(q) ||
+        f.cargoType?.toLowerCase().includes(q) ||
+        f.cargoDescription?.toLowerCase().includes(q)
+      );
+    });
+
+  return (
+    <div className="container mx-auto max-w-6xl px-4 py-8">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">{t("freight.title")}</h1>
+          <p className="text-muted-foreground mt-1">
+            {shipperView
+              ? statusFilter === "all"
+                ? "Your active freight — posted, matched, and in transit"
+                : statusFilter === "completed"
+                ? "Completed freight history"
+                : "Your freight"
+              : "Browse and apply for freight loads"}
+          </p>
+        </div>
+        {isAuthenticated && (user?.role === "shipper" || user?.role === "admin") && (
+          <Link href="/freight/new">
+            <Button className="gap-2 rounded-lg bg-primary hover:bg-primary/90">
+              <Plus className="h-4 w-4" />
+              {t("freight.postNew")}
+            </Button>
+          </Link>
+        )}
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder={t("freight.search")}
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(0); }}
+            className="pl-9 rounded-lg"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={v => { setStatusFilter(v); setPage(0); }}>
+          <SelectTrigger className="w-40 rounded-lg">
+            <SelectValue placeholder={t("common.status")} />
+          </SelectTrigger>
+          <SelectContent>
+            {/* Drivers only see posted freight in marketplace; shippers/admins can filter all statuses */}
+            {!driverView && <SelectItem value="all">{shipperView ? "Active" : t("freight.allStatuses")}</SelectItem>}
+            <SelectItem value="posted">{t("freight.posted")}</SelectItem>
+            {!driverView && <SelectItem value="matched">{t("freight.matched")}</SelectItem>}
+            {!driverView && <SelectItem value="in_transit">{t("freight.inTransit")}</SelectItem>}
+            {!driverView && <SelectItem value="completed">Completed (History)</SelectItem>}
+            {!driverView && <SelectItem value="cancelled">Cancelled</SelectItem>}
+          </SelectContent>
+        </Select>
+        <Select value={cargoFilter} onValueChange={v => { setCargoFilter(v); setPage(0); }}>
+          <SelectTrigger className="w-40 rounded-lg">
+            <SelectValue placeholder={t("common.type")} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t("freight.allTypes")}</SelectItem>
+            {CARGO_TYPES.map(tItem => (
+              <SelectItem key={tItem} value={tItem}>{tItem.charAt(0).toUpperCase() + tItem.slice(1)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Count */}
+      <p className="text-sm text-muted-foreground mb-4">
+        {isLoading ? t("common.loading") : `${freight.length} result${freight.length !== 1 ? "s" : ""}`}      </p>
+
+      {/* List */}
+      <div className="space-y-3">
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 w-full rounded-xl" />)
+        ) : isError ? (
+          <div className="text-center py-20 text-destructive">
+            <Package className="h-12 w-12 mx-auto mb-3 opacity-40" />
+            <p className="text-lg font-medium">Unable to load freight</p>
+            <p className="text-sm">The freight service did not return a valid response.</p>
+          </div>
+        ) : freight.length === 0 ? (
+          <div className="text-center py-20 text-muted-foreground">
+            <Package className="h-12 w-12 mx-auto mb-3 opacity-40" />
+            <p className="text-lg font-medium">{t("freight.noResults")}</p>
+            <p className="text-sm">{t("freight.search")}</p>
+          </div>
+        ) : (
+          freight.map((f: any) => (
+            <Link key={f.id} href={`/freight/${f.id}`}>
+              <Card className="hover:shadow-md transition-all hover:border-primary/30 cursor-pointer border-border/60 rounded-xl">
+                <CardContent className="pt-5 pb-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-2">
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${STATUS_COLORS[f.status] ?? "bg-gray-50 text-gray-700 border-gray-200"}`}>
+                          {t(STATUS_KEYS[f.status] ?? f.status)}
+                        </span>
+                        <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200 capitalize">
+                          {f.cargoType}
+                        </span>
+                        {f.distanceKm && (
+                          <span className="text-xs bg-slate-50 text-slate-500 px-2 py-0.5 rounded-full border border-slate-200">
+                            <Navigation className="h-3 w-3 inline mr-1" />{f.distanceKm} km
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mt-2">
+                        <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span className="text-sm font-semibold truncate">{f.pickupLocation}</span>
+                        <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-sm font-semibold truncate">{f.deliveryLocation}</span>
+                      </div>
+                      {f.cargoDescription && (
+                        <p className="text-xs text-muted-foreground mt-1 truncate">{f.cargoDescription}</p>
+                      )}
+                      <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1"><Scale className="h-3 w-3" />{f.weightTons} {t("freight.tons")}</span>
+                        {f.volumeM3 && <span>{f.volumeM3}m³</span>}
+                        {f.deadline && (
+                          <span className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {t("freight.due")} {new Date(f.deadline).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-lg font-bold text-foreground">{t("common.ETB")} {Number(f.budget).toLocaleString()}</p>
+                      <span className="text-xs text-muted-foreground">
+                        {String(f.priceType ?? "fixed").toLowerCase() === "negotiable"
+                          ? "Negotiable"
+                          : "Fixed Price"}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          ))
+        )}
+      </div>
+
+      {/* Pagination */}
+      {!isLoading && (freight.length > 0 || page > 0) && (
+        <div className="flex items-center justify-between mt-6 pt-4 border-t">
+          <p className="text-sm text-muted-foreground">
+            Showing {freight.length} of {totalElements} result{totalElements !== 1 ? "s" : ""}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 p-0 rounded-lg"
+              disabled={page === 0}
+              onClick={() => setPage(p => p - 1)}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm text-muted-foreground px-1">
+              {page + 1} / {Math.max((data as any)?.totalPages ?? 1, 1)}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 p-0 rounded-lg"
+              disabled={page + 1 >= ((data as any)?.totalPages ?? 1)}
+              onClick={() => setPage(p => p + 1)}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

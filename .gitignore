@@ -1,0 +1,62 @@
+# Temporary build, install, and verify logs from Flutter mobile-app CI sessions
+frontend/artifacts/mobile-app/*output*.txt
+frontend/artifacts/mobile-app/*install*.txt
+frontend/artifacts/mobile-app/analyze*.txt
+frontend/artifacts/mobile-app/verify*.txt
+frontend/artifacts/mobile-app/sdk*.txt
+frontend/artifacts/mobile-app/cmake_install.txt
+frontend/artifacts/mobile-app/final_*.txt
+
+# Additional patterns to cover infix-wildcard filenames
+frontend/artifacts/mobile-app/*install.txt
+frontend/artifacts/mobile-app/*analyze*.txt
+frontend/artifacts/mobile-app/*verify*.txt
+
+# Secrets and local environment files
+.env
+.env.local
+backend-spring-boot/.env
+
+# Spring Boot compiled build artifacts
+backend-spring-boot/target/
+backend-spring-boot/uploads/
+backend-spring-boot/phase1-*.log
+backend-spring-boot/phase2-*.log
+backend-spring-boot/full-verification-*.log
+backend-spring-boot/full-verification-*-results.json
+
+# Local runtime dependencies and verification artifacts
+ai_engine/.runtime/
+local-run-checks/
+# Local environment values and credentials
+.env
+.env.local
+.env.*
+!.env.example
+**/.env
+**/.env.local
+**/.env.*
+!**/.env.example
+
+# Local databases, runtime logs, and test credentials
+*.dump
+*.pgdump
+*.backup
+*.sqlite
+*.sqlite3
+*.db
+*.log
+*.log.*
+*.err
+*.out
+**/logs/**
+frontend/artifacts/freight-link/tests/onboarding-fixtures*.json
+frontend/artifacts/mobile-app/secrets.local.json
+
+# Installed/generated dependency trees
+**/vendor/
+**/node_modules/
+**/.dart_tool/
+**/target/
+**/build/
+**/dist/

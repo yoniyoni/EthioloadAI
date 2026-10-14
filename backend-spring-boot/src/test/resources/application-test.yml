@@ -1,0 +1,47 @@
+# Test profile configuration.
+# Uses H2 in-memory database with PostgreSQL compatibility mode.
+# Flyway is DISABLED for @DataJpaTest slices — Hibernate handles schema creation
+# via ddl-auto: create-drop so we can test entities without PostgreSQL-specific SQL.
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL;NON_KEYWORDS=VALUE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        # Allow H2 to handle JSON columns as CLOB
+        types:
+          print:
+            banner: false
+
+  flyway:
+    enabled: false
+
+jwt:
+  secret: test-secret-key-that-is-long-enough-32c
+  expiration: 900000
+  refresh-expiration: 604800000
+  header: Authorization
+  prefix: Bearer
+
+cors:
+  allowed-origins: http://localhost:3000
+
+springdoc:
+  swagger-ui:
+    enabled: false
+  api-docs:
+    enabled: false
+
+carrier:
+  invitations:
+    frontend-base-url: http://localhost:5173
+
