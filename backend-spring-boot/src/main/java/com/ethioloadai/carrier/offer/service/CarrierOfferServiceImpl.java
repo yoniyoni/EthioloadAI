@@ -16,6 +16,12 @@ import com.ethioloadai.carrier.offer.entity.OfferNegotiationEntry.NegotiationAct
 import com.ethioloadai.carrier.offer.exception.CarrierOfferException;
 import com.ethioloadai.carrier.offer.repository.CarrierOfferRepository;
 import com.ethioloadai.carrier.offer.repository.OfferNegotiationEntryRepository;
+import com.ethioloadai.carrier.dispatch.dto.CreateDispatchRequest;
+import com.ethioloadai.carrier.dispatch.service.DispatchService;
+import com.ethioloadai.carrier.fleet.entity.AssignmentStatus;
+import com.ethioloadai.carrier.fleet.entity.CarrierDriverStatus;
+import com.ethioloadai.carrier.fleet.repository.CarrierDriverRepository;
+import com.ethioloadai.carrier.fleet.repository.VehicleDriverAssignmentRepository;
 import com.ethioloadai.carrier.team.entity.CompanyRole;
 import com.ethioloadai.carrier.team.entity.MembershipStatus;
 import com.ethioloadai.carrier.team.repository.CompanyMembershipRepository;
@@ -25,6 +31,9 @@ import com.ethioloadai.freight.entity.Freight;
 import com.ethioloadai.freight.repository.FreightRepository;
 import com.ethioloadai.notification.service.NotificationStoreService;
 import com.ethioloadai.user.entity.User;
+import com.ethioloadai.user.repository.UserRepository;
+import com.ethioloadai.vehicle.entity.Vehicle;
+import com.ethioloadai.vehicle.repository.VehicleRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,6 +85,11 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
     private final CompanyMembershipRepository membershipRepo;
     private final CompanyContextService companyContextService;
     private final NotificationStoreService notificationService;
+    private final VehicleDriverAssignmentRepository pairingRepo;
+    private final CarrierDriverRepository carrierDriverRepo;
+    private final VehicleRepository vehicleRepo;
+    private final DispatchService dispatchService;
+    private final UserRepository userRepo;
 
     // ════════════════════════════════════════════════════════════════════════════
     // Carrier actions
@@ -117,11 +131,33 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
         }
         validateAmount(offerAmount);
 
+        var pairing = pairingRepo.findByCarrierCompanyIdAndVehicleIdAndStatus(
+                        companyId, request.vehicleId(), AssignmentStatus.ACTIVE)
+                .orElseThrow(() -> CarrierOfferException.invalidRequest(
+                        "Choose a vehicle with an active pre-assigned company driver"));
+        var carrierDriver = carrierDriverRepo.findByIdAndCarrierCompanyId(pairing.getCarrierDriverId(), companyId)
+                .filter(d -> d.getDriverUserId().equals(request.driverUserId()))
+                .filter(d -> d.getStatus() == CarrierDriverStatus.ACTIVE)
+                .orElseThrow(() -> CarrierOfferException.invalidRequest(
+                        "The selected driver is not the active driver assigned to this vehicle"));
+        User proposedDriver = userRepo.findById(carrierDriver.getDriverUserId())
+                .filter(u -> u.getRole() == User.Role.DRIVER)
+                .filter(u -> Boolean.TRUE.equals(u.getIsActive()))
+                .filter(u -> Boolean.TRUE.equals(u.getVerificationStatus()))
+                .orElseThrow(() -> CarrierOfferException.invalidRequest(
+                        "The selected driver must have an active, approved Driver account"));
+        Vehicle proposedVehicle = vehicleRepo.findByIdAndCarrierCompanyId(request.vehicleId(), companyId)
+                .filter(v -> v.getApprovalStatus() == Vehicle.VehicleApprovalStatus.APPROVED)
+                .orElseThrow(() -> CarrierOfferException.invalidRequest(
+                        "The selected company vehicle must be approved before applying"));
+
         // 5. Create the offer
         CarrierOffer offer = CarrierOffer.builder()
                 .freight(freight)
                 .carrierCompany(company)
                 .submittedBy(caller)
+                .proposedDriver(proposedDriver)
+                .proposedVehicle(proposedVehicle)
                 .pricingType(pricingType)
                 .currentAmount(offerAmount)
                 .status(OfferStatus.PENDING)
@@ -514,6 +550,17 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
                     submittedByUserId, offer.getId(), e.getMessage());
         }
 
+        // The shipper accepts this application together with its proposed pairing;
+        // notify that driver immediately through the established dispatch inbox.
+        if (offer.getProposedDriver() != null && offer.getProposedVehicle() != null) {
+            CreateDispatchRequest dispatchRequest = new CreateDispatchRequest();
+            dispatchRequest.setDriverUserId(offer.getProposedDriver().getId());
+            dispatchRequest.setVehicleId(offer.getProposedVehicle().getId());
+            dispatchRequest.setNotes("Pre-assigned vehicle and driver from the accepted carrier application");
+            dispatchService.createDispatch(freightId, offer.getCarrierCompany().getId(), dispatchRequest,
+                    offer.getSubmittedBy());
+        }
+
         log.info("Offer ACCEPTED: offerId={} freight={} company={} agreedAmount={}",
                 offer.getId(), freightId, companyName, agreedAmount);
 
@@ -550,15 +597,16 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
     }
 
     /**
-     * Require the caller to have a commercial role (CARRIER_OWNER or DISPATCHER).
-     * FLEET_MANAGER and DRIVER are denied.
+     * Require the caller to have a commercial company role.
+     * Drivers and legacy fleet-owner accounts are denied.
      */
     private void requireCommercialRole(CompanyContext ctx, User caller) {
         if (caller.getRole() == User.Role.DRIVER || caller.getRole() == User.Role.FLEET_OWNER) {
             throw CarrierOfferException.driverCannotSubmitCompanyOffer();
         }
         CompanyRole role = ctx.role();
-        if (role != CompanyRole.CARRIER_OWNER && role != CompanyRole.DISPATCHER) {
+        if (role != CompanyRole.CARRIER_OWNER && role != CompanyRole.FLEET_MANAGER
+                && role != CompanyRole.DISPATCHER) {
             throw CarrierOfferException.driverCannotSubmitCompanyOffer();
         }
     }

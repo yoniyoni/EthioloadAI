@@ -41,6 +41,7 @@ import CarrierOffers from "@/pages/carrier-offers";
 import CarrierDispatch from "@/pages/carrier-dispatch";
 import ProofVerification from "@/pages/proof-verification";
 import CarrierSettlement from "@/pages/carrier-settlement";
+import DriverAssignments from "@/pages/driver-assignments";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -77,6 +78,10 @@ function Router() {
           <ProtectedRoute allowedRoles={["shipper", "driver", "fleet_owner", "admin"]}>
             <Bookings />
           </ProtectedRoute>
+        </Route>
+
+        <Route path="/driver/assignments">
+          <ProtectedRoute allowedRoles={["driver"]}><DriverAssignments /></ProtectedRoute>
         </Route>
 
         <Route path="/notifications">

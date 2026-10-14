@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Loader2, Package, ArrowLeft, Brain, Truck, Banknote, Sparkles, Zap, MapPin, Navigation } from "lucide-react";
+import { Loader2, Package, ArrowLeft, Brain, Truck, Banknote, Sparkles, Zap } from "lucide-react";
 import { Link } from "wouter";
 
 const CARGO_TYPES = ["grain", "cement", "construction", "perishables", "electronics", "livestock", "fuel", "general", "other"];
@@ -33,8 +33,6 @@ export default function FreightNew() {
     cargoType: "general", cargoDescription: "",
     weightTons: "", volumeM3: "",
     budget: "", deadline: "",
-    pickupLatitude: "", pickupLongitude: "",
-    deliveryLatitude: "", deliveryLongitude: "",
     distanceKm: "", serviceType: "INTERCITY", priceType: "NEGOTIABLE",
     bidDeadline: "", preferredDate: "", vehicleTypeNeeded: "",
   });
@@ -42,6 +40,15 @@ export default function FreightNew() {
 
   const toNumber = (value: string) => value === "" ? undefined : Number(value);
   const toLocalDateTime = (value: string) => value ? `${value}${value.length === 16 ? ":00" : ""}` : undefined;
+  const localDateInputValue = (date: Date) => {
+    const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+    return local.toISOString().slice(0, 10);
+  };
+  const today = localDateInputValue(new Date());
+  const earliestBidDeadline = (() => {
+    const local = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000);
+    return local.toISOString().slice(0, 16);
+  })();
 
   const mutation = useMutation({
     mutationFn: () => api.post<any>("/freight", {
@@ -53,10 +60,6 @@ export default function FreightNew() {
       volumeM3:        toNumber(form.volumeM3),
       budget:          Number(form.budget),
       deadline:        form.deadline || undefined,
-      pickupLatitude:  toNumber(form.pickupLatitude),
-      pickupLongitude: toNumber(form.pickupLongitude),
-      destinationLatitude:  toNumber(form.deliveryLatitude),
-      destinationLongitude: toNumber(form.deliveryLongitude),
       urgencyLevel:    "normal",
       distanceKm:      form.distanceKm ? Number(form.distanceKm) : undefined,
       cargoDescription: form.cargoDescription || undefined,
@@ -83,17 +86,6 @@ export default function FreightNew() {
   const submitForm = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError("");
-    const coordinateValues = [form.pickupLatitude, form.pickupLongitude, form.deliveryLatitude, form.deliveryLongitude];
-    const hasAnyCoordinate = coordinateValues.some(Boolean);
-    const hasAllCoordinates = coordinateValues.every(Boolean);
-    if (hasAnyCoordinate && !hasAllCoordinates) {
-      setFormError("Enter all four coordinates or leave the coordinate fields empty.");
-      return;
-    }
-    if (coordinateValues.some(value => value && !Number.isFinite(Number(value)))) {
-      setFormError("Coordinates must be valid numbers.");
-      return;
-    }
     mutation.mutate();
   };
 
@@ -199,20 +191,10 @@ export default function FreightNew() {
                   </Select>
                 </div>
               </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <div className="space-y-1.5"><Label className="text-sm font-medium">Bid deadline</Label><Input type="datetime-local" value={form.bidDeadline} onChange={e => set("bidDeadline", e.target.value)} className="rounded-lg" /></div>
-                <div className="space-y-1.5"><Label className="text-sm font-medium">Preferred date</Label><Input type="date" value={form.preferredDate} onChange={e => set("preferredDate", e.target.value)} className="rounded-lg" /></div>
-                <div className="space-y-1.5"><Label className="text-sm font-medium">Vehicle type needed</Label><Input placeholder="e.g. box truck" value={form.vehicleTypeNeeded} onChange={e => set("vehicleTypeNeeded", e.target.value)} className="rounded-lg" /></div>
-              </div>
-            </div>
-
-            <div className="space-y-2 rounded-xl border border-border/60 p-4">
-              <div><p className="text-sm font-semibold">Map coordinates</p><p className="text-xs text-muted-foreground">Optional. Provide both pickup and destination coordinates only when known.</p></div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5"><Label className="text-sm font-medium">Pickup latitude</Label><Input type="number" step="any" min="-90" max="90" value={form.pickupLatitude} onChange={e => set("pickupLatitude", e.target.value)} className="rounded-lg" /></div>
-                <div className="space-y-1.5"><Label className="text-sm font-medium">Pickup longitude</Label><Input type="number" step="any" min="-180" max="180" value={form.pickupLongitude} onChange={e => set("pickupLongitude", e.target.value)} className="rounded-lg" /></div>
-                <div className="space-y-1.5"><Label className="text-sm font-medium">Destination latitude</Label><Input type="number" step="any" min="-90" max="90" value={form.deliveryLatitude} onChange={e => set("deliveryLatitude", e.target.value)} className="rounded-lg" /></div>
-                <div className="space-y-1.5"><Label className="text-sm font-medium">Destination longitude</Label><Input type="number" step="any" min="-180" max="180" value={form.deliveryLongitude} onChange={e => set("deliveryLongitude", e.target.value)} className="rounded-lg" /></div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5"><Label htmlFor="bid-deadline" className="text-sm font-medium">Bids close (date and time)</Label><Input id="bid-deadline" type="datetime-local" min={earliestBidDeadline} value={form.bidDeadline} onChange={e => set("bidDeadline", e.target.value)} className="rounded-lg" aria-describedby="bid-deadline-help" /><p id="bid-deadline-help" className="text-xs text-muted-foreground">Optional. Carriers can submit offers until this time.</p></div>
+                <div className="space-y-1.5"><Label htmlFor="preferred-pickup-date" className="text-sm font-medium">Preferred pickup date</Label><Input id="preferred-pickup-date" type="date" min={today} value={form.preferredDate} onChange={e => set("preferredDate", e.target.value)} className="rounded-lg" aria-describedby="preferred-date-help" /><p id="preferred-date-help" className="text-xs text-muted-foreground">Optional. Choose when the shipment should be ready.</p></div>
+                <div className="space-y-1.5 sm:col-span-2"><Label htmlFor="vehicle-type-needed" className="text-sm font-medium">Vehicle type needed <span className="font-normal text-muted-foreground">(optional)</span></Label><Input id="vehicle-type-needed" placeholder="e.g. box truck" value={form.vehicleTypeNeeded} onChange={e => set("vehicleTypeNeeded", e.target.value)} className="rounded-lg" /></div>
               </div>
             </div>
 

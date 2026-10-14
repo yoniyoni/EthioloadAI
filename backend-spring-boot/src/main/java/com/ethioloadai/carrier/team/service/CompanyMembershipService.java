@@ -4,6 +4,7 @@ import com.ethioloadai.carrier.team.entity.*;
 import com.ethioloadai.carrier.team.exception.CompanyTeamException;
 import com.ethioloadai.carrier.team.mapper.CompanyTeamMapper;
 import com.ethioloadai.carrier.team.repository.CompanyMembershipRepository;
+import com.ethioloadai.carrier.company.repository.CarrierCompanyRepository;
 import com.ethioloadai.user.entity.User;
 import com.ethioloadai.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,7 @@ public class CompanyMembershipService {
  private final UserRepository users;
  private final CompanyTeamAccess access;
  private final CompanyTeamMapper mapper;
+ private final CarrierCompanyRepository companies;
 
  public Page<MembershipResponse> list(Long companyId, User caller, int page, int size) {
   access.owner(companyId, caller, false);
@@ -56,6 +58,7 @@ public class CompanyMembershipService {
  }
  public MembershipResponse response(CompanyMembership member) {
   var response = mapper.membership(member);
+  companies.findById(member.getCarrierCompanyId()).ifPresent(company -> response.setCompanyName(company.getCompanyName()));
   users.findById(member.getUserId()).ifPresent(user -> {
    response.setFullName(user.getFullName());
    response.setEmail(user.getEmail());

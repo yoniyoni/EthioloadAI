@@ -83,6 +83,15 @@ public class CompanySecurityService {
                 || hasActiveRole(companyId, caller.getId(), CompanyRole.CARRIER_OWNER);
     }
 
+    /** The owner, fleet manager, or dispatcher may submit or negotiate commercial offers. */
+    public boolean canNegotiateOffers(Long companyId, Authentication auth) {
+        User caller = extractUser(auth);
+        if (caller == null) return false;
+        return hasActiveRole(companyId, caller.getId(), CompanyRole.CARRIER_OWNER)
+                || hasActiveRole(companyId, caller.getId(), CompanyRole.FLEET_MANAGER)
+                || hasActiveRole(companyId, caller.getId(), CompanyRole.DISPATCHER);
+    }
+
     /** Fleet writes require both a management membership and company approval. */
     public boolean canOperateFleet(Long companyId, Authentication auth) {
         return canManageFleet(companyId, auth) && companies.findById(companyId)

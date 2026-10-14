@@ -5,12 +5,16 @@ import com.ethioloadai.carrier.offer.dto.CounterOfferRequest;
 import com.ethioloadai.carrier.offer.dto.NegotiationEntryResponse;
 import com.ethioloadai.carrier.offer.dto.SubmitOfferRequest;
 import com.ethioloadai.carrier.offer.service.CarrierOfferService;
+import com.ethioloadai.freight.dto.FreightFilterRequest;
+import com.ethioloadai.freight.dto.FreightResponse;
+import com.ethioloadai.freight.service.FreightService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -59,6 +63,24 @@ public class CarrierOfferController {
     private static final int MAX_PAGE_SIZE = 100;
 
     private final CarrierOfferService offerService;
+    private final FreightService freightService;
+
+    /** Browse posted freight without applying the member's personal shipper filter. */
+    @GetMapping("/carrier-companies/{companyId}/available-freight")
+    @PreAuthorize("@companySecurity.isMemberOf(#companyId, authentication)")
+    @Operation(summary = "Browse posted freight available to an active company member")
+    public ResponseEntity<Page<FreightResponse>> listAvailableFreight(
+            @PathVariable Long companyId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        FreightFilterRequest filter = FreightFilterRequest.builder()
+                .status("posted")
+                .bidsOpen(true)
+                .build();
+        Pageable pageable = PageRequest.of(Math.max(0, page), Math.max(1, Math.min(size, MAX_PAGE_SIZE)),
+                Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
+        return ResponseEntity.ok(freightService.searchFreightsPaged(filter, pageable));
+    }
 
     // ════════════════════════════════════════════════════════════════════════════
     // Carrier-facing endpoints
@@ -69,7 +91,7 @@ public class CarrierOfferController {
      * CARRIER_OWNER or DISPATCHER only.
      */
     @PostMapping("/carrier-companies/{companyId}/freight/{freightId}/offers")
-    @PreAuthorize("@companySecurity.isMemberOf(#companyId, authentication)")
+    @PreAuthorize("@companySecurity.canNegotiateOffers(#companyId, authentication)")
     @Operation(summary = "Submit a carrier offer on a freight shipment")
     public ResponseEntity<CarrierOfferResponse> submitOffer(
             @PathVariable Long companyId,
@@ -98,7 +120,7 @@ public class CarrierOfferController {
      * CARRIER_OWNER or DISPATCHER only.
      */
     @PostMapping("/carrier-companies/{companyId}/offers/{offerId}/counter")
-    @PreAuthorize("@companySecurity.isMemberOf(#companyId, authentication)")
+    @PreAuthorize("@companySecurity.canNegotiateOffers(#companyId, authentication)")
     @Operation(summary = "Submit a counter-offer (carrier responds to shipper)")
     public ResponseEntity<CarrierOfferResponse> carrierCounter(
             @PathVariable Long companyId,
@@ -112,7 +134,7 @@ public class CarrierOfferController {
      * Accept the shipper's most recent counter-offer.
      */
     @PostMapping("/carrier-companies/{companyId}/offers/{offerId}/accept")
-    @PreAuthorize("@companySecurity.isMemberOf(#companyId, authentication)")
+    @PreAuthorize("@companySecurity.canNegotiateOffers(#companyId, authentication)")
     @Operation(summary = "Carrier accepts the shipper's counter-offer")
     public ResponseEntity<CarrierOfferResponse> carrierAccept(
             @PathVariable Long companyId,
@@ -125,7 +147,7 @@ public class CarrierOfferController {
      * Withdraw the company's active offer.
      */
     @PostMapping("/carrier-companies/{companyId}/offers/{offerId}/withdraw")
-    @PreAuthorize("@companySecurity.isMemberOf(#companyId, authentication)")
+    @PreAuthorize("@companySecurity.canNegotiateOffers(#companyId, authentication)")
     @Operation(summary = "Carrier withdraws its active offer")
     public ResponseEntity<CarrierOfferResponse> withdraw(
             @PathVariable Long companyId,

@@ -20,12 +20,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 @Transactional(readOnly = true)
 public class CarrierFleetServiceImpl implements CarrierFleetService {
+    private static final Pattern PHONE_CLEANUP = Pattern.compile("[\\s()-]");
 
     private final CarrierDriverRepository driverRepo;
     private final VehicleDriverAssignmentRepository assignmentRepo;
@@ -37,20 +39,40 @@ public class CarrierFleetServiceImpl implements CarrierFleetService {
     @Override
     @Transactional
     public CarrierDriverResponse addDriver(Long companyId, AddCarrierDriverRequest req, User caller) {
-        // Validate the User to be added
-        User driverUser = userRepo.findById(req.getDriverUserId())
-                .orElseThrow(() -> CarrierFleetException.notFound("Driver user"));
+        String identifier = req.getDriverIdentifier();
+        if (identifier == null || identifier.isBlank()) identifier = req.getDriverEmail();
+        boolean hasIdentifier = identifier != null && !identifier.isBlank();
+        if ((req.getDriverUserId() == null) == !hasIdentifier) {
+            throw CarrierFleetException.invalid("Provide either the registered driver email or phone, or driver account ID");
+        }
+        Long driverUserId = req.getDriverUserId();
+        User driverUser;
+        if (driverUserId != null) {
+            driverUser = userRepo.findById(driverUserId)
+                    .orElseThrow(() -> CarrierFleetException.notFound("Driver account not found"));
+        } else {
+            String normalized = identifier.strip();
+            boolean emailLike = normalized.contains("@");
+            String lookup = emailLike ? normalized.toLowerCase(Locale.ROOT) : normalizePhone(normalized);
+            driverUser = (emailLike ? userRepo.findByEmail(lookup) : userRepo.findByPhone(lookup))
+                    .orElseThrow(() -> CarrierFleetException.notFound(
+                            "No driver account found for that email or phone. Ask the driver to register and complete document verification first."));
+            driverUserId = driverUser.getId();
+        }
         if (driverUser.getRole() != User.Role.DRIVER) {
             throw CarrierFleetException.invalid(
-                    "User " + req.getDriverUserId() + " does not have role DRIVER");
+                    "That account is not registered with the Driver account type");
+        }
+        if (!Boolean.TRUE.equals(driverUser.getIsActive()) || !Boolean.TRUE.equals(driverUser.getVerificationStatus())) {
+            throw CarrierFleetException.invalid("This driver account must be active and approved before it can join a company fleet");
         }
 
         // Idempotent: if already an active driver in this company, return current state
-        var existing = driverRepo.findByCarrierCompanyIdAndDriverUserId(companyId, req.getDriverUserId());
+        var existing = driverRepo.findByCarrierCompanyIdAndDriverUserId(companyId, driverUserId);
         if (existing.isPresent()) {
             CarrierDriver cd = existing.get();
             if (cd.getStatus() == CarrierDriverStatus.ACTIVE) {
-                log.info("addDriver: driver {} already active in company {}", req.getDriverUserId(), companyId);
+                log.info("addDriver: driver {} already active in company {}", driverUserId, companyId);
                 return CarrierDriverResponse.from(cd, driverUser);
             }
             // Previously INACTIVE or REMOVED — reactivate
@@ -60,13 +82,13 @@ public class CarrierFleetServiceImpl implements CarrierFleetService {
             cd.setAddedBy(caller.getId());
             cd.setNotes(clean(req.getNotes()));
             cd = driverRepo.saveAndFlush(cd);
-            log.info("addDriver: reactivated driver {} in company {}", req.getDriverUserId(), companyId);
+            log.info("addDriver: reactivated driver {} in company {}", driverUserId, companyId);
             return CarrierDriverResponse.from(cd, driverUser);
         }
 
         CarrierDriver cd = CarrierDriver.builder()
                 .carrierCompanyId(companyId)
-                .driverUserId(req.getDriverUserId())
+                .driverUserId(driverUserId)
                 .status(CarrierDriverStatus.ACTIVE)
                 .availability(DriverAvailability.AVAILABLE)
                 .addedBy(caller.getId())
@@ -78,7 +100,7 @@ public class CarrierFleetServiceImpl implements CarrierFleetService {
         } catch (DataIntegrityViolationException ex) {
             throw CarrierFleetException.conflict("Driver is already associated with this company");
         }
-        log.info("addDriver: driver {} added to company {}", req.getDriverUserId(), companyId);
+        log.info("addDriver: driver {} added to company {}", driverUserId, companyId);
         return CarrierDriverResponse.from(cd, driverUser);
     }
 
@@ -469,5 +491,13 @@ public class CarrierFleetServiceImpl implements CarrierFleetService {
 
     private String clean(String s) {
         return (s == null || s.isBlank()) ? null : s.strip();
+    }
+
+    private String normalizePhone(String raw) {
+        String phone = PHONE_CLEANUP.matcher(raw).replaceAll("");
+        if (phone.matches("^0[79][0-9]{8}$")) return "+251" + phone.substring(1);
+        if (phone.matches("^251[79][0-9]{8}$")) return "+" + phone;
+        if (phone.matches("^[79][0-9]{8}$")) return "+251" + phone;
+        return phone;
     }
 }

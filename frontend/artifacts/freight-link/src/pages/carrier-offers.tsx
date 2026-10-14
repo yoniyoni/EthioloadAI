@@ -72,6 +72,21 @@ type OfferStatus =
   | "SUPERSEDED";
 
 type PricingType = "FIXED" | "NEGOTIABLE";
+interface FreightBoardItem {
+  id: number;
+  pickupLocation: string;
+  destination: string;
+  materialType: string;
+  weightTons: number;
+  budget: number;
+  priceType: PricingType;
+  status: string;
+  preferredDate?: string | null;
+  vehicleTypeNeeded?: string | null;
+}
+interface CompanyDriver { id: number; driverUserId: number; fullName: string; status: string; verificationStatus: boolean; isActive: boolean; }
+interface CompanyVehicle { id: number; plateNumber: string; truckType: string; approvalStatus: string; availabilityStatus: string; }
+interface FleetPair { id: number; carrierDriverId: number; vehicleId: number; status: string; }
 type ActorType = "SHIPPER" | "CARRIER";
 type NegotiationAction =
   | "OFFER"
@@ -99,6 +114,11 @@ interface CarrierOffer {
   carrierCompanyName: string;
   submittedById: number;
   submittedByName: string;
+  proposedDriverUserId: number | null;
+  proposedDriverName: string | null;
+  proposedVehicleId: number | null;
+  proposedVehiclePlate: string | null;
+  proposedVehicleType: string | null;
   pricingType: PricingType;
   currentAmount: number;
   status: OfferStatus;
@@ -165,6 +185,7 @@ function CarrierOfferPortal({
   const [submitAmount, setSubmitAmount] = useState("");
   const [submitNote, setSubmitNote]     = useState("");
   const [showSubmit, setShowSubmit]     = useState(false);
+  const [selectedPairId, setSelectedPairId] = useState("");
   const [counterAmt, setCounterAmt]     = useState("");
   const [counterNote, setCounterNote]   = useState("");
   const [activeOffer, setActiveOffer]   = useState<CarrierOffer | null>(null);
@@ -183,20 +204,51 @@ function CarrierOfferPortal({
   });
 
   const offers = offersPage?.content ?? [];
+  const { data: selectedFreight } = useQuery({
+    queryKey: ["freight", freightId],
+    queryFn: () => api.get<FreightBoardItem>(`/freight/${freightId}`),
+    enabled: freightId != null,
+  });
+  const fixedPrice = selectedFreight?.priceType === "FIXED";
+  const { data: pairsPage } = useQuery({
+    queryKey: ["company-assignments", companyId],
+    queryFn: () => api.get<{ content: FleetPair[] }>(`/carrier-companies/${companyId}/fleet/assignments?size=100`),
+    enabled: showSubmit,
+  });
+  const { data: driversPage } = useQuery({
+    queryKey: ["company-drivers", companyId],
+    queryFn: () => api.get<{ content: CompanyDriver[] }>(`/carrier-companies/${companyId}/fleet/drivers?status=ACTIVE&size=100`),
+    enabled: showSubmit,
+  });
+  const { data: vehiclesPage } = useQuery({
+    queryKey: ["company-vehicles", companyId],
+    queryFn: () => api.get<{ content: CompanyVehicle[] }>(`/carrier-companies/${companyId}/fleet/vehicles?size=100`),
+    enabled: showSubmit,
+  });
+  const activePairs = (pairsPage?.content ?? []).filter(pair => pair.status === "ACTIVE").flatMap(pair => {
+    const driver = driversPage?.content.find(item => item.id === pair.carrierDriverId);
+    const vehicle = vehiclesPage?.content.find(item => item.id === pair.vehicleId);
+    if (!driver || !vehicle || driver.status !== "ACTIVE" || !driver.isActive || !driver.verificationStatus || vehicle.approvalStatus !== "APPROVED") return [];
+    if (["on_trip", "maintenance", "unavailable"].includes((vehicle.availabilityStatus ?? "").toLowerCase())) return [];
+    return [{ pair, driver, vehicle }];
+  });
+  const selectedPair = activePairs.find(item => String(item.pair.id) === selectedPairId);
 
   // Submit offer mutation
   const submitMut = useMutation({
-    mutationFn: (body: { amount: number; note?: string }) =>
+    mutationFn: (body: { amount: number; driverUserId: number; vehicleId: number; note?: string }) =>
       api.post<CarrierOffer>(
         `/carrier-companies/${companyId}/freight/${freightId}/offers`,
         body
       ),
     onSuccess: () => {
-      toast({ title: "Offer submitted", description: "Awaiting shipper response." });
+      toast({ title: "Application sent", description: "The shipper can review your price, driver, and vehicle." });
       setShowSubmit(false);
       setSubmitAmount("");
       setSubmitNote("");
+      setSelectedPairId("");
       qc.invalidateQueries({ queryKey: ["carrier-offers", companyId] });
+      qc.invalidateQueries({ queryKey: ["available-freight", companyId] });
     },
     onError: (e: Error) => toast({ title: "Submit failed", description: e.message, variant: "destructive" }),
   });
@@ -247,38 +299,46 @@ function CarrierOfferPortal({
   });
 
   const { memberships } = useAuth();
-  const isCommercialRole = memberships.some(m => m.carrierCompanyId === companyId && ["CARRIER_OWNER", "DISPATCHER"].includes(m.role));
+  const isCommercialRole = memberships.some(m => m.carrierCompanyId === companyId && ["CARRIER_OWNER", "FLEET_MANAGER", "DISPATCHER"].includes(m.role));
   const myTurn = (o: CarrierOffer) => o.nextActor === "CARRIER";
 
   return (
     <div className="space-y-6">
+      {!freightId && <AvailableFreightBoard companyId={companyId} />}
       {/* Submit new offer */}
       {freightId && isCommercialRole && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <Send className="h-4 w-4" /> Submit Carrier Offer
+              <Send className="h-4 w-4" /> Apply to work
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {!showSubmit ? (
               <Button onClick={() => setShowSubmit(true)} size="sm">
-                Submit Offer on Freight #{freightId}
+                Apply for Freight #{freightId}
               </Button>
             ) : (
               <div className="space-y-3 max-w-sm">
-                <div>
-                  <Label htmlFor="sub-amount">Offer Amount (ETB)</Label>
+                {activePairs.length === 0 ? <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">No eligible pre-assigned driver and approved vehicle are available. Pair a vehicle with an active driver in the company workspace, then try again.</p> : <div>
+                  <Label htmlFor="application-pair">Pre-assigned driver and vehicle</Label>
+                  <select id="application-pair" value={selectedPairId} onChange={event => setSelectedPairId(event.target.value)} className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                    <option value="">Select a driver and vehicle</option>
+                    {activePairs.map(({ pair, driver, vehicle }) => <option key={pair.id} value={pair.id}>{driver.fullName} · {vehicle.plateNumber} ({vehicle.truckType})</option>)}
+                  </select>
+                </div>}
+                {fixedPrice ? <p className="text-sm text-muted-foreground">This load has a fixed price. Apply at {fmt(selectedFreight?.budget ?? null)}; the amount is set by the shipper.</p> : <div>
+                  <Label htmlFor="sub-amount">Your price (ETB)</Label>
                   <Input
                     id="sub-amount"
                     type="number"
                     step="0.01"
                     min="1"
-                    placeholder="e.g. 45000.00"
+                    placeholder="Enter the price you agree to work for"
                     value={submitAmount}
                     onChange={e => setSubmitAmount(e.target.value)}
                   />
-                </div>
+                </div>}
                 <div>
                   <Label htmlFor="sub-note">Note (optional)</Label>
                   <Textarea
@@ -292,16 +352,18 @@ function CarrierOfferPortal({
                 <div className="flex gap-2">
                   <Button
                     size="sm"
-                    disabled={!submitAmount || submitMut.isPending}
+                    disabled={!selectedPair || (!fixedPrice && !submitAmount) || submitMut.isPending}
                     onClick={() =>
                       submitMut.mutate({
-                        amount: parseFloat(submitAmount),
+                        amount: fixedPrice ? (selectedFreight?.budget ?? 0) : parseFloat(submitAmount),
+                        driverUserId: selectedPair!.driver.driverUserId,
+                        vehicleId: selectedPair!.vehicle.id,
                         note: submitNote || undefined,
                       })
                     }
                   >
                     {submitMut.isPending && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-                    Submit
+                    Send application
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => setShowSubmit(false)}>
                     Cancel
@@ -332,6 +394,7 @@ function CarrierOfferPortal({
                 key={offer.id}
                 offer={offer}
                 viewAs="carrier"
+                allowCarrierActions={isCommercialRole}
                 myTurn={myTurn(offer)}
                 onCounter={() => { setActiveOffer(offer); setCounterAmt(""); setCounterNote(""); setActionDialog("counter"); }}
                 onAccept={() => { setActiveOffer(offer); setActionDialog("accept"); }}
@@ -433,6 +496,21 @@ function CarrierOfferPortal({
       </Dialog>
     </div>
   );
+}
+
+function AvailableFreightBoard({ companyId }: { companyId: number }) {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["available-freight", companyId],
+    queryFn: () => api.get<{ content: FreightBoardItem[]; totalElements: number }>(
+      `/carrier-companies/${companyId}/available-freight?page=0&size=50`
+    ),
+    refetchInterval: 30_000,
+  });
+  const freight = data?.content ?? [];
+  return <section className="space-y-3" aria-labelledby="available-freight-heading">
+    <div><h2 id="available-freight-heading" className="text-lg font-semibold">Open freight</h2><p className="text-sm text-muted-foreground">Loads posted by shippers that are still accepting offers.</p></div>
+    {isLoading ? <div className="space-y-3">{[1, 2].map(i => <Skeleton key={i} className="h-28 w-full rounded-lg" />)}</div> : isError ? <p role="alert" className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive">Unable to load open freight. Refresh and try again.</p> : freight.length === 0 ? <Card><CardContent className="p-5"><p className="font-medium">No open loads right now</p><p className="mt-1 text-sm text-muted-foreground">New shipper posts will appear here automatically.</p></CardContent></Card> : <div className="space-y-3">{freight.map(item => <Card key={item.id}><CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0 space-y-1"><p className="font-semibold">{item.pickupLocation} <span aria-hidden="true" className="text-muted-foreground">→</span> {item.destination}</p><p className="text-sm text-muted-foreground">{item.materialType} · {item.weightTons} tons{item.vehicleTypeNeeded ? ` · ${item.vehicleTypeNeeded}` : ""}</p><p className="text-sm"><Badge variant="outline">{item.priceType === "NEGOTIABLE" ? "Negotiable" : "Fixed price"}</Badge><span className="ml-2 font-medium">{fmt(item.budget)}</span>{item.preferredDate && <span className="ml-2 text-muted-foreground">Pickup {item.preferredDate}</span>}</p></div><Button asChild className="shrink-0"><Link href={`/carrier-offers/company/${companyId}/freight/${item.id}`}>{item.priceType === "NEGOTIABLE" ? "Make an offer" : "Apply at fixed price"}</Link></Button></CardContent></Card>)}</div>}
+  </section>;
 }
 
 // ── Shipper view: all offers on a specific freight ────────────────────────────
@@ -612,6 +690,7 @@ interface OfferCardProps {
   offer: CarrierOffer;
   viewAs: "carrier" | "shipper";
   myTurn: boolean;
+  allowCarrierActions?: boolean;
   onCounter?: () => void;
   onAccept?: () => void;
   onReject?: () => void;
@@ -622,6 +701,7 @@ function OfferCard({
   offer,
   viewAs,
   myTurn,
+  allowCarrierActions = true,
   onCounter,
   onAccept,
   onReject,
@@ -657,6 +737,14 @@ function OfferCard({
         </div>
 
         {/* Agreed amount banner */}
+        {viewAs === "shipper" && (offer.proposedDriverName || offer.proposedVehiclePlate) && (
+          <div className="grid gap-2 rounded-lg bg-muted/50 p-3 text-sm sm:grid-cols-2">
+            <p><span className="text-muted-foreground">Assigned driver:</span> {offer.proposedDriverName ?? `Driver #${offer.proposedDriverUserId}`}</p>
+            <p><span className="text-muted-foreground">Assigned vehicle:</span> {offer.proposedVehiclePlate ?? `Vehicle #${offer.proposedVehicleId}`} {offer.proposedVehicleType ? `· ${offer.proposedVehicleType}` : ""}</p>
+          </div>
+        )}
+
+        {/* Agreed amount banner */}
         {offer.status === "ACCEPTED" && offer.agreedAmount && (
           <div className="flex items-center gap-2 rounded-md bg-emerald-50 px-3 py-2 text-emerald-800 text-sm">
             <ShieldCheck className="h-4 w-4 shrink-0" />
@@ -673,7 +761,7 @@ function OfferCard({
         )}
 
         {/* Action buttons */}
-        {isActive && myTurn && (
+        {isActive && myTurn && (viewAs === "shipper" || allowCarrierActions) && (
           <div className="flex flex-wrap gap-2 pt-1">
             {viewAs === "carrier" && (
               <>
@@ -713,7 +801,7 @@ function OfferCard({
         )}
 
         {/* Withdrawal allowed when it's not your turn too */}
-        {isActive && !myTurn && viewAs === "carrier" && (
+        {isActive && !myTurn && viewAs === "carrier" && allowCarrierActions && (
           <div className="pt-1">
             <Button size="sm" variant="ghost" className="text-muted-foreground text-xs" onClick={onWithdraw}>
               Withdraw offer

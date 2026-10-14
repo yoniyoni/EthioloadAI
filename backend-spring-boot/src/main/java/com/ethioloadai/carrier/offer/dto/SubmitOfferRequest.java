@@ -32,6 +32,17 @@ public record SubmitOfferRequest(
     @Digits(integer = 13, fraction = 2, message = "amount must have at most 13 integer digits and 2 decimal places")
     BigDecimal amount,
 
+    @NotNull(message = "Select the pre-assigned driver")
+    Long driverUserId,
+
+    @NotNull(message = "Select the pre-assigned vehicle")
+    Long vehicleId,
+
     /** Optional note from the carrier. */
     String note
-) {}
+) {
+    /** Compatibility constructor for existing internal callers; API clients must supply the pair. */
+    public SubmitOfferRequest(BigDecimal amount, String note) {
+        this(amount, null, null, note);
+    }
+}

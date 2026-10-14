@@ -18,6 +18,7 @@ public class VehicleResponse {
     private Long id;
     private Long userId;
     private Long fleetOwnerId;
+    private Long carrierCompanyId;
     private String truckType;
     private VehicleCategory vehicleCategory;
     private String plateNumber;

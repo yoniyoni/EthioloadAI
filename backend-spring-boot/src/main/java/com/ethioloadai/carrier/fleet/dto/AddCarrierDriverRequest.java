@@ -1,6 +1,5 @@
 package com.ethioloadai.carrier.fleet.dto;
 
-import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -15,9 +14,14 @@ import lombok.Setter;
 @Getter @Setter
 public class AddCarrierDriverRequest {
 
-    /** ID of the User with role=DRIVER to associate with this company. */
-    @NotNull(message = "driverUserId is required")
+    /** Existing driver account ID. Kept for mobile and older clients. */
     private Long driverUserId;
+
+    /** Existing driver's registered email; preferred by the company workspace. */
+    private String driverEmail;
+
+    /** Registered email or phone, for drivers who created phone-only accounts. */
+    private String driverIdentifier;
 
     /** Optional notes (e.g. license info, joining context). Max 1000 chars. */
     private String notes;

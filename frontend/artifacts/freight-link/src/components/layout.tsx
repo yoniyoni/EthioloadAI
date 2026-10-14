@@ -20,6 +20,7 @@ import {
   LogOut,
   Home,
   Navigation,
+  ClipboardList,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
@@ -56,13 +57,14 @@ export function Layout({ children }: { children: ReactNode }) {
     { label: 'My companies', href: '/fleet/companies', icon: Users, show: isAuthenticated && !isLoading && (memberships.length === 0 || memberships.some(m => m.role === 'CARRIER_OWNER')) },
     ...(!isLoading ? memberships.map(m => ({label: m.role === 'DISPATCHER' ? 'Dispatch workspace' : m.role === 'FLEET_MANAGER' ? 'Fleet workspace' : 'Company workspace', href: `/company/${m.carrierCompanyId}`, icon: Users, show: isAuthenticated})) : []),
     { label: 'Company reviews', href: '/admin/companies', icon: Users, show: isAuthenticated && user?.role === 'admin' },
-    { label: t('nav.freight'), href: '/freight', icon: Package, show: true },
+    { label: t('nav.freight'), href: memberships.length > 0 ? `/carrier-offers/company/${memberships[0].carrierCompanyId}` : '/freight', icon: Package, show: true },
     {
       label: 'Bids',
       href: '/bids',
       icon: Activity,
       show: isAuthenticated && user?.role === 'driver',
     },
+    { label: 'My assignments', href: '/driver/assignments', icon: ClipboardList, show: isAuthenticated && user?.role === 'driver' },
     {
       label: 'Bookings',
       href: '/bookings',

@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 public class MembershipResponse {
  private Long id;
  private Long carrierCompanyId;
+ private String companyName;
  private Long userId;
  private String fullName;
  private String email;

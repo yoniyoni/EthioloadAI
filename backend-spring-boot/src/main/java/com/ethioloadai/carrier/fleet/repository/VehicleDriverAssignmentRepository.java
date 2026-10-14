@@ -18,6 +18,9 @@ public interface VehicleDriverAssignmentRepository extends JpaRepository<Vehicle
     /** Company-scoped lookup — IDOR protection. */
     Optional<VehicleDriverAssignment> findByIdAndCarrierCompanyId(Long id, Long carrierCompanyId);
 
+    Optional<VehicleDriverAssignment> findByCarrierCompanyIdAndVehicleIdAndStatus(
+            Long carrierCompanyId, Long vehicleId, AssignmentStatus status);
+
     /** Current ACTIVE assignment for a driver. Used during assignment creation / conflict check. */
     Optional<VehicleDriverAssignment> findByCarrierDriverIdAndStatus(
             Long carrierDriverId, AssignmentStatus status);

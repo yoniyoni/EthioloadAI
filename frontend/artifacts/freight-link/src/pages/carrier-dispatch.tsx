@@ -176,7 +176,7 @@ function DispatchDialog({ freight, companyId, onSuccess }: DispatchDialogProps) 
   const { data: vehiclesPage } = useQuery({
     queryKey: ["company-vehicles", companyId],
     queryFn: () =>
-      api.get<{content: Vehicle[]}>(`/carrier-companies/${companyId}/fleet/vehicles`),
+      api.get<{content: Vehicle[]}>(`/carrier-companies/${companyId}/fleet/vehicles?size=100`),
     enabled: open,
   });
 
@@ -214,11 +214,11 @@ function DispatchDialog({ freight, companyId, onSuccess }: DispatchDialogProps) 
   const vehicles: Vehicle[] = vehiclesPage?.content ?? [];
 
   const eligibleDrivers = drivers.filter(
-    d => d.availability !== "ON_TRIP" && d.status === "ACTIVE"
+    d => d.availability !== "ON_TRIP" && d.availability !== "UNAVAILABLE" && d.status === "ACTIVE"
   );
   const eligibleVehicles = vehicles.filter(
     v => v.approvalStatus === "APPROVED" &&
-         !["on_trip", "maintenance", "unavailable"].includes(
+           !["assigned", "on_trip", "maintenance", "unavailable"].includes(
            (v.availabilityStatus ?? "").toLowerCase()
          )
   );
@@ -605,6 +605,10 @@ export default function CarrierDispatchPage() {
           })}
         </div>
       )}
+
+      <div className="border-t pt-4 text-sm text-muted-foreground">
+        Drivers respond from the mobile app’s <strong>My Assignments</strong> screen or the web <Button variant="link" size="sm" className="h-auto p-0" asChild><a href="/driver/assignments">driver assignment inbox</a></Button>. Accepted assignments create a booking; drivers start the trip from Bookings or the mobile trip screen.
+      </div>
     </div>
   );
 }

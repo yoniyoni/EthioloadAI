@@ -96,6 +96,10 @@ public class CarrierOfferException extends BaseException {
             "FIXED_PRICE_AMOUNT_MISMATCH", 422);
     }
 
+    public static CarrierOfferException invalidRequest(String message) {
+        return new CarrierOfferException(message, "INVALID_CARRIER_APPLICATION", 422);
+    }
+
     public static CarrierOfferException companyNotApproved() {
         return new CarrierOfferException(
             "Carrier company is not approved. Only APPROVED companies may submit commercial offers.",

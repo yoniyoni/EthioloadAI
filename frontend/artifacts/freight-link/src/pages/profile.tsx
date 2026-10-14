@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { auth } from "@/lib/api";
+import { api, auth } from "@/lib/api";
 import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,6 +46,13 @@ export default function Profile() {
     fleet_owner: "bg-purple-50 text-purple-700 border-purple-200",
   };
 
+  const companyMemberships = useQuery({
+    queryKey: ["profile-company-memberships"],
+    queryFn: () => api.get<{content: Array<{carrierCompanyId: number; companyName?: string; role: string; status: string; joinedAt?: string}>}>("/company-memberships/me?size=100"),
+    enabled: !!user,
+  });
+  const membershipRoles = companyMemberships.data?.content ?? [];
+
   return (
     <div className="container mx-auto max-w-2xl px-4 py-8">
       <div className="mb-6">
@@ -68,7 +75,7 @@ export default function Profile() {
                 </p>
                 <div className="flex items-center gap-2 mt-1">
                   <Badge className={`border ${ROLE_COLORS[user?.role ?? ""] ?? "bg-white/10 text-white border-white/20"}`}>
-                    {user?.role}
+                    Platform: {user?.role?.replaceAll("_", " ")}
                   </Badge>
                   {user?.isVerified && (
                     <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 gap-1">
@@ -80,6 +87,8 @@ export default function Profile() {
             </div>
           </div>
         </Card>
+
+        {membershipRoles.length > 0 && <Card className="border-border/60 rounded-xl"><CardHeader><CardTitle className="flex items-center gap-2 text-base"><Building2 className="h-4 w-4"/> Company roles</CardTitle></CardHeader><CardContent className="space-y-3">{membershipRoles.map(member => <div key={member.carrierCompanyId} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"><div><p className="font-medium">{member.companyName || `Carrier company #${member.carrierCompanyId}`}</p><p className="text-xs text-muted-foreground">Your role in this company</p></div><div className="flex items-center gap-2"><Badge variant="outline">{member.role.replaceAll("_", " ")}</Badge><Button size="sm" variant="outline" onClick={() => { window.location.href = `/company/${member.carrierCompanyId}`; }}>Open workspace</Button></div></div>)}</CardContent></Card>}
 
         {/* Edit form */}
         <Card className="border-border/60 rounded-xl">

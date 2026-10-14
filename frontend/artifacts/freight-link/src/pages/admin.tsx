@@ -102,6 +102,7 @@ interface AdminVehicleItem {
   id: number;
   userId?: number | null;
   fleetOwnerId?: number | null;
+  carrierCompanyId?: number | null;
   truckType?: string | null;
   vehicleCategory?: string | null;
   plateNumber?: string | null;
@@ -111,6 +112,7 @@ interface AdminVehicleItem {
   longitude?: number | null;
   lastLocationAt?: string | null;
   availabilityStatus?: string | null;
+  approvalStatus?: "UNDER_REVIEW" | "APPROVED" | "REJECTED" | "SUSPENDED" | string | null;
   rating?: number | null;
   createdAt?: string | null;
   updatedAt?: string | null;
@@ -475,6 +477,18 @@ export default function Admin() {
   const { data: vehiclesData, isLoading: vehiclesLoading, isError: vehiclesError } = useQuery({
     queryKey: ["admin-vehicles"],
     queryFn: () => api.get<AdminVehicleItem[]>("/vehicles"),
+  });
+
+  const reviewVehicle = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: "APPROVED" | "REJECTED" }) =>
+      api.patch(`/vehicles/${id}/approval-status`, { status }),
+    onSuccess: (_data, variables) => {
+      toast({ title: variables.status === "APPROVED" ? "Vehicle approved" : "Vehicle rejected" });
+      qc.invalidateQueries({ queryKey: ["admin-vehicles"] });
+      qc.invalidateQueries({ queryKey: ["company-vehicles"] });
+      qc.invalidateQueries({ queryKey: ["workspace-company"] });
+    },
+    onError: (err: any) => toast({ title: "Vehicle review failed", description: err.message, variant: "destructive" }),
   });
 
   const { data: adminNotifications, isLoading: notificationsLoading, isError: notificationsError } = useQuery({
@@ -1880,10 +1894,10 @@ export default function Admin() {
           <Card className="border-border/60 rounded-xl">
             <CardHeader>
               <CardTitle className="text-base">Vehicle Registry</CardTitle>
-              <p className="text-xs text-muted-foreground">Registered vehicles returned by Spring Boot. Vehicle approval is not supported by the current contract.</p>
+              <p className="text-xs text-muted-foreground">Review vehicles registered by drivers and fleet companies. Approved vehicles become available for company dispatch.</p>
             </CardHeader>
             <CardContent>
-              {vehiclesLoading ? <div className="space-y-2"><Skeleton className="h-12 w-full rounded-lg" /><Skeleton className="h-12 w-full rounded-lg" /></div> : vehiclesError ? <p role="alert" className="py-8 text-center text-sm text-destructive">Unable to load registered vehicles.</p> : (vehiclesData ?? []).length === 0 ? <div className="py-12 text-center text-muted-foreground"><Truck className="mx-auto mb-2 h-8 w-8 opacity-40" /><p>No registered vehicles found.</p></div> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="pb-3 font-medium text-muted-foreground">Vehicle</th><th className="pb-3 font-medium text-muted-foreground">Owner ID</th><th className="pb-3 font-medium text-muted-foreground">Registration</th><th className="pb-3 font-medium text-muted-foreground">Capacity</th><th className="pb-3 font-medium text-muted-foreground">Location</th><th className="pb-3 font-medium text-muted-foreground">Availability</th><th className="pb-3 font-medium text-muted-foreground">Registered</th></tr></thead><tbody className="divide-y">{(vehiclesData ?? []).map((vehicle) => <tr key={vehicle.id}><td className="py-3"><p className="font-medium">{vehicle.truckType ?? vehicle.vehicleCategory ?? "Vehicle"}</p><p className="text-xs text-muted-foreground">Vehicle #{vehicle.id}</p></td><td className="py-3 text-muted-foreground">{vehicle.userId ?? vehicle.fleetOwnerId ?? "Unavailable"}</td><td className="py-3 font-medium">{vehicle.plateNumber ?? "Unavailable"}</td><td className="py-3">{vehicle.capacity != null ? `${vehicle.capacity} t` : "Unavailable"}</td><td className="py-3">{vehicle.currentCity ?? "Unavailable"}</td><td className="py-3"><Badge variant="outline">{vehicle.availabilityStatus ?? "Unavailable"}</Badge></td><td className="py-3 text-xs text-muted-foreground">{vehicle.createdAt ? new Date(vehicle.createdAt).toLocaleDateString() : "Unavailable"}</td></tr>)}</tbody></table></div>}
+              {vehiclesLoading ? <div className="space-y-2"><Skeleton className="h-12 w-full rounded-lg" /><Skeleton className="h-12 w-full rounded-lg" /></div> : vehiclesError ? <p role="alert" className="py-8 text-center text-sm text-destructive">Unable to load registered vehicles.</p> : (vehiclesData ?? []).length === 0 ? <div className="py-12 text-center text-muted-foreground"><Truck className="mx-auto mb-2 h-8 w-8 opacity-40" /><p>No registered vehicles found.</p></div> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="pb-3 font-medium text-muted-foreground">Vehicle</th><th className="pb-3 font-medium text-muted-foreground">Company / owner</th><th className="pb-3 font-medium text-muted-foreground">Registration</th><th className="pb-3 font-medium text-muted-foreground">Capacity</th><th className="pb-3 font-medium text-muted-foreground">Location</th><th className="pb-3 font-medium text-muted-foreground">Approval</th><th className="pb-3 font-medium text-muted-foreground">Availability</th><th className="pb-3 font-medium text-muted-foreground">Registered</th><th className="pb-3 font-medium text-muted-foreground">Review</th></tr></thead><tbody className="divide-y">{(vehiclesData ?? []).map((vehicle) => { const approval = vehicle.approvalStatus ?? "UNDER_REVIEW"; const pending = approval === "UNDER_REVIEW"; return <tr key={vehicle.id}><td className="py-3"><p className="font-medium">{vehicle.truckType ?? vehicle.vehicleCategory ?? "Vehicle"}</p><p className="text-xs text-muted-foreground">Vehicle #{vehicle.id}</p></td><td className="py-3 text-muted-foreground">{vehicle.carrierCompanyId ? <><span className="block">Fleet company #{vehicle.carrierCompanyId}</span><span className="text-xs">Owner #{vehicle.fleetOwnerId ?? vehicle.userId ?? "—"}</span></> : <span>Owner #{vehicle.fleetOwnerId ?? vehicle.userId ?? "Unavailable"}</span>}</td><td className="py-3 font-medium">{vehicle.plateNumber ?? "Unavailable"}</td><td className="py-3">{vehicle.capacity != null ? `${vehicle.capacity} t` : "Unavailable"}</td><td className="py-3">{vehicle.currentCity ?? "Unavailable"}</td><td className="py-3"><Badge variant={approval === "APPROVED" ? "default" : approval === "REJECTED" ? "destructive" : "outline"}>{approval.replaceAll("_", " ")}</Badge></td><td className="py-3"><Badge variant="outline">{vehicle.availabilityStatus ?? "Unavailable"}</Badge></td><td className="py-3 text-xs text-muted-foreground">{vehicle.createdAt ? new Date(vehicle.createdAt).toLocaleDateString() : "Unavailable"}</td><td className="py-3"><div className="flex gap-2">{pending ? <><Button size="sm" className="gap-1" disabled={reviewVehicle.isPending} onClick={() => reviewVehicle.mutate({ id: vehicle.id, status: "APPROVED" })}><CheckCircle className="h-4 w-4"/>Approve</Button><Button size="sm" variant="destructive" className="gap-1" disabled={reviewVehicle.isPending} onClick={() => reviewVehicle.mutate({ id: vehicle.id, status: "REJECTED" })}><ThumbsDown className="h-4 w-4"/>Reject</Button></> : <span className="text-xs text-muted-foreground">Reviewed</span>}</div></td></tr>; })}</tbody></table></div>}
             </CardContent>
           </Card>
         </TabsContent>

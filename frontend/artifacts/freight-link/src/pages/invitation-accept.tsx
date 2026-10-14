@@ -21,6 +21,7 @@ export default function InvitationAccept() {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [joinedCompanyId, setJoinedCompanyId] = useState<number | null>(null);
   useEffect(() => {
     const capture = () => { setToken(captureInvitation()); setPreview(null); setError(""); setJoined(false); setPassword(""); };
     window.addEventListener("hashchange", capture);
@@ -45,10 +46,10 @@ export default function InvitationAccept() {
     setBusy(true);
     setError("");
     try {
-      let member: {carrierCompanyId: number};
+      let member: {carrierCompanyId: number; role?: string};
       if (signIn && preview && !preview.accountExists) {
         if (password !== confirmPassword) throw new Error("Passwords do not match.");
-        const result = await api.post<{session: {token: string; user: User}; membership: {carrierCompanyId: number}}>(
+        const result = await api.post<{session: {token: string; user: User}; membership: {carrierCompanyId: number; role?: string}}>(
           "/company-invitations/register", {token, fullName, phone, password});
         login(result.session.token, result.session.user);
         setPassword("");
@@ -66,9 +67,11 @@ export default function InvitationAccept() {
       member = await api.post<{carrierCompanyId: number}>("/company-invitations/accept", { token });
       }
       clearInvitation();
+      setJoinedCompanyId(member.carrierCompanyId);
+      if (member.role) setPreview(current => current ? { ...current, role: member.role! } : current);
       setJoined(true);
       await refreshMemberships();
-      navigate(`/company/${member.carrierCompanyId}`);
+      setPassword("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to accept invitation.");
     } finally { setBusy(false); }
@@ -79,7 +82,7 @@ export default function InvitationAccept() {
     <main className="mx-auto max-w-lg px-6 py-16 space-y-6">
       <h1 className="text-3xl font-bold">Company invitation</h1>
       {error && <p role="alert" className="text-destructive">{error}</p>}
-      {joined ? <p role="status">You have joined {preview?.companyName}. Your company role is {preview?.role.replaceAll("_", " ")}.</p> :
+      {joined ? <section role="status" className="space-y-4 rounded-xl border bg-card p-5"><h2 className="text-xl font-semibold">You joined {preview?.companyName}</h2><p>Your company role is <strong>{preview?.role.replaceAll("_", " ")}</strong>. This role is assigned to your company membership and will appear in your company workspace.</p><Button onClick={() => navigate(`/company/${joinedCompanyId}`)}>Open company workspace</Button></section> :
         preview ? <>
           <h2 className="text-xl font-semibold">Join {preview.companyName}</h2>
           <p>You are invited as {preview.role.replaceAll("_", " ")} using {preview.email}.</p>

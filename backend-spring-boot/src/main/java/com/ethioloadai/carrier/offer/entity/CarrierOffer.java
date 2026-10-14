@@ -3,6 +3,7 @@ package com.ethioloadai.carrier.offer.entity;
 import com.ethioloadai.carrier.company.entity.CarrierCompany;
 import com.ethioloadai.freight.entity.Freight;
 import com.ethioloadai.user.entity.User;
+import com.ethioloadai.vehicle.entity.Vehicle;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -63,6 +64,15 @@ public class CarrierOffer {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "submitted_by", nullable = false, updatable = false)
     private User submittedBy;
+
+    /** Driver and vehicle proposed together with the carrier's application. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "proposed_driver_user_id")
+    private User proposedDriver;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "proposed_vehicle_id")
+    private Vehicle proposedVehicle;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "pricing_type", nullable = false, length = 20, updatable = false)
