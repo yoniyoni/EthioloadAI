@@ -38,7 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <pre>
  *   CARRIER_OWNER  — full company management (team, invitations, fleet view)
  *   FLEET_MANAGER  — fleet + driver + vehicle read/write within company
- *   DISPATCHER     — read-only access to company fleet resources
+ *   DISPATCHER     — read-only fleet access; may dispatch and manage assignments
  *   ADMIN          — cross-company administrative access (separate path)
  * </pre>
  */
@@ -83,8 +83,16 @@ public class CompanySecurityService {
                 || hasActiveRole(companyId, caller.getId(), CompanyRole.CARRIER_OWNER);
     }
 
-    /** The owner, fleet manager, or dispatcher may submit or negotiate commercial offers. */
+    /** Only the owner or dispatcher may submit or negotiate commercial offers. */
     public boolean canNegotiateOffers(Long companyId, Authentication auth) {
+        User caller = extractUser(auth);
+        if (caller == null) return false;
+        return hasActiveRole(companyId, caller.getId(), CompanyRole.CARRIER_OWNER)
+                || hasActiveRole(companyId, caller.getId(), CompanyRole.DISPATCHER);
+    }
+
+    /** The owner, fleet manager, or dispatcher may dispatch or manage driver/vehicle assignments. */
+    public boolean canOperateDispatch(Long companyId, Authentication auth) {
         User caller = extractUser(auth);
         if (caller == null) return false;
         return hasActiveRole(companyId, caller.getId(), CompanyRole.CARRIER_OWNER)
@@ -92,9 +100,18 @@ public class CompanySecurityService {
                 || hasActiveRole(companyId, caller.getId(), CompanyRole.DISPATCHER);
     }
 
+    /** Driver/vehicle assignments require an approved company and an operational role. */
+    public boolean canOperateAssignments(Long companyId, Authentication auth) {
+        return canOperateDispatch(companyId, auth) && isApprovedCompany(companyId);
+    }
+
     /** Fleet writes require both a management membership and company approval. */
     public boolean canOperateFleet(Long companyId, Authentication auth) {
-        return canManageFleet(companyId, auth) && companies.findById(companyId)
+        return canManageFleet(companyId, auth) && isApprovedCompany(companyId);
+    }
+
+    private boolean isApprovedCompany(Long companyId) {
+        return companies.findById(companyId)
                 .map(company -> company.getVerificationStatus() == VerificationStatus.APPROVED)
                 .orElse(false);
     }

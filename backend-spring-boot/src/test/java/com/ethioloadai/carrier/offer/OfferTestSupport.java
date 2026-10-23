@@ -4,6 +4,11 @@ import com.ethioloadai.carrier.company.dto.CarrierCompanyRequest;
 import com.ethioloadai.carrier.company.entity.VerificationStatus;
 import com.ethioloadai.carrier.company.repository.CarrierCompanyRepository;
 import com.ethioloadai.carrier.company.service.CarrierCompanyService;
+import com.ethioloadai.carrier.fleet.dto.AddCarrierDriverRequest;
+import com.ethioloadai.carrier.fleet.dto.CreateAssignmentRequest;
+import com.ethioloadai.carrier.fleet.dto.RegisterCompanyVehicleRequest;
+import com.ethioloadai.carrier.fleet.repository.CarrierDriverRepository;
+import com.ethioloadai.carrier.fleet.service.CarrierFleetService;
 import com.ethioloadai.carrier.offer.repository.CarrierOfferRepository;
 import com.ethioloadai.carrier.offer.repository.OfferNegotiationEntryRepository;
 import com.ethioloadai.carrier.team.dto.InvitationRequest;
@@ -23,6 +28,8 @@ import com.ethioloadai.freight.service.FreightService;
 import com.ethioloadai.security.jwt.JwtService;
 import com.ethioloadai.user.entity.User;
 import com.ethioloadai.user.repository.UserRepository;
+import com.ethioloadai.vehicle.entity.Vehicle;
+import com.ethioloadai.vehicle.repository.VehicleRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
@@ -75,6 +82,9 @@ abstract class OfferTestSupport {
     @Autowired FreightService freightService;
     @Autowired CarrierCompanyRepository companies;
     @Autowired CarrierCompanyService companyService;
+    @Autowired CarrierFleetService fleetService;
+    @Autowired CarrierDriverRepository driverRepo;
+    @Autowired VehicleRepository vehicleRepo;
     @Autowired CompanyInvitationService invitations;
     @Autowired CompanyMembershipService teams;
     @Autowired CompanyMembershipRepository memberships;
@@ -93,15 +103,19 @@ abstract class OfferTestSupport {
     User shipper;
     User otherShipper;      // unrelated shipper — must not access shipper's freight
     User driver;            // plain DRIVER — must not submit company offers
+    User abcDriver;
+    User xyzDriver;
 
     User abcOwner;
     User abcDispatcher;
     User abcFleetManager;
     Long abcCompanyId;
+    Long abcVehicleId;
 
     User xyzOwner;
     User xyzDispatcher;
     Long xyzCompanyId;
+    Long xyzVehicleId;
 
     User admin;
 
@@ -129,6 +143,7 @@ abstract class OfferTestSupport {
         abcOwner       = mkUser(User.Role.SHIPPER);
         abcDispatcher  = mkUser(User.Role.SHIPPER);
         abcFleetManager = mkUser(User.Role.SHIPPER);
+        abcDriver      = mkUser(User.Role.DRIVER);
         abcCompanyId   = mkApprovedCompany(abcOwner);
         addMember(abcCompanyId, abcDispatcher,  CompanyRole.DISPATCHER,    abcOwner);
         addMember(abcCompanyId, abcFleetManager, CompanyRole.FLEET_MANAGER, abcOwner);
@@ -136,8 +151,12 @@ abstract class OfferTestSupport {
         // XYZ Transport
         xyzOwner      = mkUser(User.Role.SHIPPER);
         xyzDispatcher = mkUser(User.Role.SHIPPER);
+        xyzDriver     = mkUser(User.Role.DRIVER);
         xyzCompanyId  = mkApprovedCompany(xyzOwner);
         addMember(xyzCompanyId, xyzDispatcher, CompanyRole.DISPATCHER, xyzOwner);
+
+        abcVehicleId = addOfferPairing(abcCompanyId, abcOwner, abcDriver, "ABC");
+        xyzVehicleId = addOfferPairing(xyzCompanyId, xyzOwner, xyzDriver, "XYZ");
 
         // Freight
         negotiableFreight = mkFreight(shipper, Freight.PriceType.NEGOTIABLE, new BigDecimal("50000.00"));
@@ -179,6 +198,30 @@ abstract class OfferTestSupport {
         String link = links.get(target.getEmail().strip().toLowerCase(Locale.ROOT));
         String token = link.substring(link.indexOf("#token=") + 7);
         invitations.accept(token, target);
+    }
+
+    private Long addOfferPairing(Long companyId, User owner, User assignedDriver, String prefix) {
+        AddCarrierDriverRequest driverRequest = new AddCarrierDriverRequest();
+        driverRequest.setDriverUserId(assignedDriver.getId());
+        fleetService.addDriver(companyId, driverRequest, owner);
+        Long carrierDriverId = driverRepo.findByCarrierCompanyIdAndDriverUserId(
+                companyId, assignedDriver.getId()).orElseThrow().getId();
+
+        RegisterCompanyVehicleRequest vehicleRequest = new RegisterCompanyVehicleRequest();
+        vehicleRequest.setTruckType("Heavy Truck");
+        vehicleRequest.setPlateNumber(prefix + "-" + UUID.randomUUID().toString().substring(0, 8));
+        vehicleRequest.setCapacity(20.0);
+        vehicleRequest.setVehicleCategory("HEAVY");
+        Long vehicleId = fleetService.registerVehicle(companyId, vehicleRequest, owner).getId();
+        Vehicle vehicle = vehicleRepo.findById(vehicleId).orElseThrow();
+        vehicle.setApprovalStatus(Vehicle.VehicleApprovalStatus.APPROVED);
+        vehicleRepo.saveAndFlush(vehicle);
+
+        CreateAssignmentRequest assignmentRequest = new CreateAssignmentRequest();
+        assignmentRequest.setCarrierDriverId(carrierDriverId);
+        assignmentRequest.setVehicleId(vehicleId);
+        fleetService.assign(companyId, assignmentRequest, owner);
+        return vehicleId;
     }
 
     Freight mkFreight(User owner, Freight.PriceType priceType, BigDecimal budget) {

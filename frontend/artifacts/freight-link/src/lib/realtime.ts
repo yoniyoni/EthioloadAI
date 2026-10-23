@@ -1,4 +1,27 @@
+import { API_BASE } from "@/lib/api";
+
 type RealtimeMessage = { type?: string; data?: Record<string, unknown>; source?: string };
+
+export function buildWebSocketUrl(
+  endpoint: string,
+  apiBase: string = API_BASE,
+  origin: string = window.location.origin,
+): URL {
+  const apiUrl = new URL(apiBase, origin);
+  if (apiUrl.protocol !== "http:" && apiUrl.protocol !== "https:") {
+    throw new Error("The API base URL must use HTTP or HTTPS.");
+  }
+
+  const apiPath = apiUrl.pathname.replace(/\/+$/, "");
+  const endpointPath = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  const path =
+    apiPath && (endpointPath === apiPath || endpointPath.startsWith(`${apiPath}/`))
+      ? endpointPath
+      : `${apiPath}${endpointPath}`;
+  const url = new URL(path, apiUrl.origin);
+  url.protocol = apiUrl.protocol === "https:" ? "wss:" : "ws:";
+  return url;
+}
 
 export class SpringWebSocketClient {
   private socket: WebSocket | null = null;
@@ -27,8 +50,7 @@ export class SpringWebSocketClient {
     try { token = stored ? JSON.parse(stored).token ?? null : null; } catch { token = null; }
     if (!token) return;
 
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const url = new URL(`${protocol}//${window.location.host}/api${this.endpoint}`);
+    const url = buildWebSocketUrl(this.endpoint);
     url.searchParams.set("token", token);
     const socket = new WebSocket(url);
     this.socket = socket;

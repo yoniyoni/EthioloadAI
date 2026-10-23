@@ -11,6 +11,7 @@ import com.ethioloadai.carrier.dispatch.entity.DispatchStatus;
 import com.ethioloadai.carrier.dispatch.repository.DispatchAssignmentRepository;
 import com.ethioloadai.carrier.dispatch.service.DispatchService;
 import com.ethioloadai.carrier.fleet.dto.AddCarrierDriverRequest;
+import com.ethioloadai.carrier.fleet.dto.CreateAssignmentRequest;
 import com.ethioloadai.carrier.fleet.dto.RegisterCompanyVehicleRequest;
 import com.ethioloadai.carrier.fleet.entity.CarrierDriverStatus;
 import com.ethioloadai.carrier.fleet.entity.DriverAvailability;
@@ -225,6 +226,8 @@ class Phase7DeliveryIntegrationTest {
         // Vehicles
         abcVehicle1Id = mkApprovedVehicle(abcCompanyId, 20.0, abcOwner);
         xyzVehicleId  = mkApprovedVehicle(xyzCompanyId, 15.0, xyzOwner);
+        assignDriverToVehicle(abcCompanyId, abcDriverA, abcVehicle1Id, abcOwner);
+        assignDriverToVehicle(xyzCompanyId, xyzDriver, xyzVehicleId, xyzOwner);
 
         // Freight + awarded offer
         agreedPrice    = new BigDecimal("45000.00");
@@ -1468,7 +1471,7 @@ class Phase7DeliveryIntegrationTest {
      */
     void awardAndDispatchAndAccept(Freight freight, BigDecimal price) {
         // Submit offer from ABC
-        var offerReq = new SubmitOfferRequest(price, null);
+        var offerReq = new SubmitOfferRequest(price, abcDriverA.getId(), abcVehicle1Id, null);
         var offer = offerService.submitOffer(freight.getId(), abcCompanyId, abcOwner, offerReq);
 
         // Shipper accepts
@@ -1523,6 +1526,15 @@ class Phase7DeliveryIntegrationTest {
         var req = new AddCarrierDriverRequest();
         req.setDriverUserId(driverUserId);
         fleetService.addDriver(companyId, req, owner);
+    }
+
+    void assignDriverToVehicle(Long companyId, User driver, Long vehicleId, User owner) {
+        Long carrierDriverId = carrierDriverRepo.findByCarrierCompanyIdAndDriverUserId(
+                companyId, driver.getId()).orElseThrow().getId();
+        CreateAssignmentRequest request = new CreateAssignmentRequest();
+        request.setCarrierDriverId(carrierDriverId);
+        request.setVehicleId(vehicleId);
+        fleetService.assign(companyId, request, owner);
     }
 
     Long mkApprovedVehicle(Long companyId, double capacity, User owner) {

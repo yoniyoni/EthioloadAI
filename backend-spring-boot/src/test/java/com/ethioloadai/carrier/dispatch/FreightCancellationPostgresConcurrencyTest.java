@@ -135,7 +135,8 @@ class FreightCancellationPostgresConcurrencyTest extends DispatchTestSupport {
                     return null;
                 },
                 () -> offerService.submitOffer(freight.getId(), abcCompanyId, abcOwner,
-                        new SubmitOfferRequest(new BigDecimal("42000.00"), "concurrent offer")));
+                        new SubmitOfferRequest(new BigDecimal("42000.00"), abcDriverA.getId(),
+                                abcVehicle1Id, "concurrent offer")));
 
         Freight result = freightRepo.findById(freight.getId()).orElseThrow();
         boolean actionableOffer = carrierOfferRepository.existsByFreight_IdAndStatusIn(
@@ -182,7 +183,8 @@ class FreightCancellationPostgresConcurrencyTest extends DispatchTestSupport {
         Freight freight = mkFreight(shipper, Freight.PriceType.NEGOTIABLE,
                 new BigDecimal("50000.00"));
         var offer = offerService.submitOffer(freight.getId(), abcCompanyId, abcOwner,
-                new SubmitOfferRequest(new BigDecimal("42000.00"), "acceptance race"));
+                new SubmitOfferRequest(new BigDecimal("42000.00"), abcDriverA.getId(),
+                        abcVehicle1Id, "acceptance race"));
         offerService.shipperCounter(freight.getId(), offer.id(), shipper,
                 new CounterOfferRequest(new BigDecimal("43000.00"), "counter"));
 

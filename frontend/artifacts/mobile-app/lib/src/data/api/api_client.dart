@@ -1,5 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform, kReleaseMode;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform, kReleaseMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:logger/logger.dart';
@@ -10,26 +13,41 @@ import 'package:logger/logger.dart';
 const String _kApiBaseUrlOverride = String.fromEnvironment('API_BASE_URL');
 
 String get kBaseUrl {
-  return resolveApiBaseUrl(override: _kApiBaseUrlOverride, web: kIsWeb,
-    platform: defaultTargetPlatform, release: kReleaseMode, origin: Uri.base);
+  return resolveApiBaseUrl(
+      override: _kApiBaseUrlOverride,
+      web: kIsWeb,
+      platform: defaultTargetPlatform,
+      release: kReleaseMode,
+      origin: Uri.base);
 }
 
-String resolveApiBaseUrl({required String override, required bool web,
-  required TargetPlatform platform, required bool release, required Uri origin}) {
+String resolveApiBaseUrl(
+    {required String override,
+    required bool web,
+    required TargetPlatform platform,
+    required bool release,
+    required Uri origin}) {
   if (override.isNotEmpty) {
     final uri = Uri.parse(override);
-    if (!['http', 'https'].contains(uri.scheme) || uri.host.isEmpty || uri.hasQuery || uri.hasFragment || uri.userInfo.isNotEmpty) {
-      throw ArgumentError('API_BASE_URL must be an HTTP(S) URL including the API context path.');
+    if (!['http', 'https'].contains(uri.scheme) ||
+        uri.host.isEmpty ||
+        uri.hasQuery ||
+        uri.hasFragment ||
+        uri.userInfo.isNotEmpty) {
+      throw ArgumentError(
+          'API_BASE_URL must be an HTTP(S) URL including the API context path.');
     }
     return override.replaceFirst(RegExp(r'/+$'), '');
   }
   if (web) return origin.resolve('/api').toString();
-  if (release) throw StateError('Configure API_BASE_URL for a native release build.');
-  return platform == TargetPlatform.android ? 'http://10.0.2.2:8080/api' : 'http://127.0.0.1:8080/api';
+  if (release)
+    throw StateError('Configure API_BASE_URL for a native release build.');
+  return platform == TargetPlatform.android
+      ? 'http://10.0.2.2:8080/api'
+      : 'http://127.0.0.1:8080/api';
 }
 
-String get kWebSocketBaseUrl =>
-    kBaseUrl.replaceFirst(RegExp(r'^http'), 'ws');
+String get kWebSocketBaseUrl => kBaseUrl.replaceFirst(RegExp(r'^http'), 'ws');
 
 class ApiInterceptor extends Interceptor {
   final Logger logger;
@@ -71,7 +89,8 @@ class ApiInterceptor extends Interceptor {
     DioException err,
     ErrorInterceptorHandler handler,
   ) async {
-    logger.e('✗ ${err.response?.statusCode} ${err.requestOptions.path}: ${err.message}');
+    logger.e(
+        '✗ ${err.response?.statusCode} ${err.requestOptions.path}: ${err.message}');
     handler.next(err);
   }
 }
@@ -89,7 +108,8 @@ final dioProvider = Provider<Dio>((ref) {
 
   const secureStorage = FlutterSecureStorage();
   final logger = Logger();
-  dio.interceptors.add(ApiInterceptor(logger: logger, secureStorage: secureStorage));
+  dio.interceptors
+      .add(ApiInterceptor(logger: logger, secureStorage: secureStorage));
 
   // Dispose the Dio instance when the provider is disposed
   ref.onDispose(() => dio.close());
@@ -163,16 +183,47 @@ class ApiClient {
     T Function(dynamic)? fromJson,
   }) async {
     try {
-      final response = await dio.get(endpoint, queryParameters: queryParameters);
+      final response =
+          await dio.get(endpoint, queryParameters: queryParameters);
       if (response.statusCode == 200) {
         final data = _unwrap(response.data);
         return fromJson != null ? fromJson(data) : data as T;
       }
       await _clearExpiredSession(response);
-      throw ApiException(message: _extractError(response), statusCode: response.statusCode);
+      throw ApiException(
+          message: _extractError(response), statusCode: response.statusCode);
     } on DioException catch (e) {
       if (e.response?.statusCode == 401) await deleteToken();
-      throw ApiException(message: e.response == null ? 'Unable to connect. Please try again.' : _extractError(e.response), statusCode: e.response?.statusCode);
+      throw ApiException(
+          message: e.response == null
+              ? 'Unable to connect. Please try again.'
+              : _extractError(e.response),
+          statusCode: e.response?.statusCode);
+    }
+  }
+
+  Future<Uint8List> getBytes(String endpoint) async {
+    try {
+      final response = await dio.get<List<int>>(
+        endpoint,
+        options: Options(responseType: ResponseType.bytes),
+      );
+      if (response.statusCode == 200 && response.data != null) {
+        return Uint8List.fromList(response.data!);
+      }
+      await _clearExpiredSession(response);
+      throw ApiException(
+        message: _extractError(response),
+        statusCode: response.statusCode,
+      );
+    } on DioException catch (error) {
+      await _clearExpiredSession(error.response);
+      throw ApiException(
+        message: error.response == null
+            ? 'Unable to connect. Please try again.'
+            : _extractError(error.response),
+        statusCode: error.response?.statusCode,
+      );
     }
   }
 
@@ -188,10 +239,15 @@ class ApiClient {
         return fromJson != null ? fromJson(body) : body as T;
       }
       await _clearExpiredSession(response);
-      throw ApiException(message: _extractError(response), statusCode: response.statusCode);
+      throw ApiException(
+          message: _extractError(response), statusCode: response.statusCode);
     } on DioException catch (e) {
       if (e.response?.statusCode == 401) await deleteToken();
-      throw ApiException(message: e.response == null ? 'Unable to connect. Please try again.' : _extractError(e.response), statusCode: e.response?.statusCode);
+      throw ApiException(
+          message: e.response == null
+              ? 'Unable to connect. Please try again.'
+              : _extractError(e.response),
+          statusCode: e.response?.statusCode);
     }
   }
 
@@ -207,10 +263,15 @@ class ApiClient {
         return fromJson != null ? fromJson(body) : body as T;
       }
       await _clearExpiredSession(response);
-      throw ApiException(message: _extractError(response), statusCode: response.statusCode);
+      throw ApiException(
+          message: _extractError(response), statusCode: response.statusCode);
     } on DioException catch (e) {
       if (e.response?.statusCode == 401) await deleteToken();
-      throw ApiException(message: e.response == null ? 'Unable to connect. Please try again.' : _extractError(e.response), statusCode: e.response?.statusCode);
+      throw ApiException(
+          message: e.response == null
+              ? 'Unable to connect. Please try again.'
+              : _extractError(e.response),
+          statusCode: e.response?.statusCode);
     }
   }
 
@@ -221,11 +282,14 @@ class ApiClient {
         return Map<String, dynamic>.from(_unwrap(response.data) as Map);
       }
       await _clearExpiredSession(response);
-      throw ApiException(message: _extractError(response), statusCode: response.statusCode);
+      throw ApiException(
+          message: _extractError(response), statusCode: response.statusCode);
     } on DioException catch (e) {
       await _clearExpiredSession(e.response);
       throw ApiException(
-        message: e.response == null ? 'Unable to connect. Please try again.' : _extractError(e.response),
+        message: e.response == null
+            ? 'Unable to connect. Please try again.'
+            : _extractError(e.response),
         statusCode: e.response?.statusCode,
       );
     }
@@ -243,10 +307,15 @@ class ApiClient {
         return fromJson != null ? fromJson(body) : body as T;
       }
       await _clearExpiredSession(response);
-      throw ApiException(message: _extractError(response), statusCode: response.statusCode);
+      throw ApiException(
+          message: _extractError(response), statusCode: response.statusCode);
     } on DioException catch (e) {
       if (e.response?.statusCode == 401) await deleteToken();
-      throw ApiException(message: e.response == null ? 'Unable to connect. Please try again.' : _extractError(e.response), statusCode: e.response?.statusCode);
+      throw ApiException(
+          message: e.response == null
+              ? 'Unable to connect. Please try again.'
+              : _extractError(e.response),
+          statusCode: e.response?.statusCode);
     }
   }
 
@@ -255,11 +324,16 @@ class ApiClient {
       final response = await dio.delete(endpoint);
       if (response.statusCode != 200 && response.statusCode != 204) {
         await _clearExpiredSession(response);
-        throw ApiException(message: _extractError(response), statusCode: response.statusCode);
+        throw ApiException(
+            message: _extractError(response), statusCode: response.statusCode);
       }
     } on DioException catch (e) {
       if (e.response?.statusCode == 401) await deleteToken();
-      throw ApiException(message: e.response == null ? 'Unable to connect. Please try again.' : _extractError(e.response), statusCode: e.response?.statusCode);
+      throw ApiException(
+          message: e.response == null
+              ? 'Unable to connect. Please try again.'
+              : _extractError(e.response),
+          statusCode: e.response?.statusCode);
     }
   }
 }

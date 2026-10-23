@@ -15,6 +15,7 @@ import com.ethioloadai.carrier.fleet.entity.CarrierDriverStatus;
 import com.ethioloadai.carrier.fleet.entity.DriverAvailability;
 import com.ethioloadai.carrier.fleet.repository.CarrierDriverRepository;
 import com.ethioloadai.carrier.offer.entity.CarrierOffer;
+import com.ethioloadai.carrier.offer.entity.CarrierAssignmentStatus;
 import com.ethioloadai.carrier.offer.entity.CarrierOffer.OfferStatus;
 import com.ethioloadai.carrier.offer.repository.CarrierOfferRepository;
 import com.ethioloadai.carrier.team.entity.CompanyRole;
@@ -102,10 +103,6 @@ public class DispatchServiceImpl implements DispatchService {
         // 2. Load and validate freight
         Freight freight = freightRepo.findByIdForUpdate(freightId)
                 .orElseThrow(() -> DispatchException.freightNotDispatchable(freightId, "freight not found"));
-        if (freight.getStatus() != Freight.FreightStatus.POSTED) {
-            throw DispatchException.freightNotDispatchable(freightId,
-                    "freight must remain POSTED before dispatch creation");
-        }
         validateFreightDispatchable(freight);
 
         // 3. Validate winning carrier award
@@ -132,7 +129,18 @@ public class DispatchServiceImpl implements DispatchService {
         // 6. Check no active dispatch already exists (pessimistic lock prevents race)
         Optional<DispatchAssignment> existingActive = dispatchRepo.findActiveByFreightIdForUpdate(freightId);
         if (existingActive.isPresent()) {
+            DispatchAssignment existing = existingActive.get();
+            if (existing.getCarrierOfferId().equals(awardOfferId)
+                    && existing.getCarrierCompanyId().equals(companyId)
+                    && existing.getDriverUserId().equals(request.getDriverUserId())
+                    && existing.getVehicleId().equals(request.getVehicleId())) {
+                return DispatchAssignmentResponse.from(existing);
+            }
             throw DispatchException.activeDispatchExists(freightId);
+        }
+        if (freight.getStatus() != Freight.FreightStatus.POSTED) {
+            throw DispatchException.freightNotDispatchable(freightId,
+                    "freight must remain POSTED before dispatch creation");
         }
 
         // 7. Validate driver eligibility (cross-company check included)
@@ -173,6 +181,8 @@ public class DispatchServiceImpl implements DispatchService {
             // Unique partial index fired — concurrent dispatch created simultaneously
             throw DispatchException.activeDispatchExists(freightId);
         }
+        award.setAssignmentStatus(CarrierAssignmentStatus.DISPATCH_PENDING);
+        offerRepo.save(award);
 
         // 12. Mark driver ASSIGNED (system-managed availability)
         if (carrierDriver.getAvailability() == DriverAvailability.AVAILABLE) {
@@ -224,6 +234,8 @@ public class DispatchServiceImpl implements DispatchService {
         dispatch.setStatus(DispatchStatus.CANCELLED);
         dispatch.setCancelledAt(LocalDateTime.now());
         dispatch = dispatchRepo.save(dispatch);
+        updateAwardAssignmentStatus(dispatch.getCarrierOfferId(),
+                CarrierAssignmentStatus.PENDING_ASSIGNMENT);
 
         // Release driver and vehicle
         releaseDriverAndVehicle(dispatch);
@@ -354,6 +366,8 @@ public class DispatchServiceImpl implements DispatchService {
         if (existingBooking.isPresent()) {
             dispatch.setStatus(DispatchStatus.DRIVER_ACCEPTED);
             dispatch.setBookingId(existingBooking.get().getId());
+            updateAwardAssignmentStatus(dispatch.getCarrierOfferId(),
+                    CarrierAssignmentStatus.BOOKING_CREATED);
             log.info("acceptAssignment: idempotent — booking {} already exists", existingBooking.get().getId());
             return DispatchAssignmentResponse.from(dispatch);
         }
@@ -412,6 +426,8 @@ public class DispatchServiceImpl implements DispatchService {
                 dispatch.setBookingId(raceBooking.get().getId());
                 dispatch.setRespondedAt(LocalDateTime.now());
                 dispatchRepo.save(dispatch);
+                updateAwardAssignmentStatus(dispatch.getCarrierOfferId(),
+                        CarrierAssignmentStatus.BOOKING_CREATED);
                 return DispatchAssignmentResponse.from(dispatch);
             }
             throw DispatchException.concurrentConflict();
@@ -427,6 +443,8 @@ public class DispatchServiceImpl implements DispatchService {
         dispatch.setRespondedAt(LocalDateTime.now());
         dispatch.setBookingId(booking.getId());
         dispatchRepo.save(dispatch);
+        updateAwardAssignmentStatus(dispatch.getCarrierOfferId(),
+                CarrierAssignmentStatus.BOOKING_CREATED);
 
         // Driver availability → ON_TRIP (actively committed)
         carrierDriver.setAvailability(DriverAvailability.ON_TRIP);
@@ -479,6 +497,8 @@ public class DispatchServiceImpl implements DispatchService {
             dispatch.setRejectionReason(reason.isEmpty() ? null : reason);
         }
         dispatch = dispatchRepo.save(dispatch);
+        updateAwardAssignmentStatus(dispatch.getCarrierOfferId(),
+                CarrierAssignmentStatus.PENDING_ASSIGNMENT);
 
         // Release driver and vehicle — carrier can redispatch
         releaseDriverAndVehicle(dispatch);
@@ -510,6 +530,14 @@ public class DispatchServiceImpl implements DispatchService {
                     "Dispatch requires CARRIER_OWNER, FLEET_MANAGER, or DISPATCHER role",
                     "DISPATCH_ROLE_REQUIRED", 403);
         }
+    }
+
+    private void updateAwardAssignmentStatus(Long offerId, CarrierAssignmentStatus status) {
+        CarrierOffer award = offerRepo.findById(offerId)
+                .filter(offer -> offer.getStatus() == OfferStatus.ACCEPTED)
+                .orElseThrow(() -> DispatchException.noAward(offerId));
+        award.setAssignmentStatus(status);
+        offerRepo.save(award);
     }
 
     /** Validate the freight is in a state where dispatch is allowed. */

@@ -1,6 +1,7 @@
 package com.ethioloadai.carrier.offer.dto;
 
 import com.ethioloadai.carrier.offer.entity.CarrierOffer;
+import com.ethioloadai.carrier.offer.entity.CarrierAssignmentStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -31,6 +32,7 @@ public record CarrierOfferResponse(
     CarrierOffer.PricingType pricingType,
     BigDecimal currentAmount,
     CarrierOffer.OfferStatus status,
+    CarrierAssignmentStatus assignmentStatus,
     CarrierOffer.ActorType nextActor,
     BigDecimal agreedAmount,
     LocalDateTime acceptedAt,
@@ -65,6 +67,7 @@ public record CarrierOfferResponse(
             o.getPricingType(),
             o.getCurrentAmount(),
             o.getStatus(),
+            o.getAssignmentStatus(),
             o.getNextActor(),
             o.getAgreedAmount(),
             o.getAcceptedAt(),
@@ -90,6 +93,7 @@ public record CarrierOfferResponse(
             o.getPricingType(),
             o.getCurrentAmount(),
             o.getStatus(),
+            o.getAssignmentStatus(),
             o.getNextActor(),
             o.getAgreedAmount(),
             o.getAcceptedAt(),

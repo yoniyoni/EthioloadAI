@@ -32,7 +32,7 @@ import java.util.List;
  * <ul>
  *   <li>Read fleet data — any active company member (CARRIER_OWNER, FLEET_MANAGER, DISPATCHER)</li>
  *   <li>Write fleet data — CARRIER_OWNER or FLEET_MANAGER ({@code canManageFleet})</li>
- *   <li>Assignments — CARRIER_OWNER or FLEET_MANAGER</li>
+ *   <li>Driver/vehicle assignments — CARRIER_OWNER, FLEET_MANAGER, or DISPATCHER</li>
  * </ul>
  *
  * <p>The {@code carrierCompanyId} is always taken from the URL path.
@@ -210,7 +210,7 @@ public class CarrierFleetController {
     // ══════════════════════════════════════════════════════════════════════════
 
     @PostMapping("/assignments")
-    @PreAuthorize("@companySecurity.canOperateFleet(#companyId, authentication)")
+    @PreAuthorize("@companySecurity.canOperateAssignments(#companyId, authentication)")
     @Operation(summary = "Assign a driver to a vehicle. Ends any prior active assignment for the driver/vehicle.")
     public ResponseEntity<AssignmentResponse> assign(
             @PathVariable Long companyId,
@@ -242,7 +242,7 @@ public class CarrierFleetController {
     }
 
     @PostMapping("/assignments/{assignmentId}/end")
-    @PreAuthorize("@companySecurity.canOperateFleet(#companyId, authentication)")
+    @PreAuthorize("@companySecurity.canOperateAssignments(#companyId, authentication)")
     @Operation(summary = "End an active assignment and return driver/vehicle to AVAILABLE")
     public ResponseEntity<AssignmentResponse> endAssignment(
             @PathVariable Long companyId,

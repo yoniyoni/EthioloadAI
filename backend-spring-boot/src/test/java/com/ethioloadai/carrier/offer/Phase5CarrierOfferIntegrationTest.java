@@ -80,7 +80,8 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.00"))))
+                .content(body(Map.of("amount", "45000.00",
+                        "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("PENDING"))
                 .andExpect(jsonPath("$.currentAmount").value(45000.00))
@@ -95,7 +96,8 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcDispatcher))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "44000.00"))))
+                .content(body(Map.of("amount", "44000.00",
+                        "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("PENDING"));
     }
@@ -106,7 +108,8 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcFleetManager))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "44000.00"))))
+                .content(body(Map.of("amount", "44000.00",
+                        "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().is4xxClientError());
     }
 
@@ -117,7 +120,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(driver))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "44000.00"))))
+                .content(body(Map.of("amount", "44000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().is4xxClientError());
     }
 
@@ -126,7 +129,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
     void unauthenticatedDenied() throws Exception {
         mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "44000.00"))))
+                .content(body(Map.of("amount", "44000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -137,14 +140,14 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.00"))))
+                .content(body(Map.of("amount", "45000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().isCreated());
 
         // Second offer from same company on same freight — must fail
         mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "43000.00"))))
+                .content(body(Map.of("amount", "43000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().isConflict());
     }
 
@@ -160,7 +163,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.00"))))
+                .content(body(Map.of("amount", "45000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().isConflict());
     }
 
@@ -174,7 +177,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "0"))))
+                .content(body(Map.of("amount", "0", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().is4xxClientError());
     }
 
@@ -184,7 +187,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "-1000"))))
+                .content(body(Map.of("amount", "-1000", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().is4xxClientError());
     }
 
@@ -194,7 +197,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.123"))))
+                .content(body(Map.of("amount", "45000.123", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().is4xxClientError());
     }
 
@@ -204,7 +207,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.50"))))
+                .content(body(Map.of("amount", "45000.50", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.currentAmount").value(45000.50));
     }
@@ -220,7 +223,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         mvc.perform(post(offerUrl(abcCompanyId, fixedFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.00"))))
+                .content(body(Map.of("amount", "45000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.currentAmount").value(50000.00))
                 .andExpect(jsonPath("$.pricingType").value("FIXED"));
@@ -233,7 +236,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         String createResp = mvc.perform(post(offerUrl(abcCompanyId, fixedFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "50000.00"))))
+                .content(body(Map.of("amount", "50000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
 
@@ -269,7 +272,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         String createResp = mvc.perform(post(offerUrl(abcCompanyId, fixedFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "50000.00"))))
+                .content(body(Map.of("amount", "50000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
 
@@ -294,7 +297,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         String s1 = mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.00"))))
+                .content(body(Map.of("amount", "45000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         Long offerId = json.readTree(s1).get("id").asLong();
@@ -355,7 +358,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         String s1 = mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.00"))))
+                .content(body(Map.of("amount", "45000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         Long offerId = json.readTree(s1).get("id").asLong();
@@ -383,7 +386,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         String response = mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.00"))))
+                .content(body(Map.of("amount", "45000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         Long offerId = json.readTree(response).get("id").asLong();
@@ -423,7 +426,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         String s1 = mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.00"))))
+                .content(body(Map.of("amount", "45000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         Long offerId = json.readTree(s1).get("id").asLong();
@@ -452,7 +455,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         String s1 = mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.00"))))
+                .content(body(Map.of("amount", "45000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         Long offerId = json.readTree(s1).get("id").asLong();
@@ -477,7 +480,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         String s1 = mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.00"))))
+                .content(body(Map.of("amount", "45000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         Long abcOfferId = json.readTree(s1).get("id").asLong();
@@ -486,7 +489,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         String s2 = mvc.perform(post(offerUrl(xyzCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(xyzOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "46000.00"))))
+                .content(body(Map.of("amount", "46000.00", "driverUserId", xyzDriver.getId(), "vehicleId", xyzVehicleId))))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         Long xyzOfferId = json.readTree(s2).get("id").asLong();
@@ -523,7 +526,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         String s1 = mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.00"))))
+                .content(body(Map.of("amount", "45000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andReturn().getResponse().getContentAsString();
         Long abcOfferId = json.readTree(s1).get("id").asLong();
 
@@ -531,7 +534,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         String s2 = mvc.perform(post(offerUrl(xyzCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(xyzOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "46000.00"))))
+                .content(body(Map.of("amount", "46000.00", "driverUserId", xyzDriver.getId(), "vehicleId", xyzVehicleId))))
                 .andReturn().getResponse().getContentAsString();
         Long xyzOfferId = json.readTree(s2).get("id").asLong();
         em.flush(); em.clear();
@@ -559,7 +562,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         String s1 = mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.00"))))
+                .content(body(Map.of("amount", "45000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         Long abcOfferId = json.readTree(s1).get("id").asLong();
@@ -586,7 +589,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         String s1 = mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.00"))))
+                .content(body(Map.of("amount", "45000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         Long abcOfferId = json.readTree(s1).get("id").asLong();
@@ -605,7 +608,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         mvc.perform(post(offerUrl(xyzCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.00"))))
+                .content(body(Map.of("amount", "45000.00", "driverUserId", xyzDriver.getId(), "vehicleId", xyzVehicleId))))
                 .andExpect(status().is4xxClientError());
     }
 
@@ -619,7 +622,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         String s1 = mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.00"))))
+                .content(body(Map.of("amount", "45000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         Long offerId = json.readTree(s1).get("id").asLong();
@@ -637,7 +640,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         String s1 = mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.00"))))
+                .content(body(Map.of("amount", "45000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         Long offerId = json.readTree(s1).get("id").asLong();
@@ -656,7 +659,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         String s1 = mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.00"))))
+                .content(body(Map.of("amount", "45000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         Long offerId = json.readTree(s1).get("id").asLong();
@@ -678,7 +681,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         String s1 = mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.00"))))
+                .content(body(Map.of("amount", "45000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andReturn().getResponse().getContentAsString();
         Long offerId = json.readTree(s1).get("id").asLong();
         em.flush(); em.clear();
@@ -702,7 +705,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         String s1 = mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.00"))))
+                .content(body(Map.of("amount", "45000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andReturn().getResponse().getContentAsString();
         Long offerId = json.readTree(s1).get("id").asLong();
         em.flush(); em.clear();
@@ -726,7 +729,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         String s1 = mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.00"))))
+                .content(body(Map.of("amount", "45000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andReturn().getResponse().getContentAsString();
         Long offerId = json.readTree(s1).get("id").asLong();
         em.flush(); em.clear();
@@ -755,7 +758,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         String s1 = mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.00"))))
+                .content(body(Map.of("amount", "45000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andReturn().getResponse().getContentAsString();
         Long offerId = json.readTree(s1).get("id").asLong();
         em.flush(); em.clear();
@@ -814,7 +817,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         String s1 = mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.00"))))
+                .content(body(Map.of("amount", "45000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andReturn().getResponse().getContentAsString();
         Long offerId = json.readTree(s1).get("id").asLong();
         em.flush(); em.clear();
@@ -836,7 +839,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         String s1 = mvc.perform(post(offerUrl(abcCompanyId, fixedFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "50000.00"))))
+                .content(body(Map.of("amount", "50000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andReturn().getResponse().getContentAsString();
         Long offerId = json.readTree(s1).get("id").asLong();
         em.flush(); em.clear();
@@ -928,14 +931,14 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.00"))))
+                .content(body(Map.of("amount", "45000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().isCreated());
 
         // XYZ submits
         mvc.perform(post(offerUrl(xyzCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(xyzOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "46000.00"))))
+                .content(body(Map.of("amount", "46000.00", "driverUserId", xyzDriver.getId(), "vehicleId", xyzVehicleId))))
                 .andExpect(status().isCreated());
         em.flush(); em.clear();
 
@@ -951,7 +954,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.00"))))
+                .content(body(Map.of("amount", "45000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andExpect(status().isCreated());
         em.flush(); em.clear();
 
@@ -972,7 +975,7 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         String s1 = mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
                 .header("Authorization", auth(abcOwner))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body(Map.of("amount", "45000.00"))))
+                .content(body(Map.of("amount", "45000.00", "driverUserId", abcDriver.getId(), "vehicleId", abcVehicleId))))
                 .andReturn().getResponse().getContentAsString();
         Long offerId = json.readTree(s1).get("id").asLong();
         em.flush(); em.clear();

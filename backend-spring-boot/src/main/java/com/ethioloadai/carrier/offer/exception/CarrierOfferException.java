@@ -48,6 +48,12 @@ public class CarrierOfferException extends BaseException {
             "DRIVER_COMMERCIAL_FORBIDDEN", 403);
     }
 
+    public static CarrierOfferException commercialRoleRequired() {
+        return new CarrierOfferException(
+            "Commercial carrier offers require the CARRIER_OWNER or DISPATCHER role.",
+            "COMMERCIAL_ROLE_REQUIRED", 403);
+    }
+
     public static CarrierOfferException notYourTurn(com.ethioloadai.carrier.offer.entity.CarrierOffer.ActorType expected) {
         return new CarrierOfferException(
             "It is the " + expected.name() + "'s turn to respond",

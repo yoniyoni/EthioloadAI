@@ -3,6 +3,12 @@ package com.ethioloadai.carrier.offer;
 import com.ethioloadai.carrier.company.entity.CarrierCompany;
 import com.ethioloadai.carrier.company.entity.VerificationStatus;
 import com.ethioloadai.carrier.company.repository.CarrierCompanyRepository;
+import com.ethioloadai.carrier.fleet.entity.AssignmentStatus;
+import com.ethioloadai.carrier.fleet.entity.CarrierDriver;
+import com.ethioloadai.carrier.fleet.entity.CarrierDriverStatus;
+import com.ethioloadai.carrier.fleet.entity.VehicleDriverAssignment;
+import com.ethioloadai.carrier.fleet.repository.CarrierDriverRepository;
+import com.ethioloadai.carrier.fleet.repository.VehicleDriverAssignmentRepository;
 import com.ethioloadai.carrier.offer.dto.CarrierOfferResponse;
 import com.ethioloadai.carrier.offer.dto.CounterOfferRequest;
 import com.ethioloadai.carrier.offer.dto.SubmitOfferRequest;
@@ -24,6 +30,9 @@ import com.ethioloadai.freight.entity.Freight;
 import com.ethioloadai.freight.repository.FreightRepository;
 import com.ethioloadai.notification.service.NotificationStoreService;
 import com.ethioloadai.user.entity.User;
+import com.ethioloadai.user.repository.UserRepository;
+import com.ethioloadai.vehicle.entity.Vehicle;
+import com.ethioloadai.vehicle.repository.VehicleRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -62,6 +71,10 @@ class CarrierOfferServiceTest {
     @Mock CompanyMembershipRepository membershipRepo;
     @Mock CompanyContextService companyContextService;
     @Mock NotificationStoreService notificationService;
+    @Mock VehicleDriverAssignmentRepository pairingRepo;
+    @Mock CarrierDriverRepository carrierDriverRepo;
+    @Mock VehicleRepository vehicleRepo;
+    @Mock UserRepository userRepo;
 
     @InjectMocks CarrierOfferServiceImpl service;
 
@@ -92,6 +105,35 @@ class CarrierOfferServiceTest {
 
         negotiableFreight = freight(100L, Freight.PriceType.NEGOTIABLE, new BigDecimal("50000"), shipper);
         fixedFreight      = freight(101L, Freight.PriceType.FIXED,      new BigDecimal("50000"), shipper);
+
+        Vehicle vehicle = Vehicle.builder()
+                .id(200L)
+                .carrierCompanyId(10L)
+                .truckType("Heavy")
+                .plateNumber("TEST-200")
+                .capacity(20.0)
+                .approvalStatus(Vehicle.VehicleApprovalStatus.APPROVED)
+                .build();
+        CarrierDriver carrierDriver = CarrierDriver.builder()
+                .id(300L)
+                .carrierCompanyId(10L)
+                .driverUserId(driver.getId())
+                .status(CarrierDriverStatus.ACTIVE)
+                .build();
+        VehicleDriverAssignment pairing = VehicleDriverAssignment.builder()
+                .id(400L)
+                .carrierCompanyId(10L)
+                .carrierDriverId(300L)
+                .vehicleId(200L)
+                .status(AssignmentStatus.ACTIVE)
+                .build();
+        when(pairingRepo.findByCarrierCompanyIdAndVehicleIdAndStatus(
+                10L, 200L, AssignmentStatus.ACTIVE)).thenReturn(Optional.of(pairing));
+        when(carrierDriverRepo.findByIdAndCarrierCompanyId(300L, 10L))
+                .thenReturn(Optional.of(carrierDriver));
+        when(userRepo.findById(driver.getId())).thenReturn(Optional.of(driver));
+        when(vehicleRepo.findByIdAndCarrierCompanyId(200L, 10L)).thenReturn(Optional.of(vehicle));
+
         when(freightRepo.findByIdForUpdate(100L)).thenReturn(Optional.of(negotiableFreight));
         when(freightRepo.findByIdForUpdate(101L)).thenReturn(Optional.of(fixedFreight));
     }
@@ -116,7 +158,7 @@ class CarrierOfferServiceTest {
             when(historyRepo.findByCarrierOfferIdOrderByCreatedAtAsc(1L)).thenReturn(List.of());
 
             CarrierOfferResponse resp = service.submitOffer(100L, 10L, abcOwner,
-                    new SubmitOfferRequest(new BigDecimal("45000"), null));
+                    offerRequest(new BigDecimal("45000"), null));
 
             assertThat(resp.status()).isEqualTo(OfferStatus.PENDING);
             assertThat(resp.currentAmount()).isEqualByComparingTo("45000");
@@ -136,7 +178,7 @@ class CarrierOfferServiceTest {
             when(historyRepo.findByCarrierOfferIdOrderByCreatedAtAsc(2L)).thenReturn(List.of());
 
             CarrierOfferResponse resp = service.submitOffer(100L, 10L, abcDispatcher,
-                    new SubmitOfferRequest(new BigDecimal("44000"), null));
+                    offerRequest(new BigDecimal("44000"), null));
 
             assertThat(resp.status()).isEqualTo(OfferStatus.PENDING);
         }
@@ -146,10 +188,16 @@ class CarrierOfferServiceTest {
             stubCompanyContext(fleetManager, abcCompany, CompanyRole.FLEET_MANAGER);
             stubFreight(negotiableFreight);
             stubNoActiveOffer(100L, 10L);
+            CarrierOffer saved = savedOffer(1L, abcCompany, negotiableFreight,
+                    CarrierOffer.PricingType.NEGOTIABLE, new BigDecimal("45000"), OfferStatus.PENDING);
+            when(offerRepo.save(any())).thenReturn(saved);
+            when(offerRepo.findByIdEager(1L)).thenReturn(Optional.of(saved));
+            when(historyRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+            when(historyRepo.findByCarrierOfferIdOrderByCreatedAtAsc(1L)).thenReturn(List.of());
 
             assertThatThrownBy(() ->
                     service.submitOffer(100L, 10L, fleetManager,
-                            new SubmitOfferRequest(new BigDecimal("45000"), null)))
+                            offerRequest(new BigDecimal("45000"), null)))
                     .isInstanceOf(CarrierOfferException.class)
                     .hasMessageContaining("CARRIER_OWNER or DISPATCHER");
         }
@@ -162,7 +210,7 @@ class CarrierOfferServiceTest {
 
             assertThatThrownBy(() ->
                     service.submitOffer(100L, 10L, driver,
-                            new SubmitOfferRequest(new BigDecimal("45000"), null)))
+                            offerRequest(new BigDecimal("45000"), null)))
                     .isInstanceOf(CarrierOfferException.class);
         }
 
@@ -180,7 +228,7 @@ class CarrierOfferServiceTest {
 
             // Client sends 45000, but freight budget is 50000 — must be overridden
             CarrierOfferResponse resp = service.submitOffer(101L, 10L, abcOwner,
-                    new SubmitOfferRequest(new BigDecimal("45000"), null));
+                    offerRequest(new BigDecimal("45000"), null));
 
             // Amount captured in the saved offer = 50000 (freight budget)
             assertThat(resp.currentAmount()).isEqualByComparingTo("50000");
@@ -194,7 +242,7 @@ class CarrierOfferServiceTest {
 
             assertThatThrownBy(() ->
                     service.submitOffer(100L, 10L, abcOwner,
-                            new SubmitOfferRequest(new BigDecimal("45000"), null)))
+                            offerRequest(new BigDecimal("45000"), null)))
                     .isInstanceOf(CarrierOfferException.class)
                     .hasMessageContaining("already has an active offer");
         }
@@ -209,7 +257,7 @@ class CarrierOfferServiceTest {
 
             assertThatThrownBy(() ->
                     service.submitOffer(100L, 10L, abcOwner,
-                            new SubmitOfferRequest(new BigDecimal("45000"), null)))
+                            offerRequest(new BigDecimal("45000"), null)))
                     .isInstanceOf(CarrierOfferException.class)
                     .hasMessageContaining("not open");
         }
@@ -222,7 +270,7 @@ class CarrierOfferServiceTest {
 
             assertThatThrownBy(() ->
                     service.submitOffer(100L, 10L, abcOwner,
-                            new SubmitOfferRequest(BigDecimal.ZERO, null)))
+                            offerRequest(BigDecimal.ZERO, null)))
                     .isInstanceOf(Exception.class);
         }
 
@@ -234,7 +282,7 @@ class CarrierOfferServiceTest {
 
             assertThatThrownBy(() ->
                     service.submitOffer(100L, 10L, abcOwner,
-                            new SubmitOfferRequest(new BigDecimal("-100"), null)))
+                            offerRequest(new BigDecimal("-100"), null)))
                     .isInstanceOf(Exception.class);
         }
 
@@ -247,7 +295,7 @@ class CarrierOfferServiceTest {
 
             assertThatThrownBy(() ->
                     service.submitOffer(100L, 10L, abcOwner,
-                            new SubmitOfferRequest(new BigDecimal("45000"), null)))
+                            offerRequest(new BigDecimal("45000"), null)))
                     .isInstanceOf(CarrierOfferException.class)
                     .hasMessageContaining("not approved");
         }
@@ -405,8 +453,44 @@ class CarrierOfferServiceTest {
 
             assertThat(resp.status()).isEqualTo(OfferStatus.ACCEPTED);
             assertThat(resp.agreedAmount()).isEqualByComparingTo("45000");
+            assertThat(resp.assignmentStatus()).isEqualTo(
+                    com.ethioloadai.carrier.offer.entity.CarrierAssignmentStatus.PENDING_ASSIGNMENT);
             assertThat(resp.acceptedAt()).isNotNull();
             assertThat(resp.nextActor()).isNull();
+        }
+
+        @Test @DisplayName("Acceptance persists the award when the proposed pairing is stale")
+        void staleProposedPairingDoesNotBlockAward() {
+            CarrierOffer offer = pendingOffer(1L, abcCompany, negotiableFreight,
+                    new BigDecimal("45000"), ActorType.SHIPPER);
+            offer.setProposedDriver(driver);
+            offer.setProposedVehicle(Vehicle.builder()
+                    .id(200L)
+                    .carrierCompanyId(10L)
+                    .truckType("Heavy")
+                    .plateNumber("STALE-200")
+                    .capacity(20.0)
+                    .approvalStatus(Vehicle.VehicleApprovalStatus.UNDER_REVIEW)
+                    .build());
+            Freight freshFreight = freight(100L, Freight.PriceType.NEGOTIABLE,
+                    new BigDecimal("50000"), shipper);
+
+            when(offerRepo.findByIdWithLock(1L)).thenReturn(Optional.of(offer));
+            when(freightRepo.findById(100L)).thenReturn(Optional.of(freshFreight));
+            when(offerRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+            when(freightRepo.recordCarrierAward(100L, 1L)).thenReturn(1);
+            when(offerRepo.supersedCompetingOffers(100L, 1L)).thenReturn(0);
+            when(historyRepo.save(any())).thenAnswer(i -> i.getArgument(0));
+            when(offerRepo.findByIdEager(1L)).thenReturn(Optional.of(offer));
+            when(historyRepo.findByCarrierOfferIdOrderByCreatedAtAsc(1L)).thenReturn(List.of());
+
+            CarrierOfferResponse response = service.shipperAccept(100L, 1L, shipper);
+
+            assertThat(response.status()).isEqualTo(OfferStatus.ACCEPTED);
+            assertThat(response.agreedAmount()).isEqualByComparingTo("45000");
+            assertThat(response.assignmentStatus()).isEqualTo(
+                    com.ethioloadai.carrier.offer.entity.CarrierAssignmentStatus.PENDING_ASSIGNMENT);
+            verify(freightRepo).recordCarrierAward(100L, 1L);
         }
 
         @Test @DisplayName("Accepted amount equals current negotiated amount")
@@ -428,6 +512,26 @@ class CarrierOfferServiceTest {
             CarrierOfferResponse resp = service.shipperAccept(100L, 1L, shipper);
 
             assertThat(resp.agreedAmount()).isEqualByComparingTo("47000");
+        }
+
+        @Test @DisplayName("Retrying acceptance returns the same award without creating another")
+        void repeatedAcceptanceIsIdempotent() {
+            CarrierOffer offer = acceptedOffer(1L, abcCompany, negotiableFreight, new BigDecimal("45000"));
+            offer.setAssignmentStatus(com.ethioloadai.carrier.offer.entity.CarrierAssignmentStatus.PENDING_ASSIGNMENT);
+            negotiableFreight.setCarrierAwardOfferId(1L);
+            when(freightRepo.findByIdForUpdate(100L)).thenReturn(Optional.of(negotiableFreight));
+            when(offerRepo.findByIdWithLock(1L)).thenReturn(Optional.of(offer));
+            when(offerRepo.findByIdEager(1L)).thenReturn(Optional.of(offer));
+            when(historyRepo.findByCarrierOfferIdOrderByCreatedAtAsc(1L)).thenReturn(List.of());
+
+            CarrierOfferResponse response = service.shipperAccept(100L, 1L, shipper);
+
+            assertThat(response.status()).isEqualTo(OfferStatus.ACCEPTED);
+            assertThat(response.agreedAmount()).isEqualByComparingTo("45000");
+            assertThat(response.assignmentStatus()).isEqualTo(
+                    com.ethioloadai.carrier.offer.entity.CarrierAssignmentStatus.PENDING_ASSIGNMENT);
+            verify(freightRepo, never()).recordCarrierAward(anyLong(), anyLong());
+            verify(offerRepo, never()).supersedCompetingOffers(anyLong(), anyLong());
         }
 
         @Test @DisplayName("Fixed-price acceptance succeeds at budget price")
@@ -693,7 +797,7 @@ class CarrierOfferServiceTest {
 
             assertThatNoException().isThrownBy(() ->
                     service.submitOffer(100L, 10L, abcOwner,
-                            new SubmitOfferRequest(new BigDecimal("45000.50"), null)));
+                            offerRequest(new BigDecimal("45000.50"), null)));
         }
 
         @Test @DisplayName("Amount with more than 2dp rejected")
@@ -704,7 +808,7 @@ class CarrierOfferServiceTest {
 
             assertThatThrownBy(() ->
                     service.submitOffer(100L, 10L, abcOwner,
-                            new SubmitOfferRequest(new BigDecimal("45000.123"), null)))
+                            offerRequest(new BigDecimal("45000.123"), null)))
                     .isInstanceOf(Exception.class);
         }
     }
@@ -853,5 +957,9 @@ class CarrierOfferServiceTest {
 
     private void stubNoActiveOffer(Long freightId, Long companyId) {
         when(offerRepo.existsActiveOfferForCompanyAndFreight(freightId, companyId)).thenReturn(false);
+    }
+
+    private SubmitOfferRequest offerRequest(BigDecimal amount, String note) {
+        return new SubmitOfferRequest(amount, driver.getId(), 200L, note);
     }
 }

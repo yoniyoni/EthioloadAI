@@ -79,7 +79,7 @@ public class DispatchController {
      * The company ID is taken from the URL (never from the request body).
      */
     @PostMapping("/carrier-companies/{companyId}/freight/{freightId}/dispatch")
-    @PreAuthorize("@companySecurity.isMemberOf(#companyId, authentication)")
+    @PreAuthorize("@companySecurity.canOperateDispatch(#companyId, authentication)")
     @Operation(summary = "Dispatch a driver and vehicle to an awarded freight")
     public ResponseEntity<DispatchAssignmentResponse> createDispatch(
             @PathVariable Long companyId,
@@ -126,7 +126,7 @@ public class DispatchController {
      * Only allowed when the assignment is in ASSIGNED status.
      */
     @PostMapping("/carrier-companies/{companyId}/dispatches/{dispatchId}/cancel")
-    @PreAuthorize("@companySecurity.isMemberOf(#companyId, authentication)")
+    @PreAuthorize("@companySecurity.canOperateDispatch(#companyId, authentication)")
     @Operation(summary = "Cancel a pending dispatch assignment (carrier operator only)")
     public ResponseEntity<DispatchAssignmentResponse> cancelDispatch(
             @PathVariable Long companyId,

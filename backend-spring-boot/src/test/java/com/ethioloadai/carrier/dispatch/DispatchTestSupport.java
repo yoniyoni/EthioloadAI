@@ -6,6 +6,7 @@ import com.ethioloadai.carrier.company.repository.CarrierCompanyRepository;
 import com.ethioloadai.carrier.company.service.CarrierCompanyService;
 import com.ethioloadai.carrier.dispatch.repository.DispatchAssignmentRepository;
 import com.ethioloadai.carrier.fleet.dto.AddCarrierDriverRequest;
+import com.ethioloadai.carrier.fleet.dto.CreateAssignmentRequest;
 import com.ethioloadai.carrier.fleet.dto.RegisterCompanyVehicleRequest;
 import com.ethioloadai.carrier.fleet.repository.CarrierDriverRepository;
 import com.ethioloadai.carrier.fleet.service.CarrierFleetService;
@@ -171,6 +172,7 @@ abstract class DispatchTestSupport {
         v.setApprovalStatus(Vehicle.VehicleApprovalStatus.APPROVED);
         vehicleRepo.saveAndFlush(v);
         abcVehicle1Id = rawVehicleId;
+        assignDriverToVehicle(abcCompanyId, abcOwner, abcDriverA, abcVehicle1Id);
 
         // ── XYZ Transport ──────────────────────────────────────────────────────
         xyzOwner      = mkUser(User.Role.SHIPPER);
@@ -192,6 +194,7 @@ abstract class DispatchTestSupport {
         xyzV.setApprovalStatus(Vehicle.VehicleApprovalStatus.APPROVED);
         vehicleRepo.saveAndFlush(xyzV);
         xyzVehicleId = xyzRawId;
+        assignDriverToVehicle(xyzCompanyId, xyzOwner, xyzDriver, xyzVehicleId);
 
         // ── Create awarded freight ─────────────────────────────────────────────
         awardedFreight = mkFreight(shipper, Freight.PriceType.NEGOTIABLE, new BigDecimal("50000.00"));
@@ -262,13 +265,22 @@ abstract class DispatchTestSupport {
      */
     Long createAndAwardOffer(User companyActor, Long companyId, Freight freight,
                               BigDecimal amount, User freightOwner) {
-        var req = new SubmitOfferRequest(amount, null);
+        var req = new SubmitOfferRequest(amount, abcDriverA.getId(), abcVehicle1Id, null);
         var offer = offerService.submitOffer(freight.getId(), companyId, companyActor, req);
         // Shipper accepts immediately
         offerService.shipperAccept(freight.getId(), offer.id(), freightOwner);
         // Reload freight to confirm award
         freightRepo.flush();
         return offer.id();
+    }
+
+    private void assignDriverToVehicle(Long companyId, User owner, User driver, Long vehicleId) {
+        Long carrierDriverId = driverRepo.findByCarrierCompanyIdAndDriverUserId(
+                companyId, driver.getId()).orElseThrow().getId();
+        CreateAssignmentRequest request = new CreateAssignmentRequest();
+        request.setCarrierDriverId(carrierDriverId);
+        request.setVehicleId(vehicleId);
+        fleetService.assign(companyId, request, owner);
     }
 
     // ── Auth + URL helpers ─────────────────────────────────────────────────────

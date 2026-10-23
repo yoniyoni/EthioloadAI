@@ -8,6 +8,7 @@ import com.ethioloadai.carrier.offer.dto.CounterOfferRequest;
 import com.ethioloadai.carrier.offer.dto.NegotiationEntryResponse;
 import com.ethioloadai.carrier.offer.dto.SubmitOfferRequest;
 import com.ethioloadai.carrier.offer.entity.CarrierOffer;
+import com.ethioloadai.carrier.offer.entity.CarrierAssignmentStatus;
 import com.ethioloadai.carrier.offer.entity.CarrierOffer.ActorType;
 import com.ethioloadai.carrier.offer.entity.CarrierOffer.OfferStatus;
 import com.ethioloadai.carrier.offer.entity.CarrierOffer.PricingType;
@@ -16,8 +17,6 @@ import com.ethioloadai.carrier.offer.entity.OfferNegotiationEntry.NegotiationAct
 import com.ethioloadai.carrier.offer.exception.CarrierOfferException;
 import com.ethioloadai.carrier.offer.repository.CarrierOfferRepository;
 import com.ethioloadai.carrier.offer.repository.OfferNegotiationEntryRepository;
-import com.ethioloadai.carrier.dispatch.dto.CreateDispatchRequest;
-import com.ethioloadai.carrier.dispatch.service.DispatchService;
 import com.ethioloadai.carrier.fleet.entity.AssignmentStatus;
 import com.ethioloadai.carrier.fleet.entity.CarrierDriverStatus;
 import com.ethioloadai.carrier.fleet.repository.CarrierDriverRepository;
@@ -88,7 +87,6 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
     private final VehicleDriverAssignmentRepository pairingRepo;
     private final CarrierDriverRepository carrierDriverRepo;
     private final VehicleRepository vehicleRepo;
-    private final DispatchService dispatchService;
     private final UserRepository userRepo;
 
     // ════════════════════════════════════════════════════════════════════════════
@@ -228,7 +226,6 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
                 .orElseThrow(() -> CarrierOfferException.offerNotFound(offerId));
         Freight freight = freightRepo.findByIdForUpdate(freightId)
                 .orElseThrow(() -> CarrierOfferException.freightNotFound(freightId));
-        requireFreightOpen(freight);
 
         CarrierOffer offer = offerRepo.findByIdWithLock(offerId)
                 .orElseThrow(() -> CarrierOfferException.offerNotFound(offerId));
@@ -237,6 +234,10 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
                 || !offer.getCarrierCompany().getId().equals(companyId)) {
             throw CarrierOfferException.forbidden();
         }
+        if (isRecordedAward(freight, offer)) {
+            return CarrierOfferResponse.from(loadWithHistory(offerId));
+        }
+        requireFreightOpen(freight);
         // Carrier can only accept when it's their turn (shipper counter was last)
         requireActiveOffer(offer, "accept");
         if (offer.getStatus() != OfferStatus.NEGOTIATING) {
@@ -327,14 +328,14 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
         Freight freight = freightRepo.findByIdForUpdate(freightId)
                 .orElseThrow(() -> CarrierOfferException.freightNotFound(freightId));
         authorizeShipperAccess(freight, shipper);
-        requireFreightOpen(freight);
 
-        // Check freight not already awarded — use a count query to bypass JPA cache
-        boolean alreadyAwarded = freight.getCarrierAwardOfferId() != null
-                || freightRepo.findById(freightId)
-                        .map(f -> f.getCarrierAwardOfferId() != null)
-                        .orElse(false);
-        if (alreadyAwarded) {
+        Long recordedAwardId = freight.getCarrierAwardOfferId();
+        if (recordedAwardId == null) {
+            recordedAwardId = freightRepo.findById(freightId)
+                    .map(Freight::getCarrierAwardOfferId)
+                    .orElse(null);
+        }
+        if (recordedAwardId != null && !recordedAwardId.equals(offerId)) {
             throw CarrierOfferException.freightAlreadyAwarded(freightId);
         }
 
@@ -344,6 +345,13 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
         if (!offer.getFreight().getId().equals(freightId)) {
             throw CarrierOfferException.forbidden();
         }
+        if (isRecordedAward(freight, offer)) {
+            return CarrierOfferResponse.from(loadWithHistory(offerId));
+        }
+        if (recordedAwardId != null) {
+            throw CarrierOfferException.freightAlreadyAwarded(freightId);
+        }
+        requireFreightOpen(freight);
         requireActiveOffer(offer, "accept");
         requireActorTurn(offer, ActorType.SHIPPER);
 
@@ -510,6 +518,7 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
             offer.setStatus(OfferStatus.ACCEPTED);
             offer.setAcceptedAt(LocalDateTime.now());
             offer.setAgreedAmount(agreedAmount);
+            offer.setAssignmentStatus(CarrierAssignmentStatus.PENDING_ASSIGNMENT);
             offer.setNextActor(null);
             offerRepo.save(offer);
 
@@ -550,17 +559,6 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
                     submittedByUserId, offer.getId(), e.getMessage());
         }
 
-        // The shipper accepts this application together with its proposed pairing;
-        // notify that driver immediately through the established dispatch inbox.
-        if (offer.getProposedDriver() != null && offer.getProposedVehicle() != null) {
-            CreateDispatchRequest dispatchRequest = new CreateDispatchRequest();
-            dispatchRequest.setDriverUserId(offer.getProposedDriver().getId());
-            dispatchRequest.setVehicleId(offer.getProposedVehicle().getId());
-            dispatchRequest.setNotes("Pre-assigned vehicle and driver from the accepted carrier application");
-            dispatchService.createDispatch(freightId, offer.getCarrierCompany().getId(), dispatchRequest,
-                    offer.getSubmittedBy());
-        }
-
         log.info("Offer ACCEPTED: offerId={} freight={} company={} agreedAmount={}",
                 offer.getId(), freightId, companyName, agreedAmount);
 
@@ -596,6 +594,12 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
         return offer;
     }
 
+    private boolean isRecordedAward(Freight freight, CarrierOffer offer) {
+        return offer.getStatus() == OfferStatus.ACCEPTED
+                && offer.getAgreedAmount() != null
+                && offer.getId().equals(freight.getCarrierAwardOfferId());
+    }
+
     /**
      * Require the caller to have a commercial company role.
      * Drivers and legacy fleet-owner accounts are denied.
@@ -605,9 +609,8 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
             throw CarrierOfferException.driverCannotSubmitCompanyOffer();
         }
         CompanyRole role = ctx.role();
-        if (role != CompanyRole.CARRIER_OWNER && role != CompanyRole.FLEET_MANAGER
-                && role != CompanyRole.DISPATCHER) {
-            throw CarrierOfferException.driverCannotSubmitCompanyOffer();
+        if (role != CompanyRole.CARRIER_OWNER && role != CompanyRole.DISPATCHER) {
+            throw CarrierOfferException.commercialRoleRequired();
         }
     }
 

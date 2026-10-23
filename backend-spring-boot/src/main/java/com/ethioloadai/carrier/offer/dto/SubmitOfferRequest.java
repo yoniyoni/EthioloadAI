@@ -41,8 +41,4 @@ public record SubmitOfferRequest(
     /** Optional note from the carrier. */
     String note
 ) {
-    /** Compatibility constructor for existing internal callers; API clients must supply the pair. */
-    public SubmitOfferRequest(BigDecimal amount, String note) {
-        this(amount, null, null, note);
-    }
 }

@@ -18,6 +18,7 @@ import '../../features/dispatch/my_assignments_screen.dart';
 import '../../features/driver/driver_bids_screen.dart';
 import '../../features/driver/active_trip_screen.dart';
 import '../../features/delivery/active_trip_screen.dart' as delivery;
+import '../../features/delivery/shipper_proof_review_screen.dart';
 // Fleet owner
 import '../../features/fleet/fleet_dashboard_screen.dart';
 import '../../features/fleet/company_registration_screen.dart';
@@ -42,8 +43,7 @@ class _RouterNotifier extends ChangeNotifier {
 
   _RouterNotifier(this._ref) {
     _ref.listen<AuthState>(authNotifierProvider, (previous, next) {
-      final authChanged =
-          previous?.isAuthenticated != next.isAuthenticated ||
+      final authChanged = previous?.isAuthenticated != next.isAuthenticated ||
           previous?.user?.role != next.user?.role ||
           previous?.user?.verificationStatus != next.user?.verificationStatus;
       if (authChanged) {
@@ -126,11 +126,31 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(path: '/driver/trips/:tripId/active', builder: (_, state) => delivery.ActiveTripScreen(tripId: int.parse(state.pathParameters['tripId']!))),
-      GoRoute(path: '/driver/assignments', builder: (_, __) => const MyAssignmentsScreen()),
-      GoRoute(path: '/driver/assignments/:id', builder: (_, state) => AssignmentDetailScreen(dispatchId: int.parse(state.pathParameters['id']!))),
-      GoRoute(path: '/fleet/companies', builder: (_, __) => const CompanyRegistrationScreen()),
-      GoRoute(path: '/fleet/companies/:id', builder: (_, state) => CompanyRegistrationScreen(key: ValueKey(state.pathParameters['id']), companyId: state.pathParameters['id'])),
+      GoRoute(
+        path: '/shipper/deliveries/:tripId/proof',
+        builder: (_, state) => ShipperProofReviewScreen(
+          tripId: int.parse(state.pathParameters['tripId']!),
+        ),
+      ),
+      GoRoute(
+          path: '/driver/trips/:tripId/active',
+          builder: (_, state) => delivery.ActiveTripScreen(
+              tripId: int.parse(state.pathParameters['tripId']!))),
+      GoRoute(
+          path: '/driver/assignments',
+          builder: (_, __) => const MyAssignmentsScreen()),
+      GoRoute(
+          path: '/driver/assignments/:id',
+          builder: (_, state) => AssignmentDetailScreen(
+              dispatchId: int.parse(state.pathParameters['id']!))),
+      GoRoute(
+          path: '/fleet/companies',
+          builder: (_, __) => const CompanyRegistrationScreen()),
+      GoRoute(
+          path: '/fleet/companies/:id',
+          builder: (_, state) => CompanyRegistrationScreen(
+              key: ValueKey(state.pathParameters['id']),
+              companyId: state.pathParameters['id'])),
       // ── Public ────────────────────────────────────────────────────
       GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
       GoRoute(path: '/landing', builder: (_, __) => const LandingScreen()),
@@ -144,8 +164,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/freight',
-        builder: (_, __) =>
-            _wrap(const FreightListScreen(), isDriver: false),
+        builder: (_, __) => _wrap(const FreightListScreen(), isDriver: false),
         routes: [
           GoRoute(
             path: ':id',
@@ -171,18 +190,34 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/tracking/:freightId',
         builder: (_, state) {
           final id = int.parse(state.pathParameters['freightId']!);
-          final tripId = int.tryParse(state.uri.queryParameters['tripId'] ?? '');
+          final tripId =
+              int.tryParse(state.uri.queryParameters['tripId'] ?? '');
           return TrackingScreen(
             freightId: id,
             tripId: tripId != null && tripId > 0 ? tripId : null,
           );
         },
       ),
-      GoRoute(path: '/notifications', builder: (_, __) => _wrap(const NotificationsScreen(), isDriver: notifier.role == 'driver', role: notifier.role)),
-      GoRoute(path: '/history', builder: (_, __) => _wrap(const HistoryScreen(), isDriver: notifier.role == 'driver', role: notifier.role)),
-      GoRoute(path: '/messages/:freightId', builder: (_, state) => MessagesScreen(freightId: int.parse(state.pathParameters['freightId']!))),
-      GoRoute(path: '/contract/:freightId', builder: (_, state) => ContractScreen(freightId: int.parse(state.pathParameters['freightId']!))),
-      GoRoute(path: '/dispute/:freightId', builder: (_, state) => DisputeScreen(freightId: int.parse(state.pathParameters['freightId']!))),
+      GoRoute(
+          path: '/notifications',
+          builder: (_, __) => _wrap(const NotificationsScreen(),
+              isDriver: notifier.role == 'driver', role: notifier.role)),
+      GoRoute(
+          path: '/history',
+          builder: (_, __) => _wrap(const HistoryScreen(),
+              isDriver: notifier.role == 'driver', role: notifier.role)),
+      GoRoute(
+          path: '/messages/:freightId',
+          builder: (_, state) => MessagesScreen(
+              freightId: int.parse(state.pathParameters['freightId']!))),
+      GoRoute(
+          path: '/contract/:freightId',
+          builder: (_, state) => ContractScreen(
+              freightId: int.parse(state.pathParameters['freightId']!))),
+      GoRoute(
+          path: '/dispute/:freightId',
+          builder: (_, state) => DisputeScreen(
+              freightId: int.parse(state.pathParameters['freightId']!))),
 
       // ── Driver ─────────────────────────────────────────────────────
       GoRoute(
@@ -192,8 +227,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/driver/bids',
-        builder: (_, __) =>
-            _wrap(const DriverBidsScreen(), isDriver: true),
+        builder: (_, __) => _wrap(const DriverBidsScreen(), isDriver: true),
       ),
       GoRoute(
         path: '/driver/active-trip/:tripId',
@@ -205,21 +239,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/navigate',
         builder: (_, state) {
-          final q       = state.uri.queryParameters;
+          final q = state.uri.queryParameters;
           final destLat = double.tryParse(q['dest_lat'] ?? '');
           final destLng = double.tryParse(q['dest_lng'] ?? '');
           final destName = q['dest_name'] ?? '';
-          final origLat  = double.tryParse(q['orig_lat'] ?? '');
-          final origLng  = double.tryParse(q['orig_lng'] ?? '');
+          final origLat = double.tryParse(q['orig_lat'] ?? '');
+          final origLng = double.tryParse(q['orig_lng'] ?? '');
           if (destLat == null || destLng == null) {
             return const Scaffold(
               body: Center(child: Text('Destination not available')),
             );
           }
           return NavigationScreen(
-            destLat:   destLat,
-            destLng:   destLng,
-            destName:  destName,
+            destLat: destLat,
+            destLng: destLng,
+            destName: destName,
             originLat: origLat,
             originLng: origLng,
           );
@@ -228,13 +262,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/nearby-trucks',
         builder: (_, state) {
-          final q    = state.uri.queryParameters;
-          final lat  = double.tryParse(q['lat'] ?? '');
-          final lng  = double.tryParse(q['lng'] ?? '');
+          final q = state.uri.queryParameters;
+          final lat = double.tryParse(q['lat'] ?? '');
+          final lng = double.tryParse(q['lng'] ?? '');
           final name = q['name'];
           return NearbyTrucksScreen(
-            centerLat:    lat,
-            centerLng:    lng,
+            centerLat: lat,
+            centerLng: lng,
             locationName: name,
           );
         },
@@ -327,12 +361,21 @@ Widget _wrap(Widget child, {bool isDriver = false, String role = ''}) {
   if (role == 'fleet_owner') {
     return _NavScaffold(
       tabs: const [
-        _Tab(icon: Icons.dashboard,      labelKey: 'nav.fleet',    path: '/fleet'),
-        _Tab(icon: Icons.people,         labelKey: 'nav.drivers',  path: '/fleet/drivers'),
-        _Tab(icon: Icons.local_shipping, labelKey: 'nav.vehicles', path: '/fleet/vehicles'),
-        _Tab(icon: Icons.notifications,  labelKey: 'nav.notifications', path: '/notifications'),
-        _Tab(icon: Icons.history,        labelKey: 'nav.history', path: '/history'),
-        _Tab(icon: Icons.person,         labelKey: 'nav.profile',  path: '/profile'),
+        _Tab(icon: Icons.dashboard, labelKey: 'nav.fleet', path: '/fleet'),
+        _Tab(
+            icon: Icons.people,
+            labelKey: 'nav.drivers',
+            path: '/fleet/drivers'),
+        _Tab(
+            icon: Icons.local_shipping,
+            labelKey: 'nav.vehicles',
+            path: '/fleet/vehicles'),
+        _Tab(
+            icon: Icons.notifications,
+            labelKey: 'nav.notifications',
+            path: '/notifications'),
+        _Tab(icon: Icons.history, labelKey: 'nav.history', path: '/history'),
+        _Tab(icon: Icons.person, labelKey: 'nav.profile', path: '/profile'),
       ],
       child: child,
     );
@@ -341,13 +384,22 @@ Widget _wrap(Widget child, {bool isDriver = false, String role = ''}) {
   if (isDriver) {
     return _NavScaffold(
       tabs: const [
-        _Tab(icon: Icons.dashboard,       labelKey: 'nav.jobs',     path: '/driver'),
-        _Tab(icon: Icons.receipt_long,    labelKey: 'nav.bookings', path: '/my-bookings'),
-        _Tab(icon: Icons.folder_outlined, labelKey: 'nav.docs',     path: '/driver-documents'),
-        _Tab(icon: Icons.notifications,   labelKey: 'nav.notifications', path: '/notifications'),
-        _Tab(icon: Icons.history,         labelKey: 'nav.history', path: '/history'),
-        _Tab(icon: Icons.psychology,      labelKey: 'nav.ai',       path: '/ai-tools'),
-        _Tab(icon: Icons.person,          labelKey: 'nav.profile',  path: '/profile'),
+        _Tab(icon: Icons.dashboard, labelKey: 'nav.jobs', path: '/driver'),
+        _Tab(
+            icon: Icons.receipt_long,
+            labelKey: 'nav.bookings',
+            path: '/my-bookings'),
+        _Tab(
+            icon: Icons.folder_outlined,
+            labelKey: 'nav.docs',
+            path: '/driver-documents'),
+        _Tab(
+            icon: Icons.notifications,
+            labelKey: 'nav.notifications',
+            path: '/notifications'),
+        _Tab(icon: Icons.history, labelKey: 'nav.history', path: '/history'),
+        _Tab(icon: Icons.psychology, labelKey: 'nav.ai', path: '/ai-tools'),
+        _Tab(icon: Icons.person, labelKey: 'nav.profile', path: '/profile'),
       ],
       child: child,
     );
@@ -355,57 +407,64 @@ Widget _wrap(Widget child, {bool isDriver = false, String role = ''}) {
   // Shipper nav (default)
   return _NavScaffold(
     tabs: const [
-      _Tab(icon: Icons.home,           labelKey: 'nav.home',     path: '/shipper'),
-      _Tab(icon: Icons.local_shipping, labelKey: 'nav.cargo',    path: '/freight'),
-      _Tab(icon: Icons.receipt_long,   labelKey: 'nav.bookings', path: '/my-bookings'),
-      _Tab(icon: Icons.notifications,  labelKey: 'nav.notifications', path: '/notifications'),
-      _Tab(icon: Icons.history,        labelKey: 'nav.history', path: '/history'),
-      _Tab(icon: Icons.psychology,     labelKey: 'nav.ai',       path: '/ai-tools'),
-      _Tab(icon: Icons.person,         labelKey: 'nav.profile',  path: '/profile'),
+      _Tab(icon: Icons.home, labelKey: 'nav.home', path: '/shipper'),
+      _Tab(icon: Icons.local_shipping, labelKey: 'nav.cargo', path: '/freight'),
+      _Tab(
+          icon: Icons.receipt_long,
+          labelKey: 'nav.bookings',
+          path: '/my-bookings'),
+      _Tab(
+          icon: Icons.notifications,
+          labelKey: 'nav.notifications',
+          path: '/notifications'),
+      _Tab(icon: Icons.history, labelKey: 'nav.history', path: '/history'),
+      _Tab(icon: Icons.psychology, labelKey: 'nav.ai', path: '/ai-tools'),
+      _Tab(icon: Icons.person, labelKey: 'nav.profile', path: '/profile'),
     ],
     child: child,
   );
 }
 
 bool _isSharedRoute(String path) =>
-  path == '/notifications' ||
-  path == '/history' ||
-  path == '/profile' ||
-  path == '/my-bookings' ||
-  path == '/messages' ||
-  path.startsWith('/messages/') ||
-  path == '/contract' ||
-  path.startsWith('/contract/') ||
-  path == '/dispute' ||
-  path.startsWith('/dispute/');
+    path == '/notifications' ||
+    path == '/history' ||
+    path == '/profile' ||
+    path == '/my-bookings' ||
+    path == '/messages' ||
+    path.startsWith('/messages/') ||
+    path == '/contract' ||
+    path.startsWith('/contract/') ||
+    path == '/dispute' ||
+    path.startsWith('/dispute/');
 
 bool _isFleetRoute(String path) =>
-  path.startsWith('/fleet') ||
-  path == '/notifications' ||
-  path == '/history' ||
-  path == '/profile';
+    path.startsWith('/fleet') ||
+    path == '/notifications' ||
+    path == '/history' ||
+    path == '/profile';
 
 bool _isDriverRoute(String path) =>
-  path == '/driver' ||
-  path.startsWith('/driver/') ||
-  path == '/freight' ||
-  path.startsWith('/freight/') ||
-  path == '/driver-documents' ||
-  path == '/navigate' ||
-  path == '/nearby-trucks' ||
-  path == '/ai-tools' ||
-  _isSharedRoute(path);
+    path == '/driver' ||
+    path.startsWith('/driver/') ||
+    path == '/freight' ||
+    path.startsWith('/freight/') ||
+    path == '/driver-documents' ||
+    path == '/navigate' ||
+    path == '/nearby-trucks' ||
+    path == '/ai-tools' ||
+    _isSharedRoute(path);
 
 bool _isShipperRoute(String path) =>
-  path == '/shipper' ||
-  path == '/freight' ||
-  path.startsWith('/freight/') ||
-  path == '/create-freight' ||
-  path.startsWith('/cargo-bids/') ||
-  path.startsWith('/tracking/') ||
-  path == '/nearby-trucks' ||
-  path == '/ai-tools' ||
-  _isSharedRoute(path);
+    path == '/shipper' ||
+    path.startsWith('/shipper/deliveries/') ||
+    path == '/freight' ||
+    path.startsWith('/freight/') ||
+    path == '/create-freight' ||
+    path.startsWith('/cargo-bids/') ||
+    path.startsWith('/tracking/') ||
+    path == '/nearby-trucks' ||
+    path == '/ai-tools' ||
+    _isSharedRoute(path);
 
 // ── Bottom-nav tab definition ─────────────────────────────────────────────
 

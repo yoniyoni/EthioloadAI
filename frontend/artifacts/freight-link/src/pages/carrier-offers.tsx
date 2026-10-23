@@ -122,6 +122,7 @@ interface CarrierOffer {
   pricingType: PricingType;
   currentAmount: number;
   status: OfferStatus;
+  assignmentStatus: CarrierAssignmentStatus | null;
   nextActor: ActorType | null;
   agreedAmount: number | null;
   acceptedAt: string | null;
@@ -132,6 +133,11 @@ interface CarrierOffer {
   negotiationHistory: NegotiationEntry[];
 }
 
+type CarrierAssignmentStatus =
+  | "PENDING_ASSIGNMENT"
+  | "DISPATCH_PENDING"
+  | "BOOKING_CREATED";
+
 // ── Status helpers ─────────────────────────────────────────────────────────────
 
 const STATUS_COLORS: Record<OfferStatus, string> = {
@@ -141,6 +147,12 @@ const STATUS_COLORS: Record<OfferStatus, string> = {
   REJECTED:    "bg-red-50 text-red-700 border-red-200",
   WITHDRAWN:   "bg-gray-50 text-gray-600 border-gray-200",
   SUPERSEDED:  "bg-gray-50 text-gray-400 border-gray-200",
+};
+
+const ASSIGNMENT_STATUS_LABELS: Record<CarrierAssignmentStatus, string> = {
+  PENDING_ASSIGNMENT: "Pending eligible driver and vehicle assignment",
+  DISPATCH_PENDING: "Dispatch assigned; awaiting driver response",
+  BOOKING_CREATED: "Driver accepted; booking created",
 };
 
 const ACTION_LABELS: Record<NegotiationAction, string> = {
@@ -736,19 +748,26 @@ function OfferCard({
           </Badge>
         </div>
 
-        {/* Agreed amount banner */}
+        {/* Proposed pairing is not the operational dispatch assignment. */}
         {viewAs === "shipper" && (offer.proposedDriverName || offer.proposedVehiclePlate) && (
           <div className="grid gap-2 rounded-lg bg-muted/50 p-3 text-sm sm:grid-cols-2">
-            <p><span className="text-muted-foreground">Assigned driver:</span> {offer.proposedDriverName ?? `Driver #${offer.proposedDriverUserId}`}</p>
-            <p><span className="text-muted-foreground">Assigned vehicle:</span> {offer.proposedVehiclePlate ?? `Vehicle #${offer.proposedVehicleId}`} {offer.proposedVehicleType ? `· ${offer.proposedVehicleType}` : ""}</p>
+            <p><span className="text-muted-foreground">Proposed driver:</span> {offer.proposedDriverName ?? `Driver #${offer.proposedDriverUserId}`}</p>
+            <p><span className="text-muted-foreground">Proposed vehicle:</span> {offer.proposedVehiclePlate ?? `Vehicle #${offer.proposedVehicleId}`} {offer.proposedVehicleType ? `· ${offer.proposedVehicleType}` : ""}</p>
           </div>
         )}
 
-        {/* Agreed amount banner */}
+        {/* Commercial award and operational assignment have separate states. */}
         {offer.status === "ACCEPTED" && offer.agreedAmount && (
           <div className="flex items-center gap-2 rounded-md bg-emerald-50 px-3 py-2 text-emerald-800 text-sm">
             <ShieldCheck className="h-4 w-4 shrink-0" />
-            Commercial agreement: <strong>{fmt(offer.agreedAmount)}</strong>
+            <div>
+              <p>Commercial agreement: <strong>{fmt(offer.agreedAmount)}</strong></p>
+              <p className="mt-1">
+                {offer.assignmentStatus
+                  ? ASSIGNMENT_STATUS_LABELS[offer.assignmentStatus]
+                  : "Operational assignment status unavailable"}
+              </p>
+            </div>
           </div>
         )}
 

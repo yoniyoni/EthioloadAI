@@ -59,10 +59,12 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen> {
       _loadMoreError = null;
     });
     try {
-      final page = await ref.read(bookingRepositoryProvider).page(page: _nextPage);
+      final page =
+          await ref.read(bookingRepositoryProvider).page(page: _nextPage);
       if (!mounted) return;
       setState(() {
-        final existingIds = _additionalBookings.map((booking) => booking.id).toSet();
+        final existingIds =
+            _additionalBookings.map((booking) => booking.id).toSet();
         _additionalBookings.addAll(
           page.content.where((booking) => existingIds.add(booking.id)),
         );
@@ -87,6 +89,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen> {
     final bookingsAsync = ref.watch(bookingPageProvider(0));
     final user = ref.read(authNotifierProvider).user;
     final isDriver = user?.isDriver ?? false;
+    final isShipper = user?.isShipper ?? false;
 
     return Scaffold(
       backgroundColor: kBackground,
@@ -111,7 +114,10 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen> {
             };
             final seenBookingIds = <int>{};
             final bookings = [
-              for (final booking in [...firstPage.content, ..._additionalBookings])
+              for (final booking in [
+                ...firstPage.content,
+                ..._additionalBookings
+              ])
                 if (seenBookingIds.add(booking.id)) bookingsById[booking.id]!,
             ];
             final hasMore = _hasMoreBookings ?? firstPage.hasNext;
@@ -162,7 +168,8 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen> {
 
             return ListView.builder(
               padding: const EdgeInsets.all(16),
-              itemCount: items.length + (hasMore || _loadMoreError != null ? 1 : 0),
+              itemCount:
+                  items.length + (hasMore || _loadMoreError != null ? 1 : 0),
               itemBuilder: (_, i) {
                 if (i == items.length) {
                   return Padding(
@@ -180,8 +187,11 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen> {
                           ),
                         if (hasMore)
                           OutlinedButton(
-                            onPressed: _loadingMoreBookings ? null : _loadMoreBookings,
-                            child: Text(_loadingMoreBookings ? 'Loading…' : 'Load more'),
+                            onPressed:
+                                _loadingMoreBookings ? null : _loadMoreBookings,
+                            child: Text(_loadingMoreBookings
+                                ? 'Loading…'
+                                : 'Load more'),
                           ),
                       ],
                     ),
@@ -207,6 +217,7 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen> {
                   child: _BookingCard(
                     booking: item as Booking,
                     isDriver: isDriver,
+                    isShipper: isShipper,
                     onRefresh: _refreshBookings,
                   ),
                 );
@@ -286,11 +297,13 @@ class _MyBookingsScreenState extends ConsumerState<MyBookingsScreen> {
 class _BookingCard extends ConsumerStatefulWidget {
   final Booking booking;
   final bool isDriver;
+  final bool isShipper;
   final VoidCallback onRefresh;
 
   const _BookingCard({
     required this.booking,
     required this.isDriver,
+    required this.isShipper,
     required this.onRefresh,
   });
 
@@ -323,7 +336,9 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
     }
     // Task 2: notify driver when their bid transitions pending → accepted
     final newStatus = widget.booking.bookingStatus;
-    if (widget.isDriver && _prevBookingStatus == 'pending' && newStatus == 'accepted') {
+    if (widget.isDriver &&
+        _prevBookingStatus == 'pending' &&
+        newStatus == 'accepted') {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -342,31 +357,30 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
   // ── Status helpers ────────────────────────────────────────────────────
 
   static const _statusColors = {
-    'pending':   kAmber,
-    'accepted':  kGreen,
+    'pending': kAmber,
+    'accepted': kGreen,
     'delivered': kAmber,
     'confirmed': kSuccess,
     'completed': kSuccess,
   };
 
   static const _statusIcons = {
-    'pending':   Icons.hourglass_empty_rounded,
-    'accepted':  Icons.thumb_up_rounded,
+    'pending': Icons.hourglass_empty_rounded,
+    'accepted': Icons.thumb_up_rounded,
     'delivered': Icons.local_shipping_rounded,
     'confirmed': Icons.check_circle_rounded,
     'completed': Icons.check_circle_rounded,
   };
 
   static const _statusLabels = {
-    'pending':   'Pending driver acceptance',
-    'accepted':  'Driver accepted — ready to start',
+    'pending': 'Pending driver acceptance',
+    'accepted': 'Driver accepted — ready to start',
     'delivered': 'Cargo delivered — payment required',
     'confirmed': 'Payment received — booking complete',
     'completed': 'Completed',
   };
 
-  Color get _color =>
-      _statusColors[widget.booking.bookingStatus] ?? kTextMuted;
+  Color get _color => _statusColors[widget.booking.bookingStatus] ?? kTextMuted;
 
   // ── Actions ───────────────────────────────────────────────────────────
 
@@ -390,9 +404,9 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
   /// Driver accepts the booking
   Future<void> _accept() => _run(() async {
         await ref.read(apiClientProvider).patch<void>(
-              '/bookings/${widget.booking.id}',
-              data: {'booking_status': 'accepted'},
-            );
+          '/bookings/${widget.booking.id}',
+          data: {'booking_status': 'accepted'},
+        );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('Job accepted! Waiting for shipper payment.'),
@@ -414,9 +428,9 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
     await _run(() async {
       final repository = ref.read(paymentRepositoryProvider);
       final pendingPayment = await repository.create(
-            bookingId: widget.booking.id,
-            paymentMethod: method,
-          );
+        bookingId: widget.booking.id,
+        paymentMethod: method,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
@@ -435,7 +449,8 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
     setState(() => _busy = true);
     try {
       final deliveryRepository = ref.read(deliveryRepositoryProvider);
-      final tripId = await deliveryRepository.openBookingTrip(widget.booking.id);
+      final tripId =
+          await deliveryRepository.openBookingTrip(widget.booking.id);
       final trip = await deliveryRepository.startTrip(tripId);
       if (trip['id'] != tripId || trip['startTime'] == null) {
         throw StateError('Spring Boot did not confirm that the trip started.');
@@ -474,11 +489,13 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
           .getTripForBooking(widget.booking.id);
       if (resolution.bookingId != widget.booking.id ||
           resolution.freightId != widget.booking.cargoId) {
-        throw StateError('Booking tracking details do not match the selected booking.');
+        throw StateError(
+            'Booking tracking details do not match the selected booking.');
       }
       final tripId = resolution.tripId;
       if (tripId == null || resolution.tripStatus != 'arrived') {
-        throw StateError('The driver must mark arrival before delivery can be confirmed.');
+        throw StateError(
+            'The driver must mark arrival before delivery can be confirmed.');
       }
       await ref.read(deliveryRepositoryProvider).confirmDelivery(tripId);
       if (!mounted) return;
@@ -521,12 +538,17 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
       if (!mounted) return;
       if (resolution.bookingId != widget.booking.id ||
           resolution.freightId != widget.booking.cargoId) {
-        throw StateError('Booking tracking details do not match the selected booking.');
+        throw StateError(
+            'Booking tracking details do not match the selected booking.');
       }
       final tripId = resolution.tripId;
       if (tripId == null ||
-          !const {'ongoing', 'arrived', 'delivery_pending_verification', 'completed'}
-              .contains(resolution.tripStatus)) {
+          !const {
+            'ongoing',
+            'arrived',
+            'delivery_pending_verification',
+            'completed'
+          }.contains(resolution.tripStatus)) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('No trip is available for this booking.'),
           backgroundColor: kAmber,
@@ -584,9 +606,7 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
                 child: Text(
                   _statusLabels[status] ?? status,
                   style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: _color,
-                      fontWeight: FontWeight.w600),
+                      fontSize: 12, color: _color, fontWeight: FontWeight.w600),
                 ),
               ),
               if (b.isMultiStop) ...[
@@ -606,8 +626,7 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
                 ),
               ],
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: _color,
                   borderRadius: BorderRadius.circular(12),
@@ -709,8 +728,7 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
                   const SizedBox(height: 10),
                 ],
                 _InfoRow('Booking #', '${b.id}'),
-                _InfoRow('Price',
-                    'ETB ${b.estimatedPrice.toStringAsFixed(0)}'),
+                _InfoRow('Price', 'ETB ${b.estimatedPrice.toStringAsFixed(0)}'),
                 if (b.commissionFee != null) ...[
                   _InfoRow('Platform Fee (10%)',
                       'ETB ${b.commissionFee!.toStringAsFixed(0)}'),
@@ -831,7 +849,8 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
           if (_tripExists) ...[
             const _InfoBanner(
               icon: Icons.local_shipping_rounded,
-              message: 'A trip is available. Open it to start or continue delivery.',
+              message:
+                  'A trip is available. Open it to start or continue delivery.',
               color: kGreen,
             ),
             const SizedBox(height: 10),
@@ -866,7 +885,8 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
                     borderRadius: BorderRadius.circular(10)),
                 elevation: 0,
               ),
-              onPressed: (_tripId ?? b.tripId) != null ? _openDeliveryWorkflow : null,
+              onPressed:
+                  (_tripId ?? b.tripId) != null ? _openDeliveryWorkflow : null,
             ),
             const SizedBox(height: 4),
             Text(
@@ -962,6 +982,20 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
           ],
           _PriceSummaryCard(booking: b, forDriver: false),
           const SizedBox(height: 8),
+          if (widget.isShipper &&
+              b.tripStatus == 'delivery_pending_verification' &&
+              (_tripId ?? b.tripId) != null) ...[
+            _ActionButton(
+              label: 'Review Delivery Proof',
+              icon: Icons.fact_check_outlined,
+              color: kGreen,
+              onTap: () => context.push(
+                '/shipper/deliveries/${_tripId ?? b.tripId}/proof',
+              ),
+              subtitle: 'Verify or reject the driver’s submitted proof',
+            ),
+            const SizedBox(height: 10),
+          ],
           if (b.tripStatus == 'arrived') ...[
             _ActionButton(
               label: 'Confirm Delivery',
@@ -974,7 +1008,8 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
           ],
           const _InfoBanner(
             icon: Icons.local_shipping_outlined,
-            message: 'Driver is on the way — payment is collected after delivery.',
+            message:
+                'Driver is on the way — payment is collected after delivery.',
             color: kAmber,
           ),
           if (status == 'accepted') ...[
@@ -1117,8 +1152,7 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
                 children: List.generate(5, (i) {
                   final star = i + 1;
                   return GestureDetector(
-                    onTap: () =>
-                        setDialogState(() => selectedStars = star),
+                    onTap: () => setDialogState(() => selectedStars = star),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 4),
                       child: Icon(
@@ -1150,8 +1184,7 @@ class _BookingCardState extends ConsumerState<_BookingCard> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide:
-                        const BorderSide(color: kGreen, width: 1.5),
+                    borderSide: const BorderSide(color: kGreen, width: 1.5),
                   ),
                 ),
               ),
@@ -1257,14 +1290,14 @@ class _ActionButton extends StatelessWidget {
         ElevatedButton.icon(
           icon: Icon(icon, size: 18),
           label: Text(label,
-              style: GoogleFonts.inter(
-                  fontSize: 14, fontWeight: FontWeight.bold)),
+              style:
+                  GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold)),
           style: ElevatedButton.styleFrom(
             backgroundColor: color,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             elevation: 0,
           ),
           onPressed: onTap,
@@ -1314,8 +1347,7 @@ class _Chip extends StatelessWidget {
   final IconData icon;
   final String label;
   final Color color;
-  const _Chip(
-      {required this.icon, required this.label, required this.color});
+  const _Chip({required this.icon, required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -1333,9 +1365,7 @@ class _Chip extends StatelessWidget {
           const SizedBox(width: 4),
           Text(label,
               style: GoogleFonts.inter(
-                  fontSize: 11,
-                  color: color,
-                  fontWeight: FontWeight.w600)),
+                  fontSize: 11, color: color, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -1453,7 +1483,8 @@ class _BackhaulSectionState extends ConsumerState<_BackhaulSection> {
   void initState() {
     super.initState();
     _timer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (mounted) ref.invalidate(backhaulRecommendationsProvider(widget.tripId));
+      if (mounted)
+        ref.invalidate(backhaulRecommendationsProvider(widget.tripId));
     });
   }
 
@@ -1476,19 +1507,19 @@ class _BackhaulSectionState extends ConsumerState<_BackhaulSection> {
 
   // English → Amharic display names
   static const Map<String, String> _amharic = {
-    'Addis Ababa':  'አዲስ አበባ',
-    'Addis Abeba':  'አዲስ አበባ',
-    'Mekele':       'መቀሌ',
-    'Gondar':       'ጎንደር',
-    'Bahir Dar':    'ባሕር ዳር',
-    'Dire Dawa':    'ድሬዳዋ',
-    'Hawassa':      'ሐዋሳ',
-    'Jimma':        'ጅማ',
-    'Metema':       'መተማ',
-    'Humera':       'ሑመራ',
-    'Shire':        'ሽሬ',
-    'Addis Zemen':  'አዲስ ዘመን',
-    'Debre Tabor':  'ደብረ ታቦር',
+    'Addis Ababa': 'አዲስ አበባ',
+    'Addis Abeba': 'አዲስ አበባ',
+    'Mekele': 'መቀሌ',
+    'Gondar': 'ጎንደር',
+    'Bahir Dar': 'ባሕር ዳር',
+    'Dire Dawa': 'ድሬዳዋ',
+    'Hawassa': 'ሐዋሳ',
+    'Jimma': 'ጅማ',
+    'Metema': 'መተማ',
+    'Humera': 'ሑመራ',
+    'Shire': 'ሽሬ',
+    'Addis Zemen': 'አዲስ ዘመን',
+    'Debre Tabor': 'ደብረ ታቦር',
     'Debre Markos': 'ደብረ ማርቆስ',
   };
 
@@ -1526,7 +1557,8 @@ class _BackhaulSectionState extends ConsumerState<_BackhaulSection> {
                 ),
               ),
               child: Row(children: [
-                const Icon(Icons.sync_alt_rounded, color: Colors.white, size: 18),
+                const Icon(Icons.sync_alt_rounded,
+                    color: Colors.white, size: 18),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Column(
@@ -1542,8 +1574,7 @@ class _BackhaulSectionState extends ConsumerState<_BackhaulSection> {
                       Text(
                         'ወደ $amharic የሚሄዱ ጭነቶች',
                         style: GoogleFonts.inter(
-                            color: Colors.white.withAlpha(180),
-                            fontSize: 11),
+                            color: Colors.white.withAlpha(180), fontSize: 11),
                       ),
                     ],
                   ),
@@ -1565,15 +1596,14 @@ class _BackhaulSectionState extends ConsumerState<_BackhaulSection> {
                     Text(
                       'No return loads found near ${widget.destination} yet. We\'ll keep checking.',
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
-                          fontSize: 12, color: kTextSecond),
+                      style:
+                          GoogleFonts.inter(fontSize: 12, color: kTextSecond),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'አሁን ወደ ${widget.destination} የሚሄዱ ጭነቶች አልተገኙም።',
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
-                          fontSize: 11, color: kTextMuted),
+                      style: GoogleFonts.inter(fontSize: 11, color: kTextMuted),
                     ),
                   ],
                 ),
@@ -1582,8 +1612,7 @@ class _BackhaulSectionState extends ConsumerState<_BackhaulSection> {
               ...visible.map((rec) => _BackhaulCard(
                     rec: rec,
                     onDismiss: () => _dismiss(rec.id),
-                    onViewBid: () =>
-                        context.push('/freight/${rec.cargo.id}'),
+                    onViewBid: () => context.push('/freight/${rec.cargo.id}'),
                   )),
 
             const SizedBox(height: 8),
@@ -1666,8 +1695,8 @@ class _BackhaulCard extends StatelessWidget {
                     Row(children: [
                       Text(
                         '${cargo.materialType}  ·  ${cargo.weight.toStringAsFixed(0)} t',
-                        style: GoogleFonts.inter(
-                            fontSize: 11, color: kTextMuted),
+                        style:
+                            GoogleFonts.inter(fontSize: 11, color: kTextMuted),
                       ),
                       if (rec.distanceKm != null) ...[
                         Text('  ·  ',
@@ -1706,8 +1735,7 @@ class _BackhaulCard extends StatelessWidget {
                 onTap: onDismiss,
                 child: const Padding(
                   padding: EdgeInsets.only(left: 8),
-                  child: Icon(Icons.close_rounded,
-                      size: 16, color: kTextMuted),
+                  child: Icon(Icons.close_rounded, size: 16, color: kTextMuted),
                 ),
               ),
             ]),
@@ -1717,8 +1745,7 @@ class _BackhaulCard extends StatelessWidget {
             // Score bar
             Row(children: [
               Text('Match strength ',
-                  style: GoogleFonts.inter(
-                      fontSize: 10, color: kTextMuted)),
+                  style: GoogleFonts.inter(fontSize: 10, color: kTextMuted)),
               Expanded(
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(4),
@@ -1769,13 +1796,20 @@ class _BackhaulCard extends StatelessWidget {
 
 String _methodLabel(String method) {
   switch (method) {
-    case 'telebirr':      return 'Telebirr';
-    case 'cbe_birr':      return 'CBE Birr';
-    case 'awash_bank':    return 'Awash Bank';
-    case 'dashen_bank':   return 'Dashen Bank';
-    case 'bank_transfer': return 'Other Bank';
-    case 'cash':          return 'Cash';
-    default:              return method;
+    case 'telebirr':
+      return 'Telebirr';
+    case 'cbe_birr':
+      return 'CBE Birr';
+    case 'awash_bank':
+      return 'Awash Bank';
+    case 'dashen_bank':
+      return 'Dashen Bank';
+    case 'bank_transfer':
+      return 'Other Bank';
+    case 'cash':
+      return 'Cash';
+    default:
+      return method;
   }
 }
 
@@ -1793,14 +1827,11 @@ class _PaymentMethodBadge extends StatelessWidget {
         border: Border.all(color: kGreen.withValues(alpha: 0.25)),
       ),
       child: Row(children: [
-        const Icon(Icons.check_circle_outline_rounded,
-            size: 16, color: kGreen),
+        const Icon(Icons.check_circle_outline_rounded, size: 16, color: kGreen),
         const SizedBox(width: 8),
         Text('Payment method: ${_methodLabel(method)}',
             style: GoogleFonts.inter(
-                fontSize: 13,
-                color: kGreen,
-                fontWeight: FontWeight.w600)),
+                fontSize: 13, color: kGreen, fontWeight: FontWeight.w600)),
       ]),
     );
   }
@@ -1822,12 +1853,42 @@ class _DriverPaymentSheetState extends State<_DriverPaymentSheet> {
   String? _selected;
 
   static const _methods = [
-    ('cash',          'Cash / ጥሬ ገንዘብ',     'Paid at delivery — most common in Ethiopia', Icons.payments_rounded),
-    ('telebirr',      'Telebirr',             'Mobile transfer — instant',                   Icons.phone_android_rounded),
-    ('cbe_birr',      'CBE Birr',             'Commercial Bank of Ethiopia',                 Icons.account_balance_rounded),
-    ('awash_bank',    'Awash Bank',           'Bank transfer to Awash account',              Icons.account_balance_outlined),
-    ('dashen_bank',   'Dashen Bank',          'Bank transfer to Dashen account',             Icons.account_balance_outlined),
-    ('bank_transfer', 'Other Bank',           'Any other Ethiopian bank',                    Icons.account_balance_outlined),
+    (
+      'cash',
+      'Cash / ጥሬ ገንዘብ',
+      'Paid at delivery — most common in Ethiopia',
+      Icons.payments_rounded
+    ),
+    (
+      'telebirr',
+      'Telebirr',
+      'Mobile transfer — instant',
+      Icons.phone_android_rounded
+    ),
+    (
+      'cbe_birr',
+      'CBE Birr',
+      'Commercial Bank of Ethiopia',
+      Icons.account_balance_rounded
+    ),
+    (
+      'awash_bank',
+      'Awash Bank',
+      'Bank transfer to Awash account',
+      Icons.account_balance_outlined
+    ),
+    (
+      'dashen_bank',
+      'Dashen Bank',
+      'Bank transfer to Dashen account',
+      Icons.account_balance_outlined
+    ),
+    (
+      'bank_transfer',
+      'Other Bank',
+      'Any other Ethiopian bank',
+      Icons.account_balance_outlined
+    ),
   ];
 
   @override
@@ -1855,9 +1916,7 @@ class _DriverPaymentSheetState extends State<_DriverPaymentSheet> {
           Text(
             'How was payment made?',
             style: GoogleFonts.inter(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: kTextPrimary),
+                fontSize: 16, fontWeight: FontWeight.w700, color: kTextPrimary),
           ),
           const SizedBox(height: 2),
           Text(
@@ -1874,9 +1933,8 @@ class _DriverPaymentSheetState extends State<_DriverPaymentSheet> {
                 margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: selected
-                      ? kAmber.withValues(alpha: 0.06)
-                      : kBackground,
+                  color:
+                      selected ? kAmber.withValues(alpha: 0.06) : kBackground,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
                     color: selected ? kAmber : kBorder,
@@ -1893,8 +1951,7 @@ class _DriverPaymentSheetState extends State<_DriverPaymentSheet> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(icon,
-                        size: 18,
-                        color: selected ? kAmber : kTextSecond),
+                        size: 18, color: selected ? kAmber : kTextSecond),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -1924,8 +1981,7 @@ class _DriverPaymentSheetState extends State<_DriverPaymentSheet> {
             TextButton(
               onPressed: () => Navigator.pop(context, null),
               style: TextButton.styleFrom(foregroundColor: kTextMuted),
-              child: Text('Skip / ሰርዝ',
-                  style: GoogleFonts.inter(fontSize: 13)),
+              child: Text('Skip / ሰርዝ', style: GoogleFonts.inter(fontSize: 13)),
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -1971,7 +2027,12 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
   String? _selected;
 
   static const _methods = [
-    ('cash', 'Cash settlement', 'An administrator records receipt manually', Icons.payments_rounded),
+    (
+      'cash',
+      'Cash settlement',
+      'An administrator records receipt manually',
+      Icons.payments_rounded
+    ),
   ];
 
   @override
@@ -2003,7 +2064,8 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
                   fontWeight: FontWeight.w700,
                   color: kTextPrimary)),
           const SizedBox(height: 4),
-          Text('External payment gateways are not active. Request cash settlement for admin confirmation.',
+          Text(
+              'External payment gateways are not active. Request cash settlement for admin confirmation.',
               style: GoogleFonts.inter(fontSize: 13, color: kTextSecond)),
           const SizedBox(height: 16),
           ..._methods.map((m) {
@@ -2015,9 +2077,8 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: selected
-                      ? kGreen.withValues(alpha: 0.06)
-                      : kBackground,
+                  color:
+                      selected ? kGreen.withValues(alpha: 0.06) : kBackground,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
                     color: selected ? kGreen : kBorder,
@@ -2034,8 +2095,7 @@ class _PaymentMethodSheetState extends State<_PaymentMethodSheet> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(icon,
-                        size: 20,
-                        color: selected ? kGreen : kTextSecond),
+                        size: 20, color: selected ? kGreen : kTextSecond),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -2107,9 +2167,9 @@ class _PriceSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final price      = booking.estimatedPrice;
+    final price = booking.estimatedPrice;
     final commission = booking.commissionFee ?? (price * 0.10);
-    final driverNet  = price - commission;
+    final driverNet = price - commission;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -2147,7 +2207,8 @@ class _PriceSummaryCard extends StatelessWidget {
           const Divider(height: 18, color: kBorder),
           _SummaryRow(
             label: forDriver ? 'You will receive' : 'Total to pay',
-            value: 'ETB ${forDriver ? driverNet.toStringAsFixed(0) : price.toStringAsFixed(0)}',
+            value:
+                'ETB ${forDriver ? driverNet.toStringAsFixed(0) : price.toStringAsFixed(0)}',
             bold: true,
             valueColor: kGreen,
           ),

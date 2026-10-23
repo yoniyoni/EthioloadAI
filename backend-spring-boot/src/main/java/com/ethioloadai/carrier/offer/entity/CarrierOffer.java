@@ -90,6 +90,11 @@ public class CarrierOffer {
     @Builder.Default
     private OfferStatus status = OfferStatus.PENDING;
 
+    /** Operational assignment progress; the commercial offer status remains ACCEPTED. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "assignment_status", length = 30)
+    private CarrierAssignmentStatus assignmentStatus;
+
     /**
      * Whose turn it is to respond. {@code null} in terminal states.
      */

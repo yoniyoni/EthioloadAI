@@ -71,29 +71,40 @@ class ProofOfDelivery {
   }
 
   bool get isSubmitted => status == ProofStatus.submitted;
-  bool get isVerified  => status == ProofStatus.verified;
-  bool get isRejected  => status == ProofStatus.rejected;
+  bool get isVerified => status == ProofStatus.verified;
+  bool get isRejected => status == ProofStatus.rejected;
+  bool get canReview => isSubmitted;
 }
 
 enum ProofStatus {
   submitted,
   verified,
-  rejected;
+  rejected,
+  unknown;
 
   static ProofStatus fromString(String value) {
     switch (value.toUpperCase()) {
-      case 'SUBMITTED': return ProofStatus.submitted;
-      case 'VERIFIED':  return ProofStatus.verified;
-      case 'REJECTED':  return ProofStatus.rejected;
-      default:          return ProofStatus.submitted;
+      case 'SUBMITTED':
+        return ProofStatus.submitted;
+      case 'VERIFIED':
+        return ProofStatus.verified;
+      case 'REJECTED':
+        return ProofStatus.rejected;
+      default:
+        return ProofStatus.unknown;
     }
   }
 
   String get label {
     switch (this) {
-      case ProofStatus.submitted: return 'Awaiting Verification';
-      case ProofStatus.verified:  return 'Verified';
-      case ProofStatus.rejected:  return 'Rejected';
+      case ProofStatus.submitted:
+        return 'Awaiting Verification';
+      case ProofStatus.verified:
+        return 'Verified';
+      case ProofStatus.rejected:
+        return 'Rejected';
+      case ProofStatus.unknown:
+        return 'Unknown status';
     }
   }
 }
