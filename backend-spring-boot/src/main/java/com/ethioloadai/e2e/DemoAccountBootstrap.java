@@ -34,18 +34,21 @@ public class DemoAccountBootstrap implements ApplicationRunner {
     private final String datasourceUrl;
     private final Environment environment;
     private final String adminPassword;
+    private final boolean rotateAdminPassword;
 
     public DemoAccountBootstrap(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
             @Value("${spring.datasource.url:}") String datasourceUrl,
             Environment environment,
-            @Value("${e2e.demo.admin-password:}") String adminPassword) {
+            @Value("${e2e.demo.admin-password:}") String adminPassword,
+            @Value("${app.demo-seed.rotate-admin-password:false}") boolean rotateAdminPassword) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.datasourceUrl = datasourceUrl;
         this.environment = environment;
         this.adminPassword = adminPassword;
+        this.rotateAdminPassword = rotateAdminPassword;
     }
 
     @Override
@@ -54,8 +57,13 @@ public class DemoAccountBootstrap implements ApplicationRunner {
         requireAllowedDatasource();
         requireConfiguredPasswords();
 
-        createIfAbsent(new DemoAccount("Demo Administrator", "+251911000001",
-                "admin@freightlink.et", User.Role.ADMIN, true, true, adminPassword));
+        DemoAccount admin = new DemoAccount("Demo Administrator", "+251911000001",
+                "admin@freightlink.et", User.Role.ADMIN, true, true, adminPassword);
+        if (rotateAdminPassword) {
+            rotateExistingAdminPassword(admin);
+        } else {
+            createIfAbsent(admin);
+        }
     }
 
     private void requireAllowedDatasource() {
@@ -110,9 +118,37 @@ public class DemoAccountBootstrap implements ApplicationRunner {
     }
 
     private boolean matchesIdentity(User user, DemoAccount account) {
-        return Objects.equals(user.getEmail(), account.email())
+        return Objects.equals(user.getFullName(), account.fullName())
+                && Objects.equals(user.getEmail(), account.email())
                 && Objects.equals(user.getPhone(), account.phone())
                 && user.getRole() == account.role();
+    }
+
+    private void rotateExistingAdminPassword(DemoAccount account) {
+        Optional<User> byEmail = userRepository.findByEmail(account.email());
+        Optional<User> byPhone = userRepository.findByPhone(account.phone());
+
+        if (byEmail.isEmpty()
+                || byPhone.isEmpty()
+                || !Objects.equals(byEmail.get().getId(), byPhone.get().getId())
+                || !matchesIdentity(byEmail.get(), account)) {
+            throw new IllegalStateException(
+                    "E2E admin password rotation requires the exact existing bootstrap admin");
+        }
+
+        int updated = userRepository.updateBootstrapAdminPassword(
+                byEmail.get().getId(),
+                account.email(),
+                account.phone(),
+                User.Role.ADMIN,
+                passwordEncoder.encode(account.password()));
+        if (updated != 1) {
+            throw new IllegalStateException(
+                    "E2E admin password rotation did not update exactly one administrator");
+        }
+
+        log.info("Rotated password for E2E admin account email={} role={}",
+                account.email(), account.role());
     }
 
     private boolean isBlank(String value) {

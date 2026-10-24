@@ -23,6 +23,7 @@ flyway:
 app:
   demo-seed:
     enabled: ${APP_DEMO_SEED_ENABLED:false}
+    rotate-admin-password: ${APP_DEMO_SEED_ROTATE_ADMIN_PASSWORD:false}
 
 e2e:
   datasource:

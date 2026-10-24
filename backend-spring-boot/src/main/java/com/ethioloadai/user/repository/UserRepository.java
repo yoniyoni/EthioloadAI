@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -19,6 +20,22 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmail(String email);
 
     Optional<User> findByPhone(String phone);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            UPDATE User u
+               SET u.password = :encodedPassword
+             WHERE u.id = :userId
+               AND u.email = :email
+               AND u.phone = :phone
+               AND u.role = :role
+            """)
+    int updateBootstrapAdminPassword(
+            @Param("userId") Long userId,
+            @Param("email") String email,
+            @Param("phone") String phone,
+            @Param("role") User.Role role,
+            @Param("encodedPassword") String encodedPassword);
 
     @Query("SELECT u FROM User u WHERE u.email = :identifier OR u.phone = :identifier")
     Optional<User> findByEmailOrPhone(String identifier);

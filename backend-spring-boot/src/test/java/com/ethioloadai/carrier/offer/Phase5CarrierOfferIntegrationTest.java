@@ -886,6 +886,8 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         // Body contains XYZ company id but the path/membership is ABC
         String body = json.writeValueAsString(Map.of(
                 "amount", "45000.00",
+                "driverUserId", abcDriver.getId(),
+                "vehicleId", abcVehicleId,
                 "carrierCompanyId", xyzCompanyId   // malicious field — must be ignored
         ));
         String resp = mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))
@@ -906,6 +908,8 @@ class Phase5CarrierOfferIntegrationTest extends OfferTestSupport {
         // Try to self-accept by including "status": "ACCEPTED" in the submit body
         String body = json.writeValueAsString(Map.of(
                 "amount", "45000.00",
+                "driverUserId", abcDriver.getId(),
+                "vehicleId", abcVehicleId,
                 "status", "ACCEPTED"   // must be ignored
         ));
         String resp = mvc.perform(post(offerUrl(abcCompanyId, negotiableFreight.getId()))

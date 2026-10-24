@@ -18,8 +18,10 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.Mockito.*;
 
 class DemoAccountBootstrapTest {
@@ -58,7 +60,7 @@ class DemoAccountBootstrapTest {
 
         bootstrap = new DemoAccountBootstrap(
                 users, encoder, DemoAccountBootstrap.ALLOWED_E2E_DATASOURCE_URL, environment,
-                adminPassword);
+                adminPassword, false);
     }
 
     @Test
@@ -81,9 +83,138 @@ class DemoAccountBootstrapTest {
         bootstrap.run(null);
 
         verify(users, times(1)).saveAndFlush(any(User.class));
+        verify(users, never()).updateBootstrapAdminPassword(
+                any(), anyString(), anyString(), any(User.Role.class), anyString());
         assertThat(admin.getPassword()).isEqualTo(originalPasswordHash);
         assertThat(admin.getVerificationStatus()).isFalse();
         assertThat(admin.getIsActive()).isFalse();
+    }
+
+    @Test
+    void explicitRotationChangesOnlyThePasswordForTheExactExistingAdmin() {
+        User admin = User.builder()
+                .id(41L)
+                .fullName("Demo Administrator")
+                .email("admin@freightlink.et")
+                .phone("+251911000001")
+                .password("existing-hash")
+                .role(User.Role.ADMIN)
+                .fleetOwnerId(72L)
+                .location("Synthetic location")
+                .verificationStatus(false)
+                .isActive(false)
+                .rememberToken("existing-token")
+                .build();
+        usersByEmail.put(admin.getEmail(), admin);
+        usersByPhone.put(admin.getPhone(), admin);
+        when(users.updateBootstrapAdminPassword(
+                any(), anyString(), anyString(), any(User.Role.class), anyString()))
+                .thenReturn(1);
+
+        DemoAccountBootstrap rotating = new DemoAccountBootstrap(
+                users, encoder, DemoAccountBootstrap.ALLOWED_E2E_DATASOURCE_URL,
+                environment, adminPassword, true);
+        rotating.run(null);
+
+        var encodedPassword = forClass(String.class);
+        verify(users).updateBootstrapAdminPassword(
+                eq(41L), eq("admin@freightlink.et"), eq("+251911000001"),
+                eq(User.Role.ADMIN), encodedPassword.capture());
+        assertThat(encodedPassword.getValue()).isNotEqualTo(adminPassword);
+        assertThat(encoder.matches(adminPassword, encodedPassword.getValue())).isTrue();
+        verify(users, never()).saveAndFlush(any(User.class));
+        assertThat(admin.getId()).isEqualTo(41L);
+        assertThat(admin.getFullName()).isEqualTo("Demo Administrator");
+        assertThat(admin.getEmail()).isEqualTo("admin@freightlink.et");
+        assertThat(admin.getPhone()).isEqualTo("+251911000001");
+        assertThat(admin.getPassword()).isEqualTo("existing-hash");
+        assertThat(admin.getRole()).isEqualTo(User.Role.ADMIN);
+        assertThat(admin.getFleetOwnerId()).isEqualTo(72L);
+        assertThat(admin.getLocation()).isEqualTo("Synthetic location");
+        assertThat(admin.getVerificationStatus()).isFalse();
+        assertThat(admin.getIsActive()).isFalse();
+        assertThat(admin.getRememberToken()).isEqualTo("existing-token");
+    }
+
+    @Test
+    void explicitRotationRequiresAnExistingMatchingAdminIdentity() {
+        DemoAccountBootstrap rotating = new DemoAccountBootstrap(
+                users, encoder, DemoAccountBootstrap.ALLOWED_E2E_DATASOURCE_URL,
+                environment, adminPassword, true);
+
+        assertThatThrownBy(() -> rotating.run(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("exact existing bootstrap admin");
+        verify(users, never()).updateBootstrapAdminPassword(
+                any(), anyString(), anyString(), any(User.Role.class), anyString());
+        verify(users, never()).saveAndFlush(any(User.class));
+    }
+
+    @Test
+    void explicitRotationRejectsAnIdentityWithTheWrongRole() {
+        User existing = User.builder()
+                .id(41L)
+                .fullName("Demo Administrator")
+                .email("admin@freightlink.et")
+                .phone("+251911000001")
+                .password("existing-hash")
+                .role(User.Role.SHIPPER)
+                .verificationStatus(true)
+                .isActive(true)
+                .build();
+        usersByEmail.put(existing.getEmail(), existing);
+        usersByPhone.put(existing.getPhone(), existing);
+        DemoAccountBootstrap rotating = new DemoAccountBootstrap(
+                users, encoder, DemoAccountBootstrap.ALLOWED_E2E_DATASOURCE_URL,
+                environment, adminPassword, true);
+
+        assertThatThrownBy(() -> rotating.run(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("exact existing bootstrap admin");
+        assertThat(existing.getRole()).isEqualTo(User.Role.SHIPPER);
+        assertThat(existing.getPassword()).isEqualTo("existing-hash");
+        verify(users, never()).updateBootstrapAdminPassword(
+                any(), anyString(), anyString(), any(User.Role.class), anyString());
+    }
+
+    @Test
+    void explicitRotationRejectsAnEmailWhosePhoneDoesNotMatch() {
+        User existing = User.builder()
+                .id(41L)
+                .fullName("Demo Administrator")
+                .email("admin@freightlink.et")
+                .phone("+251911000099")
+                .password("existing-hash")
+                .role(User.Role.ADMIN)
+                .verificationStatus(true)
+                .isActive(true)
+                .build();
+        usersByEmail.put(existing.getEmail(), existing);
+        usersByPhone.put(existing.getPhone(), existing);
+        DemoAccountBootstrap rotating = new DemoAccountBootstrap(
+                users, encoder, DemoAccountBootstrap.ALLOWED_E2E_DATASOURCE_URL,
+                environment, adminPassword, true);
+
+        assertThatThrownBy(() -> rotating.run(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("exact existing bootstrap admin");
+        assertThat(existing.getPhone()).isEqualTo("+251911000099");
+        assertThat(existing.getPassword()).isEqualTo("existing-hash");
+        verify(users, never()).updateBootstrapAdminPassword(
+                any(), anyString(), anyString(), any(User.Role.class), anyString());
+    }
+
+    @Test
+    void passwordRotationQueryUpdatesOnlyThePasswordForTheExactIdentity() throws Exception {
+        var method = UserRepository.class.getMethod(
+                "updateBootstrapAdminPassword",
+                Long.class, String.class, String.class, User.Role.class, String.class);
+        var query = method.getAnnotation(org.springframework.data.jpa.repository.Query.class);
+
+        assertThat(query.value().replaceAll("\\s+", " ").trim())
+                .isEqualTo("UPDATE User u SET u.password = :encodedPassword "
+                        + "WHERE u.id = :userId AND u.email = :email "
+                        + "AND u.phone = :phone AND u.role = :role");
     }
 
     @Test
@@ -114,7 +245,7 @@ class DemoAccountBootstrapTest {
     void refusesAnyDatasourceOtherThanTheIsolatedE2EDatabaseBeforeRepositoryAccess() {
         DemoAccountBootstrap unsafe = new DemoAccountBootstrap(
                 users, encoder, "jdbc:postgresql://127.0.0.1:5433/ethioloadai_spring",
-                environment, adminPassword);
+                environment, adminPassword, true);
 
         assertThatThrownBy(() -> unsafe.run(null))
                 .isInstanceOf(IllegalStateException.class)
@@ -126,7 +257,7 @@ class DemoAccountBootstrapTest {
     void refusesToSeedWhenAnyDemoPasswordIsMissing() {
         DemoAccountBootstrap missingPassword = new DemoAccountBootstrap(
                 users, encoder, DemoAccountBootstrap.ALLOWED_E2E_DATASOURCE_URL,
-                environment, "");
+                environment, "", true);
 
         assertThatThrownBy(() -> missingPassword.run(null))
                 .isInstanceOf(IllegalStateException.class)
@@ -142,6 +273,10 @@ class DemoAccountBootstrapTest {
                 DemoAccountBootstrap.class.getAnnotation(ConditionalOnProperty.class);
         assertThat(condition.name()).containsExactly("app.demo-seed.enabled");
         assertThat(condition.havingValue()).isEqualTo("true");
+        assertThat(DemoAccountBootstrap.class.getDeclaredConstructors()[0]
+                .getParameters()[5].getAnnotation(
+                        org.springframework.beans.factory.annotation.Value.class).value())
+                .isEqualTo("${app.demo-seed.rotate-admin-password:false}");
     }
 
     @Test
@@ -152,7 +287,7 @@ class DemoAccountBootstrapTest {
                 .isEqualTo("jdbc:postgresql://127.0.0.1:15433/ethioloadai_e2e");
         DemoAccountBootstrap e2e = new DemoAccountBootstrap(
                 users, encoder, DemoAccountBootstrap.ALLOWED_E2E_DATASOURCE_URL,
-                e2eEnvironment, adminPassword);
+                e2eEnvironment, adminPassword, false);
 
         e2e.run(null);
 
@@ -171,7 +306,7 @@ class DemoAccountBootstrapTest {
                 "jdbc:postgresql://db.example.test:15433/ethioloadai_e2e"
         }) {
             DemoAccountBootstrap unsafe = new DemoAccountBootstrap(
-                    users, encoder, datasource, e2eEnvironment, adminPassword);
+                    users, encoder, datasource, e2eEnvironment, adminPassword, true);
 
             assertThatThrownBy(() -> unsafe.run(null))
                     .isInstanceOf(IllegalStateException.class)
@@ -187,7 +322,7 @@ class DemoAccountBootstrapTest {
         devEnvironment.setActiveProfiles("dev");
         DemoAccountBootstrap unsafe = new DemoAccountBootstrap(
                 users, encoder, DemoAccountBootstrap.ALLOWED_E2E_DATASOURCE_URL, devEnvironment,
-                adminPassword);
+                adminPassword, true);
 
         assertThatThrownBy(() -> unsafe.run(null))
                 .isInstanceOf(IllegalStateException.class)

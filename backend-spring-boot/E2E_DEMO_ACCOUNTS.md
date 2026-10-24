@@ -39,6 +39,8 @@ The E2E-only bootstrap remains disabled unless `APP_DEMO_SEED_ENABLED=true` is e
 
 The bootstrap creates only the synthetic administrator, only under the `e2e` profile, and only against the exact host-loopback E2E datasource. It only creates the account when both its email and phone are unused. A conflicting identity aborts rather than overwriting an existing account. A matching account is preserved, including its password and state. Create shipper, driver, and fleet-owner test accounts through the application interfaces; do not use this bootstrap to fabricate their workflow state.
 
+Password rotation for the existing bootstrap administrator requires the separate, normally disabled `APP_DEMO_SEED_ROTATE_ADMIN_PASSWORD=true` flag in addition to `APP_DEMO_SEED_ENABLED=true`. It is restricted to the exact existing administrator identity and approved host-loopback E2E datasource, and updates only its password hash. Use it only for an explicitly authorized local E2E recovery; never enable it in production.
+
 ## Authorization gates before any E2E execution
 
 No database, Spring service, account, migration, or workflow is started by these instructions. Each action below requires separate explicit approval:
