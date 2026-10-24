@@ -1,6 +1,7 @@
 package com.ethioloadai.carrier.team.controller;
 import com.ethioloadai.carrier.team.dto.*;
 import com.ethioloadai.carrier.team.service.*;
+import com.ethioloadai.security.proxy.TrustedClientAddress;
 import com.ethioloadai.user.entity.User;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -10,6 +11,7 @@ import org.springframework.http.*;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
 
 @RestController @RequiredArgsConstructor
 @Tag(name="Company Invitations", description="Tokens are sent in POST bodies, never URL queries")
@@ -19,8 +21,10 @@ public class CompanyInvitationController {
  private final InvitationRegistrationService registration;
  @PostMapping("/company-invitations/register")
  public ResponseEntity<InvitationRegistrationService.Result> register(
-   @jakarta.validation.Valid @RequestBody InvitationRegistrationRequest request) {
-  return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(registration.register(request));
+   @jakarta.validation.Valid @RequestBody InvitationRegistrationRequest request,
+   HttpServletRequest servletRequest) {
+  return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(
+    registration.register(request, TrustedClientAddress.resolve(servletRequest)));
  }
  @PostMapping("/company-invitations/validate") @Operation(summary="Public token validation with limited metadata")
  public ResponseEntity<InvitationPreview> validate(@RequestBody InvitationTokenRequest request) {
@@ -38,4 +42,3 @@ public class CompanyInvitationController {
   return memberships.mine(caller, page, size);
  }
 }
-

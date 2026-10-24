@@ -2,6 +2,7 @@ package com.ethioloadai.auth.controller;
 
 import com.ethioloadai.auth.dto.*;
 import com.ethioloadai.auth.service.AuthenticationService;
+import com.ethioloadai.security.proxy.TrustedClientAddress;
 import com.ethioloadai.security.model.UserDetailsImpl;
 import com.ethioloadai.user.entity.User;
 import io.swagger.v3.oas.annotations.Operation;
@@ -38,15 +39,19 @@ public class MobileAuthCompatibilityController {
             @Valid @RequestBody LoginRequest request,
             HttpServletRequest servletRequest) {
         log.info("POST /api/login (mobile alias) - Login request received");
-        AuthenticationResponse response = authenticationService.login(request, servletRequest.getRemoteAddr());
+        AuthenticationResponse response = authenticationService.login(
+                request, TrustedClientAddress.resolve(servletRequest));
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/register")
     @Operation(summary = "Mobile register alias")
-    public ResponseEntity<AuthenticationResponse> register(@Valid @RequestBody RegisterRequest request) {
+    public ResponseEntity<AuthenticationResponse> register(
+            @Valid @RequestBody RegisterRequest request,
+            HttpServletRequest servletRequest) {
         log.info("POST /api/register (mobile alias) - Registration request received");
-        AuthenticationResponse response = authenticationService.register(request);
+        AuthenticationResponse response = authenticationService.register(
+                request, TrustedClientAddress.resolve(servletRequest));
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

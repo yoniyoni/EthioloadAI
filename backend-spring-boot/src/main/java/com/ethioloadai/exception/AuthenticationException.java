@@ -25,6 +25,18 @@ public class AuthenticationException extends BaseException {
         public int getHttpStatus() {
             return 429;
         }
+
+    }
+
+    public static class TooManyRegistrationAttemptsException extends AuthenticationException {
+        public TooManyRegistrationAttemptsException() {
+            super("Too many registration attempts. Please try again later.");
+        }
+
+        @Override
+        public int getHttpStatus() {
+            return 429;
+        }
     }
 
     public static class InvalidTokenException extends AuthenticationException {

@@ -139,6 +139,86 @@ class AuthenticationAbuseProtectionTest {
     }
 
     @Test
+    void registrationIsLimitedBySourceAddress() {
+        LoginAttemptRateLimiter isolated = registrationLimiter(2, 60, 30, 5, 2, 3600, System::nanoTime);
+
+        isolated.checkRegistration("198.51.100.10", "first@example.com", "+251911000001");
+        isolated.checkRegistration("198.51.100.10", "second@example.com", "+251911000002");
+        AuthenticationException.TooManyRegistrationAttemptsException limited = assertThrows(
+                AuthenticationException.TooManyRegistrationAttemptsException.class,
+                () -> isolated.checkRegistration("198.51.100.10", "third@example.com", "+251911000003"));
+
+        assertEquals(429, limited.getHttpStatus());
+        assertEquals(429, new GlobalExceptionHandler().handleBaseException(limited).getStatusCode().value());
+    }
+
+    @Test
+    void repeatedRegistrationAttemptsAreStoppedBeforePersistence() {
+        RegisterRequest request = new RegisterRequest(
+                "Abebe Girma", "+251911223344", "abebe@example.com", "securePass1", "shipper");
+        User candidate = User.builder().phone(request.getPhone()).build();
+        when(authMapper.toEntity(request)).thenReturn(candidate);
+        when(passwordEncoder.encode(request.getPassword())).thenReturn("encoded");
+        doThrow(new DataIntegrityViolationException("duplicate"))
+                .when(userRepository).saveAndFlush(candidate);
+
+        for (int attempt = 0; attempt < 10; attempt++) {
+            assertThrows(RegistrationConflictException.class,
+                    () -> authenticationService.register(request, "192.0.2.70"));
+        }
+        AuthenticationException.TooManyRegistrationAttemptsException limited = assertThrows(
+                AuthenticationException.TooManyRegistrationAttemptsException.class,
+                () -> authenticationService.register(request, "192.0.2.70"));
+
+        assertEquals(429, limited.getHttpStatus());
+        verify(userRepository, times(10)).saveAndFlush(candidate);
+    }
+
+    @Test
+    void registrationIdentifierNormalizationCoversEmailAndPhone() {
+        LoginAttemptRateLimiter emailLimiter = registrationLimiter(30, 60, 30, 5, 2, 3600, System::nanoTime);
+
+        emailLimiter.checkRegistration("192.0.2.1", " Person@Example.com ", "+251911000001");
+        emailLimiter.checkRegistration("192.0.2.2", "PERSON@example.com", "+251911000002");
+
+        assertThrows(AuthenticationException.TooManyRegistrationAttemptsException.class,
+                () -> emailLimiter.checkRegistration("192.0.2.3", "person@example.com", "+251911000003"));
+
+        LoginAttemptRateLimiter phoneLimiter = registrationLimiter(30, 60, 30, 5, 2, 3600, System::nanoTime);
+        phoneLimiter.checkRegistration("192.0.2.1", "first@example.com", "+251911000001");
+        phoneLimiter.checkRegistration("192.0.2.2", "second@example.com", "251911000001");
+        assertThrows(AuthenticationException.TooManyRegistrationAttemptsException.class,
+                () -> phoneLimiter.checkRegistration("192.0.2.3", "third@example.com", "+251911000001"));
+    }
+
+    @Test
+    void missingAndMalformedSourceAddressesShareConservativeRegistrationBucket() {
+        LoginAttemptRateLimiter isolated = registrationLimiter(30, 60, 30, 5, 2, 3600, System::nanoTime);
+
+        isolated.checkRegistration(null, "first@example.com", "+251911000001");
+        isolated.checkRegistration("", "second@example.com", "+251911000002");
+
+        assertThrows(AuthenticationException.TooManyRegistrationAttemptsException.class,
+                () -> isolated.checkRegistration("999.999.999.999", "third@example.com", "+251911000003"));
+        assertThrows(AuthenticationException.TooManyRegistrationAttemptsException.class,
+                () -> isolated.checkRegistration("not-an-ip", "fourth@example.com", "+251911000004"));
+    }
+
+    @Test
+    void registrationLimitsExpireAfterConfiguredRefillDuration() {
+        MutableNanoClock clock = new MutableNanoClock();
+        LoginAttemptRateLimiter isolated = registrationLimiter(30, 60, 30, 5, 1, 10, clock);
+
+        isolated.checkRegistration("192.0.2.44", "person@example.com", "+251911000001");
+        assertThrows(AuthenticationException.TooManyRegistrationAttemptsException.class,
+                () -> isolated.checkRegistration("192.0.2.44", "other@example.com", "+251911000002"));
+
+        clock.advance(Duration.ofSeconds(10));
+        assertDoesNotThrow(() -> isolated.checkRegistration(
+                "192.0.2.44", "other@example.com", "+251911000002"));
+    }
+
+    @Test
     void staleSlotsAreReclaimedAfterAFullBucketRefillInterval() {
         MutableNanoClock clock = new MutableNanoClock();
         LoginAttemptRateLimiter isolated = limiter(2, 10, 2, 10, clock, 1, 1);
@@ -440,6 +520,14 @@ class AuthenticationAbuseProtectionTest {
             int sourceCapacity, long sourceRefillSeconds, LongSupplier clock) {
         return new LoginAttemptRateLimiter(identifierCapacity, identifierRefillSeconds,
                 sourceCapacity, sourceRefillSeconds, clock);
+    }
+
+    private static LoginAttemptRateLimiter registrationLimiter(
+            int identifierCapacity, long identifierRefillSeconds,
+            int sourceCapacity, long sourceRefillSeconds,
+            int registrationCapacity, long registrationRefillSeconds, LongSupplier clock) {
+        return new LoginAttemptRateLimiter(identifierCapacity, identifierRefillSeconds,
+                sourceCapacity, sourceRefillSeconds, registrationCapacity, registrationRefillSeconds, clock);
     }
 
     private static LoginAttemptRateLimiter limiter(

@@ -11,6 +11,7 @@ import 'package:logger/logger.dart';
 // Override at build time with: --dart-define=API_BASE_URL=http://your-server/api
 // Falls back to the Spring Boot local server (port 8080 with context-path /api).
 const String _kApiBaseUrlOverride = String.fromEnvironment('API_BASE_URL');
+const String _kWebSocketBaseUrlOverride = String.fromEnvironment('WEBSOCKET_BASE_URL');
 
 String get kBaseUrl {
   return resolveApiBaseUrl(
@@ -47,7 +48,29 @@ String resolveApiBaseUrl(
       : 'http://127.0.0.1:8080/api';
 }
 
-String get kWebSocketBaseUrl => kBaseUrl.replaceFirst(RegExp(r'^http'), 'ws');
+String get kWebSocketBaseUrl {
+  return resolveWebSocketBaseUrl(
+      override: _kWebSocketBaseUrlOverride, apiBaseUrl: kBaseUrl);
+}
+
+String resolveWebSocketBaseUrl(
+    {required String override, required String apiBaseUrl}) {
+  if (override.isEmpty) return apiBaseUrl.replaceFirst(RegExp(r'^http'), 'ws');
+
+  final uri = Uri.parse(override);
+  if (!['http', 'https'].contains(uri.scheme) ||
+      uri.host.isEmpty ||
+      uri.hasQuery ||
+      uri.hasFragment ||
+      uri.userInfo.isNotEmpty) {
+    throw ArgumentError(
+        'WEBSOCKET_BASE_URL must be an HTTP(S) URL including the API context path.');
+  }
+  return uri
+      .replace(scheme: uri.scheme == 'https' ? 'wss' : 'ws')
+      .toString()
+      .replaceFirst(RegExp(r'/+$'), '');
+}
 
 class ApiInterceptor extends Interceptor {
   final Logger logger;

@@ -3,6 +3,7 @@ package com.ethioloadai.config;
 import com.ethioloadai.security.RestAccessDeniedHandler;
 import com.ethioloadai.security.RestAuthenticationEntryPoint;
 import com.ethioloadai.security.jwt.JwtAuthenticationFilter;
+import com.ethioloadai.security.proxy.OriginProxyGuardFilter;
 import com.ethioloadai.security.request.JsonRequestBodyLimitFilter;
 import com.ethioloadai.security.service.CustomUserDetailsService;
 import org.slf4j.Logger;
@@ -62,7 +63,10 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            @Value("${app.proxy.required:false}") boolean proxyRequired,
+            @Value("${app.proxy.secret:}") String proxySecret) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -87,6 +91,9 @@ public class SecurityConfig {
                 )
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(
+                        new OriginProxyGuardFilter(proxyRequired, proxySecret),
+                        JwtAuthenticationFilter.class)
                 .addFilterBefore(
                         new JsonRequestBodyLimitFilter(maxJsonRequestBodySize.toBytes()),
                         AuthorizationFilter.class);

@@ -45,6 +45,7 @@ class MobileAuthCompatibilityControllerTest {
         AuthController controller = new AuthController(service);
         HttpServletRequest servletRequest = mock(HttpServletRequest.class);
         when(servletRequest.getRemoteAddr()).thenReturn("192.0.2.2");
+        when(servletRequest.getHeader("X-Forwarded-For")).thenReturn("203.0.113.200");
         LoginRequest request = new LoginRequest("driver@test.com", "Password123!");
         AuthenticationResponse expected = AuthenticationResponse.builder()
                 .token("jwt-token")
@@ -57,6 +58,7 @@ class MobileAuthCompatibilityControllerTest {
         assertEquals(200, response.getStatusCode().value());
         assertEquals("jwt-token", response.getBody().getToken());
         verify(service).login(request, "192.0.2.2");
+        verify(servletRequest, never()).getHeader("X-Forwarded-For");
     }
 
     @Test
@@ -64,6 +66,9 @@ class MobileAuthCompatibilityControllerTest {
     void testMobileRegister() {
         AuthenticationService service = mock(AuthenticationService.class);
         MobileAuthCompatibilityController controller = new MobileAuthCompatibilityController(service);
+        HttpServletRequest servletRequest = mock(HttpServletRequest.class);
+        when(servletRequest.getRemoteAddr()).thenReturn("192.0.2.3");
+        when(servletRequest.getHeader("X-Forwarded-For")).thenReturn("203.0.113.200");
 
         RegisterRequest req = new RegisterRequest();
         req.setEmail("shipper@test.com");
@@ -77,10 +82,37 @@ class MobileAuthCompatibilityControllerTest {
                 .user(UserResponse.builder().id(2L).email("shipper@test.com").role("SHIPPER").build())
                 .build();
 
-        when(service.register(req)).thenReturn(mockAuth);
+        when(service.register(req, "192.0.2.3")).thenReturn(mockAuth);
 
-        ResponseEntity<AuthenticationResponse> response = controller.register(req);
+        ResponseEntity<AuthenticationResponse> response = controller.register(req, servletRequest);
         assertEquals(201, response.getStatusCode().value());
         assertEquals("jwt-reg-token", response.getBody().getToken());
+        verify(service).register(req, "192.0.2.3");
+        verify(servletRequest, never()).getHeader("X-Forwarded-For");
+    }
+
+    @Test
+    @DisplayName("POST /api/auth/register uses the socket peer instead of a forwarded address")
+    void testPrimaryRegisterIgnoresForwardedAddress() {
+        AuthenticationService service = mock(AuthenticationService.class);
+        AuthController controller = new AuthController(service);
+        HttpServletRequest servletRequest = mock(HttpServletRequest.class);
+        when(servletRequest.getRemoteAddr()).thenReturn("192.0.2.4");
+        when(servletRequest.getHeader("X-Forwarded-For")).thenReturn("203.0.113.200");
+
+        RegisterRequest request = new RegisterRequest(
+                "Abebe", "+251911223344", "abebe@example.com", "Password123!", "shipper");
+        AuthenticationResponse expected = AuthenticationResponse.builder()
+                .token("jwt-reg-token")
+                .user(UserResponse.builder().id(3L).email("abebe@example.com").role("SHIPPER").build())
+                .build();
+        when(service.register(request, "192.0.2.4")).thenReturn(expected);
+
+        ResponseEntity<AuthenticationResponse> response = controller.register(request, servletRequest);
+
+        assertEquals(201, response.getStatusCode().value());
+        assertEquals("jwt-reg-token", response.getBody().getToken());
+        verify(service).register(request, "192.0.2.4");
+        verify(servletRequest, never()).getHeader("X-Forwarded-For");
     }
 }

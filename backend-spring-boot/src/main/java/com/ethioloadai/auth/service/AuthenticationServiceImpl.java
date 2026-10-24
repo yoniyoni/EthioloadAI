@@ -34,6 +34,17 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     @Override
     @Transactional
     public AuthenticationResponse register(RegisterRequest request) {
+        return registerWithSourceIp(request, null);
+    }
+
+    @Override
+    @Transactional
+    public AuthenticationResponse register(RegisterRequest request, String sourceIp) {
+        return registerWithSourceIp(request, sourceIp);
+    }
+
+    private AuthenticationResponse registerWithSourceIp(RegisterRequest request, String sourceIp) {
+        loginAttemptRateLimiter.checkRegistration(sourceIp, request.getEmail(), request.getPhone());
         log.info("User registration initiated");
 
         // Map request to entity

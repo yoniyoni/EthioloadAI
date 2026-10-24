@@ -46,6 +46,23 @@ void main() {
     expect(()=>resolve(TargetPlatform.android,release:true),throwsStateError);
     expect(()=>resolve(TargetPlatform.android,override:'file:///secret'),throwsArgumentError);
   });
+  test('mobile websocket can connect directly while REST uses the Vercel proxy', () {
+    expect(
+      resolveWebSocketBaseUrl(
+        override: 'https://render.example.test/api/',
+        apiBaseUrl: 'https://vercel.example.test/api',
+      ),
+      'wss://render.example.test/api',
+    );
+    expect(
+      resolveWebSocketBaseUrl(override: '', apiBaseUrl: 'https://api.example.test/api'),
+      'wss://api.example.test/api',
+    );
+    expect(
+      () => resolveWebSocketBaseUrl(override: 'file:///invalid', apiBaseUrl: ''),
+      throwsArgumentError,
+    );
+  });
   test('login persists JWT and builds authenticated state; invalid credentials clear state', () async {
     final dio=Dio(BaseOptions(baseUrl:'http://127.0.0.1:8080/api',validateStatus:(s)=>true));
     dio.httpClientAdapter=ContractAdapter(200);

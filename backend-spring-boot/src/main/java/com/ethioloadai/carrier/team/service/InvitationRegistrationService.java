@@ -19,12 +19,17 @@ public class InvitationRegistrationService {
  // Account creation and invitation consumption must commit or roll back together.
  @Transactional
  public Result register(InvitationRegistrationRequest request) {
+  return register(request, null);
+ }
+
+ @Transactional
+ public Result register(InvitationRegistrationRequest request, String sourceIp) {
   var preview = invitations.validate(request.getToken());
   var registration = new RegisterRequest(request.getFullName(), request.getPhone(),
       preview.email(), request.getPassword(), "shipper");
   // The base account role does not grant company permissions. Company/role are
   // taken exclusively from the invitation by accept(), never from client input.
-  var session = authentication.register(registration);
+  var session = authentication.register(registration, sourceIp);
   var user = users.findById(session.getUser().getId()).orElseThrow();
   var membership = invitations.accept(request.getToken(), user);
   return new Result(session, membership);

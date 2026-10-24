@@ -55,6 +55,9 @@ spring:
 app:
   request-body:
     max-json-size: 1MB
+  proxy:
+    required: ${APP_PROXY_REQUIRED:false}
+    secret: ${SPRING_PROXY_SECRET:}
 
 server:
   port: ${SERVER_PORT:8080}
@@ -136,9 +139,8 @@ carrier:
     email-from: ${EMAIL_FROM:}
 
 # Authentication rate limiting
-# The Spring login limiter is process-local defense in depth. It is not shared across
-# application instances, and the current registration endpoint has no application-level
-# IP limiter; the rate-limit.registration values below are not wired to registration.
+# The Spring limiter is process-local defense in depth. It is not shared across
+# application instances and resets when the process restarts.
 # Production deployment requirement (not enforced by this application configuration):
 # the trusted edge/gateway/WAF must rate-limit login and registration before forwarding
 # requests to Spring Boot, using the connection/source IP rather than arbitrary
@@ -153,7 +155,6 @@ rate-limit:
     source-refill-seconds: 5
   registration:
     capacity: 10
-    refill-tokens: 10
     refill-duration-seconds: 3600
   api:
     capacity: 100

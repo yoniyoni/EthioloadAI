@@ -1,10 +1,11 @@
 import { API_BASE } from "@/lib/api";
 
 type RealtimeMessage = { type?: string; data?: Record<string, unknown>; source?: string };
+const WEBSOCKET_BASE = import.meta.env.VITE_WEBSOCKET_BASE_URL || API_BASE;
 
 export function buildWebSocketUrl(
   endpoint: string,
-  apiBase: string = API_BASE,
+  apiBase: string = WEBSOCKET_BASE,
   origin: string = window.location.origin,
 ): URL {
   const apiUrl = new URL(apiBase, origin);

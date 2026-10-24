@@ -3,6 +3,7 @@ package com.ethioloadai.auth.controller;
 import com.ethioloadai.auth.dto.*;
 import com.ethioloadai.auth.service.AuthenticationService;
 import com.ethioloadai.security.model.UserDetailsImpl;
+import com.ethioloadai.security.proxy.TrustedClientAddress;
 import com.ethioloadai.user.entity.User;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -39,6 +40,8 @@ public class AuthController {
             content = @Content(schema = @Schema(implementation = AuthenticationResponse.class))),
         @ApiResponse(responseCode = "422", description = "Validation error",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+        @ApiResponse(responseCode = "429", description = "Too many registration attempts",
+            content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
         @ApiResponse(responseCode = "409", description = "Unable to register using the provided details",
             content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
         @ApiResponse(responseCode = "500", description = "Internal server error",
@@ -46,9 +49,11 @@ public class AuthController {
     })
     public ResponseEntity<AuthenticationResponse> register(
             @Parameter(description = "User registration data", required = true)
-            @Valid @RequestBody RegisterRequest request) {
+            @Valid @RequestBody RegisterRequest request,
+            HttpServletRequest servletRequest) {
         log.info("POST /api/auth/register - Registration request received");
-        AuthenticationResponse response = authenticationService.register(request);
+        AuthenticationResponse response = authenticationService.register(
+                request, TrustedClientAddress.resolve(servletRequest));
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
@@ -69,7 +74,8 @@ public class AuthController {
             @Valid @RequestBody LoginRequest request,
             HttpServletRequest servletRequest) {
         log.info("POST /api/auth/login - Login request received");
-        AuthenticationResponse response = authenticationService.login(request, servletRequest.getRemoteAddr());
+        AuthenticationResponse response = authenticationService.login(
+                request, TrustedClientAddress.resolve(servletRequest));
         return ResponseEntity.ok(response);
     }
 

@@ -5,6 +5,7 @@ import com.ethioloadai.auth.dto.*;
 public interface AuthenticationService {
 
     AuthenticationResponse register(RegisterRequest request);
+    AuthenticationResponse register(RegisterRequest request, String sourceIp);
 
     AuthenticationResponse login(LoginRequest request, String sourceIp);
 

@@ -17,6 +17,13 @@ spring:
 jwt:
   secret: ${JWT_SECRET}
 
+# All REST traffic must arrive through the trusted Vercel Function. The
+# WebSocket handshake remains a separate direct JWT-authenticated connection.
+app:
+  proxy:
+    required: true
+    secret: ${SPRING_PROXY_SECRET:}
+
 # Deployment security requirement: configure and verify IP-based rate limits for
 # login and registration at the trusted production ingress/gateway/WAF before
 # requests reach Spring Boot. Use the actual connection/source IP, strip or

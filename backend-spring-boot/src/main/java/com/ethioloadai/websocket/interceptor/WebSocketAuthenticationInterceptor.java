@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.server.HandshakeInterceptor;
 
+import java.net.InetSocketAddress;
 import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -273,26 +274,12 @@ public class WebSocketAuthenticationInterceptor implements HandshakeInterceptor 
     /**
      * Get client IP address from request.
      */
-    private String getClientIpAddress(ServerHttpRequest request) {
-        // Check X-Forwarded-For header for proxy setups
-        List<String> xForwardedFor = request.getHeaders().get("X-Forwarded-For");
-        if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
-            String forwardedIp = xForwardedFor.get(0);
-            if (forwardedIp != null && !forwardedIp.trim().isEmpty()) {
-                // Take first IP in case of multiple proxies
-                return forwardedIp.split(",")[0].trim();
-            }
+    static String getClientIpAddress(ServerHttpRequest request) {
+        InetSocketAddress remoteAddress = request.getRemoteAddress();
+        if (remoteAddress == null || remoteAddress.getAddress() == null) {
+            return "unknown";
         }
-        
-        // Check X-Real-IP header
-        List<String> xRealIp = request.getHeaders().get("X-Real-IP");
-        if (xRealIp != null && !xRealIp.isEmpty()) {
-            return xRealIp.get(0);
-        }
-        
-        // Fallback to remote address
-        return request.getRemoteAddress() != null ? 
-               request.getRemoteAddress().getAddress().getHostAddress() : "unknown";
+        return remoteAddress.getAddress().getHostAddress();
     }
 
     /**
