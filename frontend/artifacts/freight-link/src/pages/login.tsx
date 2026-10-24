@@ -286,31 +286,6 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Demo accounts */}
-          <div className="mt-6 rounded-xl bg-muted border border-border p-4">
-            <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">{t("auth.demoAccounts")}</p>
-            <div className="space-y-1.5 text-sm">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold px-2 py-0.5 rounded"
-                  style={{ color: '#0F3D1A', background: 'rgba(15,61,26,0.12)' }}>ADMIN</span>
-                <span className="text-muted-foreground font-mono text-xs">admin@freightlink.et / admin123</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold px-2 py-0.5 rounded"
-                  style={{ color: '#F59E0B', background: 'rgba(245,158,11,0.12)' }}>SHIPPER</span>
-                <span className="text-muted-foreground font-mono text-xs">tigist@shipper.et / shipper123</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold px-2 py-0.5 rounded"
-                  style={{ color: '#0F3D1A', background: 'rgba(15,61,26,0.12)' }}>DRIVER</span>
-                <span className="text-muted-foreground font-mono text-xs">bekele@driver.et / driver123</span>
-              </div>
-              <p className="text-xs text-muted-foreground/60 pt-1 font-mono">
-                Use the credentials above with the Spring Boot backend.
-              </p>
-            </div>
-          </div>
-
           <p className="mt-6 text-center text-sm text-muted-foreground">
             {t("auth.noAccount")}{" "}
             <Link href="/register" className="font-semibold text-foreground hover:text-primary transition-colors">
