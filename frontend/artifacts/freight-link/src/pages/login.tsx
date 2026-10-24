@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { useLanguage } from "@/lib/i18n/language-context";
 import { auth } from "@/lib/api";
 import { pendingInvitation } from "@/lib/invitation-session";
+import { getLoginIdentifier, isValidPhoneIdentifier } from "@/lib/auth-identifiers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,9 +24,14 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const identifier = getLoginIdentifier(form.identifier, usePhone);
+    if (usePhone && !isValidPhoneIdentifier(form.identifier)) {
+      toast({ title: "Invalid phone number", description: "Phone number must be valid.", variant: "destructive" });
+      return;
+    }
     setLoading(true);
     try {
-      const data = await auth.post<{ token: string; user: any }>("/auth/login", form);
+      const data = await auth.post<{ token: string; user: any }>("/auth/login", { ...form, identifier });
       login(data.token, data.user);
       toast({ title: t("auth.loginTitle"), description: data.user.full_name ?? data.user.name });
       const role = (data.user.role ?? "").toLowerCase();
@@ -195,6 +201,7 @@ export default function Login() {
                     placeholder="911 234 567"
                     value={form.identifier}
                     onChange={e => setForm(f => ({ ...f, identifier: e.target.value }))}
+                    required
                     className="h-11 rounded-l-none rounded-lg"
                   />
                 </div>

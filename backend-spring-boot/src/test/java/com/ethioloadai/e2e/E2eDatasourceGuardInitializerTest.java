@@ -29,7 +29,7 @@ class E2eDatasourceGuardInitializerTest {
         assertThat(e2eProperties.getProperty("spring.config.import"))
                 .isEqualTo("configtree:/run/secrets/");
         assertThat(e2eProperties.getProperty("cors.allowed-origins"))
-                .isEqualTo("http://localhost:5173,http://127.0.0.1:8765");
+                .isEqualTo("http://localhost:5173,http://localhost:5174,http://127.0.0.1:8765");
     }
 
     @Test
@@ -419,7 +419,8 @@ class E2eDatasourceGuardInitializerTest {
                 "spring.datasource.password", "synthetic-password",
                 "ai-engine.enabled", "false",
                 "routing.external-services.enabled", "false",
-                "cors.allowed-origins", "http://localhost:5173,http://127.0.0.1:8765",
+                "cors.allowed-origins",
+                "http://localhost:5173,http://localhost:5174,http://127.0.0.1:8765",
                 "spring.flyway.enabled", "true",
                 "spring.sql.init.mode", "never"));
         if (mode != null) {

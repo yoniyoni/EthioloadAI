@@ -80,7 +80,7 @@ public final class E2eDatasourceGuardInitializer
         requireEffectivePropertyValue(
                 environment,
                 "cors.allowed-origins",
-                "http://localhost:5173,http://127.0.0.1:8765");
+                "http://localhost:5173,http://localhost:5174,http://127.0.0.1:8765");
         requirePropertyAbsent(environment, new String[]{"cors.allowed-origin-patterns"});
         requireBlankProperty(environment, "spring.mail.username");
         requireBlankProperty(environment, "spring.mail.password");

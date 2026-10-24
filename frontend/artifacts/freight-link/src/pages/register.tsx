@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/contexts/auth-context";
 import { auth, api } from "@/lib/api";
+import { isValidPhoneIdentifier, normalizeEthiopianPhone } from "@/lib/auth-identifiers";
 import { pendingInvitation } from "@/lib/invitation-session";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -145,6 +146,9 @@ export default function Register() {
 
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "", password: "", role: "shipper" });
+  const [phoneError, setPhoneError] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const emailInput = useRef<HTMLInputElement>(null);
   const [invitedEmail, setInvitedEmail] = useState("");
   useEffect(() => {
     const token = pendingInvitation();
@@ -177,15 +181,7 @@ export default function Register() {
       const data = await auth.post<{ token: string; user: any }>("/auth/register", {
         fullName: form.name,
         email: form.email,
-        // The phone control displays +251 separately. Preserve explicit international
-        // numbers, and normalize Ethiopian local input to the backend's full format.
-        phone: (() => {
-          const phone = form.phone.replace(/[\s()-]/g, "");
-          if (/^[79]\d{8}$/.test(phone)) return "+251" + phone;
-          if (/^0[79]\d{8}$/.test(phone)) return "+251" + phone.slice(1);
-          if (/^251[79]\d{8}$/.test(phone)) return "+" + phone;
-          return phone;
-        })(),
+        phone: normalizeEthiopianPhone(form.phone),
         password: form.password,
         role: pendingInvitation() ? "shipper" : form.role,
       });
@@ -257,13 +253,33 @@ export default function Register() {
   ];
 
   const nextStep = () => {
-    if (step === 0 && (!form.name.trim() || !form.phone.trim())) {
-      toast({ title: "Complete your personal details", description: "Full name and phone number are required.", variant: "destructive" });
-      return;
+    if (step === 0) {
+      if (!form.name.trim()) {
+        toast({ title: "Complete your personal details", description: "Full name is required.", variant: "destructive" });
+        return;
+      }
+      if (!form.phone.trim()) {
+        setPhoneError("Phone is required");
+        return;
+      }
+      if (!isValidPhoneIdentifier(form.phone)) {
+        setPhoneError("Phone number must be valid");
+        return;
+      }
+      setPhoneError("");
     }
-    if (step === 1 && !form.email.trim()) {
-      toast({ title: "Email address required", description: "Enter an email address to continue.", variant: "destructive" });
-      return;
+    if (step === 1) {
+      if (!form.email.trim()) {
+        setEmailError("Email is required");
+        emailInput.current?.focus();
+        return;
+      }
+      if (!emailInput.current?.checkValidity()) {
+        setEmailError("Email must be valid");
+        emailInput.current?.focus();
+        return;
+      }
+      setEmailError("");
     }
     setStep(s => Math.min(s + 1, 2));
   };
@@ -388,11 +404,17 @@ export default function Register() {
                         type="tel"
                         placeholder="911 223 344"
                         value={form.phone}
-                        onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                        aria-invalid={!!phoneError}
+                        aria-describedby={phoneError ? "phone-error" : undefined}
+                        onChange={e => {
+                          setForm(f => ({ ...f, phone: e.target.value }));
+                          setPhoneError("");
+                        }}
                         required
                         className="h-11 rounded-l-none rounded-lg"
                       />
                     </div>
+                    {phoneError && <p id="phone-error" className="text-sm text-destructive">{phoneError}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="role" className="text-sm font-medium">Account Type</Label>
@@ -433,12 +455,19 @@ export default function Register() {
                       id="email"
                       type="email"
                       placeholder="name@company.com"
+                      ref={emailInput}
                       value={form.email}
                       readOnly={!!invitedEmail}
-                      onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                      aria-invalid={!!emailError}
+                      aria-describedby={emailError ? "email-error" : undefined}
+                      onChange={e => {
+                        setForm(f => ({ ...f, email: e.target.value }));
+                        setEmailError("");
+                      }}
                       required
                       className="h-11 rounded-lg"
                     />
+                    {emailError && <p id="email-error" className="text-sm text-destructive">{emailError}</p>}
                   </div>
                   <div className="flex gap-2">
                     <Button type="button" variant="outline" className="flex-1 h-11 rounded-lg" onClick={prevStep}>
