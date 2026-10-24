@@ -29,8 +29,6 @@ e2e:
     mode: ${E2E_DATASOURCE_MODE:}
   demo:
     admin-password: ${E2E_DEMO_ADMIN_PASSWORD:}
-    shipper-password: ${E2E_DEMO_SHIPPER_PASSWORD:}
-    driver-password: ${E2E_DEMO_DRIVER_PASSWORD:}
 
 carrier:
   invitations:

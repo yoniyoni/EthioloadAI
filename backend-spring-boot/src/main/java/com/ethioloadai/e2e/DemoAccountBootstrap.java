@@ -20,14 +20,12 @@ import java.util.Objects;
 import java.util.Optional;
 
 @Component
-@Profile({"dev & !prod", "e2e & !prod"})
+@Profile("e2e & !prod")
 @ConditionalOnProperty(name = "app.demo-seed.enabled", havingValue = "true")
 public class DemoAccountBootstrap implements ApplicationRunner {
 
-    static final String ALLOWED_DATASOURCE_URL =
-            "jdbc:postgresql://127.0.0.1:5433/ethioloadai_e2e";
     static final String ALLOWED_E2E_DATASOURCE_URL =
-            E2eDatasourceGuardInitializer.ALLOWED_DOCKER_DATASOURCE_URL;
+            E2eDatasourceGuardInitializer.ALLOWED_DATASOURCE_URL;
 
     private static final Logger log = LoggerFactory.getLogger(DemoAccountBootstrap.class);
 
@@ -36,24 +34,18 @@ public class DemoAccountBootstrap implements ApplicationRunner {
     private final String datasourceUrl;
     private final Environment environment;
     private final String adminPassword;
-    private final String shipperPassword;
-    private final String driverPassword;
 
     public DemoAccountBootstrap(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
             @Value("${spring.datasource.url:}") String datasourceUrl,
             Environment environment,
-            @Value("${e2e.demo.admin-password:}") String adminPassword,
-            @Value("${e2e.demo.shipper-password:}") String shipperPassword,
-            @Value("${e2e.demo.driver-password:}") String driverPassword) {
+            @Value("${e2e.demo.admin-password:}") String adminPassword) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.datasourceUrl = datasourceUrl;
         this.environment = environment;
         this.adminPassword = adminPassword;
-        this.shipperPassword = shipperPassword;
-        this.driverPassword = driverPassword;
     }
 
     @Override
@@ -62,40 +54,25 @@ public class DemoAccountBootstrap implements ApplicationRunner {
         requireAllowedDatasource();
         requireConfiguredPasswords();
 
-        List<DemoAccount> accounts = List.of(
-                new DemoAccount("Demo Administrator", "+251911000001",
-                        "admin@freightlink.et", User.Role.ADMIN, true, true, adminPassword),
-                new DemoAccount("Demo Shipper", "+251911000002",
-                        "tigist@shipper.et", User.Role.SHIPPER, true, true, shipperPassword),
-                new DemoAccount("Demo Driver", "+251911000003",
-                        "bekele@driver.et", User.Role.DRIVER, false, false, driverPassword)
-        );
-
-        for (DemoAccount account : accounts) {
-            createIfAbsent(account);
-        }
+        createIfAbsent(new DemoAccount("Demo Administrator", "+251911000001",
+                "admin@freightlink.et", User.Role.ADMIN, true, true, adminPassword));
     }
 
     private void requireAllowedDatasource() {
         List<String> profiles = Arrays.asList(environment.getActiveProfiles());
-        boolean production = profiles.contains("prod");
-        boolean allowedDevelopmentTarget =
-                profiles.contains("dev") && !production
-                        && ALLOWED_DATASOURCE_URL.equals(datasourceUrl);
         boolean allowedE2eTarget =
-                profiles.contains("e2e") && !production
+                profiles.contains("e2e") && !profiles.contains("prod")
                         && ALLOWED_E2E_DATASOURCE_URL.equals(datasourceUrl);
-        if (!allowedDevelopmentTarget && !allowedE2eTarget) {
+        if (!allowedE2eTarget) {
             throw new IllegalStateException(
                     "Demo seeding is restricted to its approved profile and datasource");
         }
     }
 
     private void requireConfiguredPasswords() {
-        if (isBlank(adminPassword) || isBlank(shipperPassword) || isBlank(driverPassword)) {
+        if (isBlank(adminPassword)) {
             throw new IllegalStateException(
-                    "Set E2E_DEMO_ADMIN_PASSWORD, E2E_DEMO_SHIPPER_PASSWORD, and "
-                            + "E2E_DEMO_DRIVER_PASSWORD to run the DEV/E2E demo seed.");
+                    "Set E2E_DEMO_ADMIN_PASSWORD to run the E2E admin bootstrap.");
         }
     }
 
@@ -108,13 +85,13 @@ public class DemoAccountBootstrap implements ApplicationRunner {
                     && byPhone.isPresent()
                     && Objects.equals(byEmail.get().getId(), byPhone.get().getId())
                     && matchesIdentity(byEmail.get(), account)) {
-                log.info("Preserving existing DEV/E2E demo account email={} role={}",
+                log.info("Preserving existing E2E admin account email={} role={}",
                         account.email(), account.role());
                 return;
             }
 
             throw new IllegalStateException(
-                    "DEV/E2E demo account identity conflicts with an existing user: "
+                    "E2E admin bootstrap identity conflicts with an existing user: "
                             + account.email());
         }
 
@@ -129,7 +106,7 @@ public class DemoAccountBootstrap implements ApplicationRunner {
                 .build();
 
         userRepository.saveAndFlush(user);
-        log.info("Created DEV/E2E demo account email={} role={}", account.email(), account.role());
+        log.info("Created E2E admin account email={} role={}", account.email(), account.role());
     }
 
     private boolean matchesIdentity(User user, DemoAccount account) {

@@ -13,6 +13,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -23,24 +24,22 @@ import static org.mockito.Mockito.*;
 
 class DemoAccountBootstrapTest {
 
-    private static final String ADMIN_PASSWORD = "admin-test-password";
-    private static final String SHIPPER_PASSWORD = "shipper-test-password";
-    private static final String DRIVER_PASSWORD = "driver-test-password";
-
     private UserRepository users;
     private PasswordEncoder encoder;
     private MockEnvironment environment;
     private DemoAccountBootstrap bootstrap;
+    private String adminPassword;
     private Map<String, User> usersByEmail;
     private Map<String, User> usersByPhone;
     private AtomicLong ids;
 
     @BeforeEach
     void setUp() {
+        adminPassword = UUID.randomUUID().toString();
         users = mock(UserRepository.class);
         encoder = new BCryptPasswordEncoder();
         environment = new MockEnvironment();
-        environment.setActiveProfiles("dev");
+        environment.setActiveProfiles("e2e");
         usersByEmail = new HashMap<>();
         usersByPhone = new HashMap<>();
         ids = new AtomicLong();
@@ -58,8 +57,8 @@ class DemoAccountBootstrapTest {
         });
 
         bootstrap = new DemoAccountBootstrap(
-                users, encoder, DemoAccountBootstrap.ALLOWED_DATASOURCE_URL, environment,
-                ADMIN_PASSWORD, SHIPPER_PASSWORD, DRIVER_PASSWORD);
+                users, encoder, DemoAccountBootstrap.ALLOWED_E2E_DATASOURCE_URL, environment,
+                adminPassword);
     }
 
     @Test
@@ -67,35 +66,55 @@ class DemoAccountBootstrapTest {
         bootstrap.run(null);
 
         assertAccount("admin@freightlink.et", "+251911000001", User.Role.ADMIN,
-                true, true, ADMIN_PASSWORD);
-        assertAccount("tigist@shipper.et", "+251911000002", User.Role.SHIPPER,
-                true, true, SHIPPER_PASSWORD);
-        assertAccount("bekele@driver.et", "+251911000003", User.Role.DRIVER,
-                false, false, DRIVER_PASSWORD);
-        verify(users, times(3)).saveAndFlush(any(User.class));
+                true, true, adminPassword);
+        verify(users).saveAndFlush(any(User.class));
     }
 
     @Test
-    void rerunPreservesExistingAccountsAndDoesNotResetKycOrPasswords() {
+    void rerunPreservesExistingAdminPasswordAndState() {
         bootstrap.run(null);
-        User driver = usersByEmail.get("bekele@driver.et");
-        String originalPasswordHash = driver.getPassword();
-        driver.setVerificationStatus(true);
-        driver.setIsActive(true);
+        User admin = usersByEmail.get("admin@freightlink.et");
+        String originalPasswordHash = admin.getPassword();
+        admin.setVerificationStatus(false);
+        admin.setIsActive(false);
 
         bootstrap.run(null);
 
-        verify(users, times(3)).saveAndFlush(any(User.class));
-        assertThat(driver.getPassword()).isEqualTo(originalPasswordHash);
-        assertThat(driver.getVerificationStatus()).isTrue();
-        assertThat(driver.getIsActive()).isTrue();
+        verify(users, times(1)).saveAndFlush(any(User.class));
+        assertThat(admin.getPassword()).isEqualTo(originalPasswordHash);
+        assertThat(admin.getVerificationStatus()).isFalse();
+        assertThat(admin.getIsActive()).isFalse();
+    }
+
+    @Test
+    void refusesToChangeAnExistingIdentityWithAnotherRole() {
+        User existing = User.builder()
+                .id(41L)
+                .fullName("Existing shipper")
+                .email("admin@freightlink.et")
+                .phone("+251911000001")
+                .password("existing-hash")
+                .role(User.Role.SHIPPER)
+                .verificationStatus(true)
+                .isActive(true)
+                .build();
+        usersByEmail.put(existing.getEmail(), existing);
+        usersByPhone.put(existing.getPhone(), existing);
+
+        assertThatThrownBy(() -> bootstrap.run(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("identity conflicts");
+
+        assertThat(existing.getRole()).isEqualTo(User.Role.SHIPPER);
+        assertThat(existing.getPassword()).isEqualTo("existing-hash");
+        verify(users, never()).saveAndFlush(any(User.class));
     }
 
     @Test
     void refusesAnyDatasourceOtherThanTheIsolatedE2EDatabaseBeforeRepositoryAccess() {
         DemoAccountBootstrap unsafe = new DemoAccountBootstrap(
                 users, encoder, "jdbc:postgresql://127.0.0.1:5433/ethioloadai_spring",
-                environment, ADMIN_PASSWORD, SHIPPER_PASSWORD, DRIVER_PASSWORD);
+                environment, adminPassword);
 
         assertThatThrownBy(() -> unsafe.run(null))
                 .isInstanceOf(IllegalStateException.class)
@@ -106,19 +125,19 @@ class DemoAccountBootstrapTest {
     @Test
     void refusesToSeedWhenAnyDemoPasswordIsMissing() {
         DemoAccountBootstrap missingPassword = new DemoAccountBootstrap(
-                users, encoder, DemoAccountBootstrap.ALLOWED_DATASOURCE_URL,
-                environment, ADMIN_PASSWORD, "", DRIVER_PASSWORD);
+                users, encoder, DemoAccountBootstrap.ALLOWED_E2E_DATASOURCE_URL,
+                environment, "");
 
         assertThatThrownBy(() -> missingPassword.run(null))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("E2E_DEMO_SHIPPER_PASSWORD");
+                .hasMessageContaining("E2E_DEMO_ADMIN_PASSWORD");
         verifyNoInteractions(users);
     }
 
     @Test
-    void onlyLoadsForTheExplicitDevProfileAndEnableFlag() {
+    void onlyLoadsForTheExplicitE2eProfileAndEnableFlag() {
         assertThat(DemoAccountBootstrap.class.getAnnotation(Profile.class).value())
-                .containsExactly("dev & !prod", "e2e & !prod");
+                .containsExactly("e2e & !prod");
         ConditionalOnProperty condition =
                 DemoAccountBootstrap.class.getAnnotation(ConditionalOnProperty.class);
         assertThat(condition.name()).containsExactly("app.demo-seed.enabled");
@@ -130,22 +149,45 @@ class DemoAccountBootstrapTest {
         MockEnvironment e2eEnvironment = new MockEnvironment();
         e2eEnvironment.setActiveProfiles("e2e");
         assertThat(DemoAccountBootstrap.ALLOWED_E2E_DATASOURCE_URL)
-                .isEqualTo(E2eDatasourceGuardInitializer.ALLOWED_DOCKER_DATASOURCE_URL);
+                .isEqualTo("jdbc:postgresql://127.0.0.1:15433/ethioloadai_e2e");
         DemoAccountBootstrap e2e = new DemoAccountBootstrap(
-                users, encoder, E2eDatasourceGuardInitializer.ALLOWED_DOCKER_DATASOURCE_URL,
-                e2eEnvironment,
-                ADMIN_PASSWORD, SHIPPER_PASSWORD, DRIVER_PASSWORD);
+                users, encoder, DemoAccountBootstrap.ALLOWED_E2E_DATASOURCE_URL,
+                e2eEnvironment, adminPassword);
 
         e2e.run(null);
 
-        verify(users, times(3)).saveAndFlush(any(User.class));
+        verify(users).saveAndFlush(any(User.class));
     }
 
     @Test
-    void e2eTargetIsRejectedForTheDevelopmentProfile() {
+    void e2eBootstrapRejectsNonExactDatabaseTargetsBeforeRepositoryAccess() {
+        MockEnvironment e2eEnvironment = new MockEnvironment();
+        e2eEnvironment.setActiveProfiles("e2e");
+        for (String datasource : new String[] {
+                "jdbc:postgresql://localhost:15433/ethioloadai_e2e",
+                "jdbc:postgresql://127.0.0.1:15432/ethioloadai_e2e",
+                "jdbc:postgresql://127.0.0.1:15433/other_database",
+                "jdbc:postgresql://127.0.0.1:5433/ethioloadai_e2e",
+                "jdbc:postgresql://db.example.test:15433/ethioloadai_e2e"
+        }) {
+            DemoAccountBootstrap unsafe = new DemoAccountBootstrap(
+                    users, encoder, datasource, e2eEnvironment, adminPassword);
+
+            assertThatThrownBy(() -> unsafe.run(null))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("approved profile and datasource");
+        }
+
+        verifyNoInteractions(users);
+    }
+
+    @Test
+    void e2eTargetIsRejectedOutsideTheE2eProfile() {
+        MockEnvironment devEnvironment = new MockEnvironment();
+        devEnvironment.setActiveProfiles("dev");
         DemoAccountBootstrap unsafe = new DemoAccountBootstrap(
-                users, encoder, DemoAccountBootstrap.ALLOWED_E2E_DATASOURCE_URL, environment,
-                ADMIN_PASSWORD, SHIPPER_PASSWORD, DRIVER_PASSWORD);
+                users, encoder, DemoAccountBootstrap.ALLOWED_E2E_DATASOURCE_URL, devEnvironment,
+                adminPassword);
 
         assertThatThrownBy(() -> unsafe.run(null))
                 .isInstanceOf(IllegalStateException.class)

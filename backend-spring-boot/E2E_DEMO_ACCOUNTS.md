@@ -29,17 +29,15 @@ delivery also refuses to invoke the mail sender when required SMTP settings
 are blank. These application-level controls do not constitute process-wide
 network egress isolation.
 
-This guard applies when `e2e` is active. Existing development seeding remains restricted to the `dev` profile and its existing port-5433 demo database. The production profile is not eligible for demo-account seeding. Never use the development datasource for E2E work.
+This guard applies when `e2e` is active. Demo-account bootstrap is available only under the `e2e` profile and is never eligible for production. Never use the development datasource for E2E work.
 
 ## Demo-account bootstrap
 
-Seeding remains disabled unless `APP_DEMO_SEED_ENABLED=true` is explicitly set and all three synthetic passwords are supplied through:
+The E2E-only bootstrap remains disabled unless `APP_DEMO_SEED_ENABLED=true` is explicitly set and a synthetic administrator password is supplied through:
 
 - `E2E_DEMO_ADMIN_PASSWORD`
-- `E2E_DEMO_SHIPPER_PASSWORD`
-- `E2E_DEMO_DRIVER_PASSWORD`
 
-The bootstrap only creates an account when both its email and phone are unused. A conflicting identity aborts rather than overwriting an existing account. Matching accounts are preserved, including their password and KYC state. The synthetic driver starts pending and inactive; activate it only through the normal authorized KYC/admin workflow.
+The bootstrap creates only the synthetic administrator, only under the `e2e` profile, and only against the exact host-loopback E2E datasource. It only creates the account when both its email and phone are unused. A conflicting identity aborts rather than overwriting an existing account. A matching account is preserved, including its password and state. Create shipper, driver, and fleet-owner test accounts through the application interfaces; do not use this bootstrap to fabricate their workflow state.
 
 ## Authorization gates before any E2E execution
 
@@ -59,5 +57,4 @@ Do not persist secrets in `.env` files, source control, shell profiles, or logs.
 | Role | Email | Initial state |
 |---|---|---|
 | ADMIN | `admin@freightlink.et` | Verified and active |
-| SHIPPER | `tigist@shipper.et` | Verified and active |
-| DRIVER | `bekele@driver.et` | Pending KYC and inactive |
+Shipper, driver, and fleet-owner accounts are created through the application interfaces for each E2E workflow.
