@@ -30,7 +30,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
                AND u.phone = :phone
                AND u.role = :role
             """)
-    int updateBootstrapAdminPassword(
+    int updateBootstrapAccountPassword(
             @Param("userId") Long userId,
             @Param("email") String email,
             @Param("phone") String phone,

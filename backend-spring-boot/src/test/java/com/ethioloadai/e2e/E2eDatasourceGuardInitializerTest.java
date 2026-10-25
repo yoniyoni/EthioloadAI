@@ -1,5 +1,7 @@
 package com.ethioloadai.e2e;
 
+import com.ethioloadai.config.CorsProperties;
+import com.ethioloadai.config.SecurityConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.core.env.MapPropertySource;
@@ -7,6 +9,8 @@ import org.springframework.core.env.PropertySource;
 import org.springframework.core.env.SystemEnvironmentPropertySource;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.mock.env.MockEnvironment;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.util.unit.DataSize;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -29,7 +33,32 @@ class E2eDatasourceGuardInitializerTest {
         assertThat(e2eProperties.getProperty("spring.config.import"))
                 .isEqualTo("configtree:/run/secrets/");
         assertThat(e2eProperties.getProperty("cors.allowed-origins"))
-                .isEqualTo("http://localhost:5173,http://localhost:5174,http://127.0.0.1:8765");
+                .isEqualTo("http://localhost:5173,http://localhost:5174,http://127.0.0.1:5174,http://127.0.0.1:8765");
+    }
+
+    @Test
+    void e2eCorsAllowsOnlyTheConfiguredLocalAppOrigins() throws IOException {
+        PropertySource<?> e2eProperties = new YamlPropertySourceLoader()
+                .load("application-e2e", new ClassPathResource("application-e2e.yml"))
+                .get(0);
+        CorsProperties corsProperties = new CorsProperties();
+        corsProperties.setAllowedOrigins(List.of(
+                ((String) e2eProperties.getProperty("cors.allowed-origins")).split(",")));
+        SecurityConfig securityConfig = new SecurityConfig(
+                null, null, null, null, corsProperties, DataSize.ofMegabytes(1));
+        var corsConfiguration = securityConfig.corsConfigurationSource()
+                .getCorsConfiguration(new MockHttpServletRequest());
+
+        assertThat(corsConfiguration).isNotNull();
+        assertThat(corsConfiguration.checkOrigin("http://localhost:5173"))
+                .isEqualTo("http://localhost:5173");
+        assertThat(corsConfiguration.checkOrigin("http://localhost:5174"))
+                .isEqualTo("http://localhost:5174");
+        assertThat(corsConfiguration.checkOrigin("http://127.0.0.1:5174"))
+                .isEqualTo("http://127.0.0.1:5174");
+        assertThat(corsConfiguration.checkOrigin("http://127.0.0.1:5175")).isNull();
+        assertThat(corsConfiguration.checkOrigin("https://127.0.0.1:5174")).isNull();
+        assertThat(corsConfiguration.checkOrigin("https://untrusted.example")).isNull();
     }
 
     @Test
@@ -420,7 +449,7 @@ class E2eDatasourceGuardInitializerTest {
                 "ai-engine.enabled", "false",
                 "routing.external-services.enabled", "false",
                 "cors.allowed-origins",
-                "http://localhost:5173,http://localhost:5174,http://127.0.0.1:8765",
+                "http://localhost:5173,http://localhost:5174,http://127.0.0.1:5174,http://127.0.0.1:8765",
                 "spring.flyway.enabled", "true",
                 "spring.sql.init.mode", "never"));
         if (mode != null) {

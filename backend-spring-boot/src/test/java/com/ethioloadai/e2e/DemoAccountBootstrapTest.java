@@ -73,6 +73,105 @@ class DemoAccountBootstrapTest {
     }
 
     @Test
+    void seedsOnlyTheConfiguredShipperAndPendingDriverAccounts() {
+        String shipperPassword = UUID.randomUUID().toString();
+        String driverPassword = UUID.randomUUID().toString();
+        DemoAccountBootstrap configured = new DemoAccountBootstrap(
+                users, encoder, DemoAccountBootstrap.ALLOWED_E2E_DATASOURCE_URL,
+                environment, adminPassword, false, shipperPassword, driverPassword);
+
+        configured.run(null);
+
+        assertAccount("admin@freightlink.et", "+251911000001", User.Role.ADMIN,
+                true, true, adminPassword);
+        assertAccount("tigist@shipper.et", "+251911000012", User.Role.SHIPPER,
+                true, true, shipperPassword);
+        assertAccount("bekele@driver.et", "+251911000013", User.Role.DRIVER,
+                false, false, driverPassword);
+        verify(users, times(3)).saveAndFlush(any(User.class));
+    }
+
+    @Test
+    void repairsOnlyPasswordsForMatchingRoleAccountIdentities() {
+        User shipper = User.builder()
+                .id(51L)
+                .fullName("Tigist Mesfin")
+                .email("tigist@shipper.et")
+                .phone("+251911000012")
+                .password("old-shipper-hash")
+                .role(User.Role.SHIPPER)
+                .verificationStatus(false)
+                .isActive(false)
+                .build();
+        User driver = User.builder()
+                .id(52L)
+                .fullName("Bekele Girma")
+                .email("bekele@driver.et")
+                .phone("+251911000013")
+                .password("old-driver-hash")
+                .role(User.Role.DRIVER)
+                .verificationStatus(true)
+                .isActive(true)
+                .build();
+        usersByEmail.put(shipper.getEmail(), shipper);
+        usersByPhone.put(shipper.getPhone(), shipper);
+        usersByEmail.put(driver.getEmail(), driver);
+        usersByPhone.put(driver.getPhone(), driver);
+        when(users.updateBootstrapAccountPassword(
+                any(), anyString(), anyString(), any(User.Role.class), anyString()))
+                .thenReturn(1);
+        String shipperPassword = UUID.randomUUID().toString();
+        String driverPassword = UUID.randomUUID().toString();
+        DemoAccountBootstrap configured = new DemoAccountBootstrap(
+                users, encoder, DemoAccountBootstrap.ALLOWED_E2E_DATASOURCE_URL,
+                environment, adminPassword, false, shipperPassword, driverPassword);
+
+        configured.run(null);
+
+        verify(users).updateBootstrapAccountPassword(
+                eq(51L), eq("tigist@shipper.et"), eq("+251911000012"),
+                eq(User.Role.SHIPPER), anyString());
+        verify(users).updateBootstrapAccountPassword(
+                eq(52L), eq("bekele@driver.et"), eq("+251911000013"),
+                eq(User.Role.DRIVER), anyString());
+        assertThat(shipper.getVerificationStatus()).isFalse();
+        assertThat(shipper.getIsActive()).isFalse();
+        assertThat(driver.getVerificationStatus()).isTrue();
+        assertThat(driver.getIsActive()).isTrue();
+        assertThat(shipper.getRole()).isEqualTo(User.Role.SHIPPER);
+        assertThat(driver.getRole()).isEqualTo(User.Role.DRIVER);
+        verify(users, times(1)).saveAndFlush(any(User.class));
+    }
+
+    @Test
+    void refusesToRepairDemoAccountWithRoleConflict() {
+        User conflicting = User.builder()
+                .id(53L)
+                .fullName("Tigist Mesfin")
+                .email("tigist@shipper.et")
+                .phone("+251911000012")
+                .password("existing-hash")
+                .role(User.Role.DRIVER)
+                .verificationStatus(false)
+                .isActive(false)
+                .build();
+        usersByEmail.put(conflicting.getEmail(), conflicting);
+        usersByPhone.put(conflicting.getPhone(), conflicting);
+        DemoAccountBootstrap configured = new DemoAccountBootstrap(
+                users, encoder, DemoAccountBootstrap.ALLOWED_E2E_DATASOURCE_URL,
+                environment, adminPassword, false, UUID.randomUUID().toString(), "");
+
+        assertThatThrownBy(() -> configured.run(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("identity conflicts");
+
+        assertThat(conflicting.getRole()).isEqualTo(User.Role.DRIVER);
+        assertThat(conflicting.getPassword()).isEqualTo("existing-hash");
+        verify(users, never()).updateBootstrapAccountPassword(
+                any(), anyString(), anyString(), any(User.Role.class), anyString());
+    }
+
+    @Test
     void rerunPreservesExistingAdminPasswordAndState() {
         bootstrap.run(null);
         User admin = usersByEmail.get("admin@freightlink.et");
@@ -83,7 +182,7 @@ class DemoAccountBootstrapTest {
         bootstrap.run(null);
 
         verify(users, times(1)).saveAndFlush(any(User.class));
-        verify(users, never()).updateBootstrapAdminPassword(
+        verify(users, never()).updateBootstrapAccountPassword(
                 any(), anyString(), anyString(), any(User.Role.class), anyString());
         assertThat(admin.getPassword()).isEqualTo(originalPasswordHash);
         assertThat(admin.getVerificationStatus()).isFalse();
@@ -107,7 +206,7 @@ class DemoAccountBootstrapTest {
                 .build();
         usersByEmail.put(admin.getEmail(), admin);
         usersByPhone.put(admin.getPhone(), admin);
-        when(users.updateBootstrapAdminPassword(
+        when(users.updateBootstrapAccountPassword(
                 any(), anyString(), anyString(), any(User.Role.class), anyString()))
                 .thenReturn(1);
 
@@ -117,7 +216,7 @@ class DemoAccountBootstrapTest {
         rotating.run(null);
 
         var encodedPassword = forClass(String.class);
-        verify(users).updateBootstrapAdminPassword(
+        verify(users).updateBootstrapAccountPassword(
                 eq(41L), eq("admin@freightlink.et"), eq("+251911000001"),
                 eq(User.Role.ADMIN), encodedPassword.capture());
         assertThat(encodedPassword.getValue()).isNotEqualTo(adminPassword);
@@ -137,6 +236,31 @@ class DemoAccountBootstrapTest {
     }
 
     @Test
+    void explicitRotationDoesNotRewriteAnAlreadyMatchingAdminPassword() {
+        User admin = User.builder()
+                .id(42L)
+                .fullName("Demo Administrator")
+                .email("admin@freightlink.et")
+                .phone("+251911000001")
+                .password(encoder.encode(adminPassword))
+                .role(User.Role.ADMIN)
+                .verificationStatus(true)
+                .isActive(true)
+                .build();
+        usersByEmail.put(admin.getEmail(), admin);
+        usersByPhone.put(admin.getPhone(), admin);
+        DemoAccountBootstrap rotating = new DemoAccountBootstrap(
+                users, encoder, DemoAccountBootstrap.ALLOWED_E2E_DATASOURCE_URL,
+                environment, adminPassword, true);
+
+        rotating.run(null);
+
+        verify(users, never()).updateBootstrapAccountPassword(
+                any(), anyString(), anyString(), any(User.Role.class), anyString());
+        assertThat(encoder.matches(adminPassword, admin.getPassword())).isTrue();
+    }
+
+    @Test
     void explicitRotationRequiresAnExistingMatchingAdminIdentity() {
         DemoAccountBootstrap rotating = new DemoAccountBootstrap(
                 users, encoder, DemoAccountBootstrap.ALLOWED_E2E_DATASOURCE_URL,
@@ -145,7 +269,7 @@ class DemoAccountBootstrapTest {
         assertThatThrownBy(() -> rotating.run(null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("exact existing bootstrap admin");
-        verify(users, never()).updateBootstrapAdminPassword(
+        verify(users, never()).updateBootstrapAccountPassword(
                 any(), anyString(), anyString(), any(User.Role.class), anyString());
         verify(users, never()).saveAndFlush(any(User.class));
     }
@@ -173,7 +297,7 @@ class DemoAccountBootstrapTest {
                 .hasMessageContaining("exact existing bootstrap admin");
         assertThat(existing.getRole()).isEqualTo(User.Role.SHIPPER);
         assertThat(existing.getPassword()).isEqualTo("existing-hash");
-        verify(users, never()).updateBootstrapAdminPassword(
+        verify(users, never()).updateBootstrapAccountPassword(
                 any(), anyString(), anyString(), any(User.Role.class), anyString());
     }
 
@@ -200,14 +324,14 @@ class DemoAccountBootstrapTest {
                 .hasMessageContaining("exact existing bootstrap admin");
         assertThat(existing.getPhone()).isEqualTo("+251911000099");
         assertThat(existing.getPassword()).isEqualTo("existing-hash");
-        verify(users, never()).updateBootstrapAdminPassword(
+        verify(users, never()).updateBootstrapAccountPassword(
                 any(), anyString(), anyString(), any(User.Role.class), anyString());
     }
 
     @Test
     void passwordRotationQueryUpdatesOnlyThePasswordForTheExactIdentity() throws Exception {
         var method = UserRepository.class.getMethod(
-                "updateBootstrapAdminPassword",
+                "updateBootstrapAccountPassword",
                 Long.class, String.class, String.class, User.Role.class, String.class);
         var query = method.getAnnotation(org.springframework.data.jpa.repository.Query.class);
 
@@ -266,17 +390,32 @@ class DemoAccountBootstrapTest {
     }
 
     @Test
-    void onlyLoadsForTheExplicitE2eProfileAndEnableFlag() {
+    void onlyLoadsForTheExplicitE2eProfileAndEnableFlag() throws NoSuchMethodException {
         assertThat(DemoAccountBootstrap.class.getAnnotation(Profile.class).value())
                 .containsExactly("e2e & !prod");
         ConditionalOnProperty condition =
                 DemoAccountBootstrap.class.getAnnotation(ConditionalOnProperty.class);
         assertThat(condition.name()).containsExactly("app.demo-seed.enabled");
         assertThat(condition.havingValue()).isEqualTo("true");
-        assertThat(DemoAccountBootstrap.class.getDeclaredConstructors()[0]
+        var constructor = DemoAccountBootstrap.class.getDeclaredConstructor(
+                UserRepository.class,
+                PasswordEncoder.class,
+                String.class,
+                org.springframework.core.env.Environment.class,
+                String.class,
+                boolean.class,
+                String.class,
+                String.class);
+        assertThat(constructor
                 .getParameters()[5].getAnnotation(
                         org.springframework.beans.factory.annotation.Value.class).value())
                 .isEqualTo("${app.demo-seed.rotate-admin-password:false}");
+        assertThat(constructor.getParameters()[6].getAnnotation(
+                        org.springframework.beans.factory.annotation.Value.class).value())
+                        .isEqualTo("${e2e.demo.shipper-password:}");
+        assertThat(constructor.getParameters()[7].getAnnotation(
+                        org.springframework.beans.factory.annotation.Value.class).value())
+                        .isEqualTo("${e2e.demo.driver-password:}");
     }
 
     @Test

@@ -29,6 +29,10 @@ delivery also refuses to invoke the mail sender when required SMTP settings
 are blank. These application-level controls do not constitute process-wide
 network egress isolation.
 
+The E2E CORS allowlist permits only the configured React and Flutter local
+origins, including `http://127.0.0.1:5174` for Flutter's loopback web server.
+Do not replace the exact origin list with a wildcard or origin pattern.
+
 This guard applies when `e2e` is active. Demo-account bootstrap is available only under the `e2e` profile and is never eligible for production. Never use the development datasource for E2E work.
 
 ## Demo-account bootstrap
@@ -37,7 +41,7 @@ The E2E-only bootstrap remains disabled unless `APP_DEMO_SEED_ENABLED=true` is e
 
 - `E2E_DEMO_ADMIN_PASSWORD`
 
-The bootstrap creates only the synthetic administrator, only under the `e2e` profile, and only against the exact host-loopback E2E datasource. It only creates the account when both its email and phone are unused. A conflicting identity aborts rather than overwriting an existing account. A matching account is preserved, including its password and state. Create shipper, driver, and fleet-owner test accounts through the application interfaces; do not use this bootstrap to fabricate their workflow state.
+The bootstrap creates only the synthetic administrator by default. Optional `E2E_DEMO_SHIPPER_PASSWORD` and `E2E_DEMO_DRIVER_PASSWORD` values enable only the exact shipper and driver identities listed below. It runs only under the `e2e` profile and only against the exact host-loopback E2E datasource. New accounts are created only when both their email and phone are unused. Any existing email, phone, or role conflict aborts rather than overwriting the account. For an exact matching identity, only the password hash is changed when necessary; verification and active state are preserved. A new driver remains unverified and inactive pending normal KYC review. This mechanism does not create vehicles, documents, or workflow state. Create fleet-owner test accounts through the application interface.
 
 Password rotation for the existing bootstrap administrator requires the separate, normally disabled `APP_DEMO_SEED_ROTATE_ADMIN_PASSWORD=true` flag in addition to `APP_DEMO_SEED_ENABLED=true`. It is restricted to the exact existing administrator identity and approved host-loopback E2E datasource, and updates only its password hash. Use it only for an explicitly authorized local E2E recovery; never enable it in production.
 
@@ -59,4 +63,5 @@ Do not persist secrets in `.env` files, source control, shell profiles, or logs.
 | Role | Email | Initial state |
 |---|---|---|
 | ADMIN | `admin@freightlink.et` | Verified and active |
-Shipper, driver, and fleet-owner accounts are created through the application interfaces for each E2E workflow.
+| SHIPPER | `tigist@shipper.et` | Verified and active |
+| DRIVER | `bekele@driver.et` | Unverified and inactive pending KYC |
