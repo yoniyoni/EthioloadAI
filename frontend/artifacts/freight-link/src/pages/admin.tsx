@@ -118,6 +118,27 @@ interface AdminVehicleItem {
   updatedAt?: string | null;
 }
 
+interface AdminVehicleDocumentItem {
+  id: number;
+  vehicleId?: number | null;
+  vehicle_id?: number | null;
+  userId?: number | null;
+  user_id?: number | null;
+  vehiclePlateNumber?: string | null;
+  vehicle_plate_number?: string | null;
+  documentType?: string;
+  document_type?: string;
+  documentLabel?: string;
+  document_label?: string;
+  originalName?: string;
+  original_name?: string;
+  status: string;
+  rejectionReason?: string | null;
+  rejection_reason?: string | null;
+  fileUrl?: string;
+  file_url?: string;
+}
+
 interface AdminDriverVehicle {
   id: number;
   truckType: string;
@@ -390,6 +411,7 @@ export default function Admin() {
   const [driverSearch, setDriverSearch] = useState("");
   const [driverDocOpen, setDriverDocOpen] = useState(false);
   const [selectedDriver, setSelectedDriver] = useState<AdminDriverDocGroup | null>(null);
+  const [vehicleRejectForm, setVehicleRejectForm] = useState({ documentId: null as number | null, reason: "" });
   const [pricingForm, setPricingForm] = useState({ rate_min: 18, rate_max: 28 });
   const [failedPaymentId, setFailedPaymentId] = useState<number | null>(null);
 
@@ -478,6 +500,40 @@ export default function Admin() {
     queryKey: ["admin-vehicles"],
     queryFn: () => api.get<AdminVehicleItem[]>("/vehicles"),
   });
+
+  const {
+    data: vehicleDocumentsData,
+    isLoading: vehicleDocumentsLoading,
+    isError: vehicleDocumentsError,
+  } = useQuery({
+    queryKey: ["admin-vehicle-documents", "pending"],
+    queryFn: () => api.get<AdminVehicleDocumentItem[]>("/admin/vehicle-documents?status=PENDING"),
+  });
+
+  const reviewVehicleDocument = useMutation({
+    mutationFn: ({ id, status, rejectionReason }: { id: number; status: "APPROVED" | "REJECTED"; rejectionReason?: string }) =>
+      api.patch(`/admin/vehicle-documents/${id}/review`, { status, rejectionReason }),
+    onSuccess: async (_data, variables) => {
+      if (variables.status === "REJECTED") {
+        setVehicleRejectForm({ documentId: null, reason: "" });
+      }
+      toast({ title: "Vehicle document reviewed" });
+      await qc.invalidateQueries({ queryKey: ["admin-vehicle-documents", "pending"] });
+      await qc.invalidateQueries({ queryKey: ["admin-vehicles"] });
+      await qc.invalidateQueries({ queryKey: ["my-vehicles"] });
+    },
+    onError: (err: any) => toast({ title: "Vehicle document review failed", description: err.message, variant: "destructive" }),
+  });
+
+  async function handleViewVehicleDocument(document: AdminVehicleDocumentItem) {
+    try {
+      const fileUrl = document.fileUrl ?? document.file_url ?? `/api/vehicle-documents/${document.id}/file`;
+      const blob = await api.getBlob(fileUrl);
+      window.open(URL.createObjectURL(blob), "_blank", "noopener,noreferrer");
+    } catch {
+      toast({ title: "Could not load vehicle document", variant: "destructive" });
+    }
+  }
 
   const reviewVehicle = useMutation({
     mutationFn: ({ id, status }: { id: number; status: "APPROVED" | "REJECTED" }) =>
@@ -1898,6 +1954,83 @@ export default function Admin() {
             </CardHeader>
             <CardContent>
               {vehiclesLoading ? <div className="space-y-2"><Skeleton className="h-12 w-full rounded-lg" /><Skeleton className="h-12 w-full rounded-lg" /></div> : vehiclesError ? <p role="alert" className="py-8 text-center text-sm text-destructive">Unable to load registered vehicles.</p> : (vehiclesData ?? []).length === 0 ? <div className="py-12 text-center text-muted-foreground"><Truck className="mx-auto mb-2 h-8 w-8 opacity-40" /><p>No registered vehicles found.</p></div> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="pb-3 font-medium text-muted-foreground">Vehicle</th><th className="pb-3 font-medium text-muted-foreground">Company / owner</th><th className="pb-3 font-medium text-muted-foreground">Registration</th><th className="pb-3 font-medium text-muted-foreground">Capacity</th><th className="pb-3 font-medium text-muted-foreground">Location</th><th className="pb-3 font-medium text-muted-foreground">Approval</th><th className="pb-3 font-medium text-muted-foreground">Availability</th><th className="pb-3 font-medium text-muted-foreground">Registered</th><th className="pb-3 font-medium text-muted-foreground">Review</th></tr></thead><tbody className="divide-y">{(vehiclesData ?? []).map((vehicle) => { const approval = vehicle.approvalStatus ?? "UNDER_REVIEW"; const pending = approval === "UNDER_REVIEW"; return <tr key={vehicle.id}><td className="py-3"><p className="font-medium">{vehicle.truckType ?? vehicle.vehicleCategory ?? "Vehicle"}</p><p className="text-xs text-muted-foreground">Vehicle #{vehicle.id}</p></td><td className="py-3 text-muted-foreground">{vehicle.carrierCompanyId ? <><span className="block">Fleet company #{vehicle.carrierCompanyId}</span><span className="text-xs">Owner #{vehicle.fleetOwnerId ?? vehicle.userId ?? "—"}</span></> : <span>Owner #{vehicle.fleetOwnerId ?? vehicle.userId ?? "Unavailable"}</span>}</td><td className="py-3 font-medium">{vehicle.plateNumber ?? "Unavailable"}</td><td className="py-3">{vehicle.capacity != null ? `${vehicle.capacity} t` : "Unavailable"}</td><td className="py-3">{vehicle.currentCity ?? "Unavailable"}</td><td className="py-3"><Badge variant={approval === "APPROVED" ? "default" : approval === "REJECTED" ? "destructive" : "outline"}>{approval.replaceAll("_", " ")}</Badge></td><td className="py-3"><Badge variant="outline">{vehicle.availabilityStatus ?? "Unavailable"}</Badge></td><td className="py-3 text-xs text-muted-foreground">{vehicle.createdAt ? new Date(vehicle.createdAt).toLocaleDateString() : "Unavailable"}</td><td className="py-3"><div className="flex gap-2">{pending ? <><Button size="sm" className="gap-1" disabled={reviewVehicle.isPending} onClick={() => reviewVehicle.mutate({ id: vehicle.id, status: "APPROVED" })}><CheckCircle className="h-4 w-4"/>Approve</Button><Button size="sm" variant="destructive" className="gap-1" disabled={reviewVehicle.isPending} onClick={() => reviewVehicle.mutate({ id: vehicle.id, status: "REJECTED" })}><ThumbsDown className="h-4 w-4"/>Reject</Button></> : <span className="text-xs text-muted-foreground">Reviewed</span>}</div></td></tr>; })}</tbody></table></div>}
+            </CardContent>
+          </Card>
+          <Card className="mt-6 border-border/60 rounded-xl">
+            <CardHeader>
+              <CardTitle className="text-base">Pending Vehicle Documents</CardTitle>
+              <p className="text-xs text-muted-foreground">Review uploaded documents before vehicle approval.</p>
+            </CardHeader>
+            <CardContent>
+              {vehicleDocumentsLoading ? (
+                <div className="space-y-2"><Skeleton className="h-12 w-full rounded-lg" /></div>
+              ) : vehicleDocumentsError ? (
+                <p role="alert" className="py-6 text-center text-sm text-destructive">Unable to load vehicle documents.</p>
+              ) : (vehicleDocumentsData ?? []).length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">No pending vehicle documents.</p>
+              ) : (
+                <div className="space-y-3">
+                  {(vehicleDocumentsData ?? []).map((document) => (
+                    <div key={document.id} className="rounded-lg border p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="font-medium">{document.documentLabel ?? document.document_label ?? document.documentType ?? document.document_type}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Vehicle #{document.vehicleId ?? document.vehicle_id} · Owner #{document.userId ?? document.user_id} · {document.vehiclePlateNumber ?? document.vehicle_plate_number}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{document.originalName ?? document.original_name}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" onClick={() => void handleViewVehicleDocument(document)}>View</Button>
+                          <Button
+                            size="sm"
+                            disabled={reviewVehicleDocument.isPending}
+                            onClick={() => reviewVehicleDocument.mutate({ id: document.id, status: "APPROVED" })}
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            disabled={reviewVehicleDocument.isPending}
+                            onClick={() => setVehicleRejectForm({ documentId: document.id, reason: "" })}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      </div>
+                      {vehicleRejectForm.documentId === document.id && (
+                        <div className="mt-3 flex flex-wrap items-end gap-2">
+                          <div className="min-w-56 flex-1 space-y-1">
+                            <Label htmlFor={`vehicle-document-rejection-${document.id}`}>Rejection reason</Label>
+                            <Input
+                              id={`vehicle-document-rejection-${document.id}`}
+                              value={vehicleRejectForm.reason}
+                              onChange={(event) => setVehicleRejectForm((current) => ({ ...current, reason: event.target.value }))}
+                              maxLength={500}
+                            />
+                          </div>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            disabled={!vehicleRejectForm.reason.trim() || reviewVehicleDocument.isPending}
+                            onClick={() => reviewVehicleDocument.mutate({
+                              id: document.id,
+                              status: "REJECTED",
+                              rejectionReason: vehicleRejectForm.reason.trim(),
+                            })}
+                          >
+                            Confirm rejection
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => setVehicleRejectForm({ documentId: null, reason: "" })}>
+                            Cancel
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

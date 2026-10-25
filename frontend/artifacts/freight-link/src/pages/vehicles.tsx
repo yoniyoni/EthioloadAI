@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,117 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/auth-context";
 
 const TRUCK_TYPES = ["pickup", "light_truck", "medium_truck", "heavy_truck", "tanker", "refrigerated", "flatbed", "tipper"];
+
+const REQUIRED_VEHICLE_DOCUMENTS = [
+  ["registration_certificate", "Registration Certificate"],
+  ["insurance_certificate", "Insurance Certificate"],
+  ["roadworthiness_certificate", "Roadworthiness Certificate"],
+  ["ownership_document", "Ownership Document"],
+] as const;
+
+interface VehicleDocumentItem {
+  documentType?: string;
+  document_type?: string;
+  documentLabel?: string;
+  document_label?: string;
+  originalName?: string;
+  original_name?: string;
+  status?: string;
+  rejectionReason?: string | null;
+  rejection_reason?: string | null;
+}
+
+function VehicleDocumentUploads({ vehicleId }: { vehicleId: number }) {
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const queryClient = useQueryClient();
+  const [busyType, setBusyType] = useState<string | null>(null);
+  const { data = [], isError } = useQuery<VehicleDocumentItem[]>({
+    queryKey: ["vehicle-documents", vehicleId],
+    queryFn: () => api.get<VehicleDocumentItem[]>(`/vehicles/${vehicleId}/documents`),
+  });
+  const uploadMutation = useMutation({
+    mutationFn: async ({ type, file }: { type: string; file: File }) => {
+      if (file.size > 5 * 1024 * 1024) throw new Error("Maximum file size is 5 MB");
+      if (!["application/pdf", "image/jpeg", "image/png"].includes(file.type)) {
+        throw new Error("Only PDF, JPG, and PNG files are accepted");
+      }
+      const form = new FormData();
+      form.append("documentType", type);
+      form.append("file", file);
+      return api.upload(`/vehicles/${vehicleId}/documents`, form);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["vehicle-documents", vehicleId] });
+      await queryClient.invalidateQueries({ queryKey: ["my-vehicles"] });
+    },
+    onSettled: () => setBusyType(null),
+  });
+  const documents = Array.isArray(data) ? data : [];
+  const documentsByType = new Map(
+    documents.map((document) => [
+      String(document.documentType ?? document.document_type).toLowerCase(),
+      document,
+    ]),
+  );
+
+  return (
+    <section className="mt-4 space-y-3 border-t pt-4" aria-label="Vehicle documents">
+      <h3 className="text-sm font-semibold">Required vehicle documents</h3>
+      {isError && <p role="alert" className="text-sm text-destructive">Unable to load vehicle documents.</p>}
+      <div className="grid gap-3 sm:grid-cols-2">
+        {REQUIRED_VEHICLE_DOCUMENTS.map(([type, label]) => {
+          const document = documentsByType.get(type);
+          const status = String(document?.status ?? "NOT_UPLOADED").toUpperCase();
+          return (
+            <div key={type} className="space-y-2 rounded-lg border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">{label}</p>
+                <Badge variant="outline">{status}</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {document?.originalName ?? document?.original_name ?? "Not uploaded"}
+              </p>
+              {(document?.rejectionReason ?? document?.rejection_reason) && (
+                <p className="text-xs text-destructive">
+                  Reason: {document?.rejectionReason ?? document?.rejection_reason}
+                </p>
+              )}
+              <input
+                ref={(element) => { inputRefs.current[type] = element; }}
+                className="hidden"
+                type="file"
+                accept=".jpg,.jpeg,.png,.pdf"
+                aria-label={`File for ${label}`}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) {
+                    setBusyType(type);
+                    uploadMutation.mutate({ type, file });
+                  }
+                  event.currentTarget.value = "";
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={busyType === type}
+                onClick={() => inputRefs.current[type]?.click()}
+              >
+                {status === "NOT_UPLOADED" ? "Upload" : status === "REJECTED" ? "Re-upload" : "Replace"}
+              </Button>
+            </div>
+          );
+        })}
+      </div>
+      {uploadMutation.isError && (
+        <p role="alert" className="text-sm text-destructive">
+          {(uploadMutation.error as Error).message}
+        </p>
+      )}
+    </section>
+  );
+}
 
 export default function Vehicles() {
   const { user } = useAuth();
@@ -172,6 +283,7 @@ export default function Vehicles() {
                     <span>{v.currentCity}</span>
                   </div>
                 )}
+                <VehicleDocumentUploads vehicleId={v.id} />
               </CardContent>
             </Card>
           ))}
