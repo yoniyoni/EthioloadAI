@@ -56,7 +56,7 @@ class _PlaceSearchFieldState extends ConsumerState<PlaceSearchField> {
     _focus.removeListener(_onFocusChange);
     _focus.dispose();
     _debounce?.cancel();
-    _removeOverlay();
+    _removeOverlay(rebuild: false);
     super.dispose();
   }
 
@@ -96,10 +96,10 @@ class _PlaceSearchFieldState extends ConsumerState<PlaceSearchField> {
     _focus.unfocus();
   }
 
-  void _removeOverlay() {
+  void _removeOverlay({bool rebuild = true}) {
     _overlay?.remove();
     _overlay = null;
-    if (mounted) setState(() => _results = []);
+    if (rebuild && mounted) setState(() => _results = []);
   }
 
   void _showOverlay() {
