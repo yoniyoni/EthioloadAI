@@ -60,3 +60,4 @@ frontend/artifacts/mobile-app/secrets.local.json
 **/target/
 **/build/
 **/dist/
+.neon
