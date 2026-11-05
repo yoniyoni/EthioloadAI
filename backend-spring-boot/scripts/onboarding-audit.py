@@ -1,19 +1,22 @@
 """Real-stack onboarding audit. Only mutate records created by this audit."""
 import runpy,json,sys,urllib.request,re
 from pathlib import Path
+from e2e_mail_capture import capture_cursor, captured_message
 m=runpy.run_path(str(Path(__file__).with_name('final-integration-fixtures.py')))
 api,sql,OUT=m['api'],m['sql'],m['OUT']
 path=OUT/'onboarding-fixtures.json'
 f=json.loads(path.read_text())
 mode=sys.argv[1] if len(sys.argv)>1 else 'setup'
-def save():path.write_text(json.dumps(f))
+def save():
+    f.pop('edgeTokens',None)
+    for value in f.values():
+        if isinstance(value,dict):
+            value.pop('url',None)
+    path.write_text(json.dumps(f))
 def login(name):
     u=f['users'][name]
     u['session']=api('POST','/auth/login',{'identifier':u['email'],'password':f['password']})
     return u['session']['token']
-def capture():
-    key=(OUT/'onboarding-mail-key').read_text().strip()
-    return json.load(urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:12526/',headers={'X-Test-Key':key})))['latest']
 if mode=='setup':
     if 'admin' not in f['users']:
         address='onboarding-'+f['stamp']+'-admin@example.test'
@@ -40,6 +43,7 @@ elif mode=='snapshot':
 elif mode=='verify':
     import time,hashlib
     checks=[]
+    captured_tokens=[]
     owner,admin,manager,dispatcher,xyzOwner=[login(n) for n in ['owner','admin','manager','dispatcher','xyzOwner']]
     cid=int(f['ABC']['id']);xid=int(f['XYZ']['id']);base=f'/carrier-companies/{cid}'
     def register(name,role='shipper'):
@@ -51,10 +55,15 @@ elif mode=='verify':
         return login(name)
     def issue(company,token,name,role='DISPATCHER'):
         address=f['users'].get(name,{}).get('email',f"onboarding-{f['stamp']}-{name}@example.test").lower()
+        cursor=capture_cursor()
         inv=api('POST',f'/carrier-companies/{company}/team/invitations',{'email':address,'role':role},token)
-        mail=capture();assert mail['recipient']==address
+        mail=captured_message(cursor,address)
         raw=mail['token'];assert len(raw)==43
-        f.setdefault('edgeTokens',[]).append(raw);save()
+        captured_tokens.append(raw)
+        f.setdefault('capturedInvitations',[]).append({
+            'cursor':cursor,'messageCursor':mail['cursor'],'recipient':address
+        })
+        save()
         return inv,raw,address
     # New employees in XYZ prove both companies are isolated in both directions.
     for name,role in [('xyzManager','FLEET_MANAGER'),('xyzDispatcher','DISPATCHER')]:
@@ -89,14 +98,23 @@ elif mode=='verify':
         if expected==200:assert r.read().startswith(b'%PDF-')
     checks.append('Company documents stored and downloadable by owner/admin; unrelated company denied')
     for name in ['manager','dispatcher']:
-        raw=f[name]['url'].split('#token=')[1]
+        raw=captured_message(
+            f[name]['captureCursor'],f[name]['email'],f[name]['messageCursor']
+        )['token']
         api('POST','/company-invitations/accept',{'token':raw},login(name),expected=(400,))
     api('POST',base+'/team/invitations',{'email':f['users']['manager']['email'],'role':'FLEET_MANAGER'},owner,expected=(409,))
     api('POST',base+'/team/invitations',{'email':'denied@example.test','role':'CARRIER_OWNER'},owner,expected=(400,))
     wrong=register('wrong');inv,raw,address=issue(cid,owner,'alice')
     api('POST','/company-invitations/accept',{'token':raw},wrong,expected=(403,))
     assert not api('GET','/company-memberships/me',token=wrong)['content']
-    replacement=api('POST',base+f"/team/invitations/{inv['id']}/resend",{},owner);new=capture()['token'];f['edgeTokens'].append(new);save()
+    cursor=capture_cursor()
+    replacement=api('POST',base+f"/team/invitations/{inv['id']}/resend",{},owner)
+    replacement_mail=captured_message(cursor,address);new=replacement_mail['token']
+    captured_tokens.append(new)
+    f.setdefault('capturedInvitations',[]).append({
+        'cursor':cursor,'messageCursor':replacement_mail['cursor'],'recipient':address
+    })
+    save()
     api('POST','/company-invitations/validate',{'token':raw},expected=(400,))
     api('POST','/company-invitations/validate',{'token':new})
     api('POST',base+f"/team/invitations/{replacement['id']}/revoke",{},owner)
@@ -140,7 +158,18 @@ elif mode=='verify':
     rows=json.loads(sql(f"SELECT coalesce(json_agg(t),'[]') FROM (SELECT u.id AS user_id,c.id AS company_id,m.role,m.status,i.status AS invitation_status,i.accepted_at IS NOT NULL AS accepted_at_set,(length(i.token_hash)=64) AS hash_only,count(*) OVER(PARTITION BY m.carrier_company_id,m.user_id) AS membership_count FROM company_memberships m JOIN users u ON u.id=m.user_id JOIN carrier_companies c ON c.id=m.carrier_company_id JOIN company_invitations i ON i.accepted_by=u.id AND i.carrier_company_id=c.id WHERE c.id IN ({cid},{xid}) AND i.status='ACCEPTED') t"))
     assert len(rows)==4 and all(r['membership_count']==1 and r['status']=='ACTIVE' and r['accepted_at_set'] and r['hash_only'] for r in rows)
     checks.append('PostgreSQL: four accepted employee invitations, one ACTIVE company membership each, accepted_at set, SHA-256 token hashes only')
-    knownTokens=f['edgeTokens']+[f[n]['url'].split('#token=')[1] for n in ['manager','dispatcher']]
+    knownTokens=list(captured_tokens)
+    knownTokens.extend(
+        captured_message(ref['cursor'],ref['recipient'],ref['messageCursor'])['token']
+        for ref in f.get('capturedInvitations',[])
+    )
+    knownTokens.extend(
+        captured_message(
+            f[name]['captureCursor'],f[name]['email'],f[name]['messageCursor']
+        )['token']
+        for name in ['manager','dispatcher']
+        if name in f and 'captureCursor' in f[name]
+    )
     log=(OUT/'onboarding-application.log').read_text(errors='replace')
     assert not any(raw in log for raw in knownTokens)
     checks.append('Runtime application log contains no tested raw invitation tokens')

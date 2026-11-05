@@ -79,13 +79,13 @@ public record CarrierOfferResponse(
         );
     }
 
-    /** Summary view: no negotiation history (for public/other-carrier views). */
+    /** Summary view: no negotiation history or marketplace-private locations. */
     public static CarrierOfferResponse summary(CarrierOffer o) {
         return new CarrierOfferResponse(
             o.getId(),
             o.getFreight() != null ? o.getFreight().getId() : null,
-            o.getFreight() != null ? o.getFreight().getPickupLocation() : null,
-            o.getFreight() != null ? o.getFreight().getDestination() : null,
+            null,
+            null,
             o.getCarrierCompany() != null ? o.getCarrierCompany().getId() : null,
             o.getCarrierCompany() != null ? o.getCarrierCompany().getCompanyName() : null,
             null, null, // submittedBy hidden in summary
@@ -103,5 +103,72 @@ public record CarrierOfferResponse(
             o.getUpdatedAt(),
             List.of()
         );
+    }
+
+    /** Carrier's own offer view; route details become available only after award. */
+    public static CarrierOfferResponse forCarrier(CarrierOffer o, boolean includeOperationalRoute) {
+        CarrierOfferResponse response = from(o);
+        if (includeOperationalRoute && o.getStatus() == CarrierOffer.OfferStatus.ACCEPTED) {
+            return response;
+        }
+        return new CarrierOfferResponse(
+                response.id(),
+                response.freightId(),
+                null,
+                null,
+                response.carrierCompanyId(),
+                response.carrierCompanyName(),
+                response.submittedById(),
+                response.submittedByName(),
+                response.proposedDriverUserId(),
+                response.proposedDriverName(),
+                response.proposedVehicleId(),
+                response.proposedVehiclePlate(),
+                response.proposedVehicleType(),
+                response.pricingType(),
+                response.currentAmount(),
+                response.status(),
+                response.assignmentStatus(),
+                response.nextActor(),
+                response.agreedAmount(),
+                response.acceptedAt(),
+                response.rejectedAt(),
+                response.withdrawnAt(),
+                response.createdAt(),
+                response.updatedAt(),
+                response.negotiationHistory());
+    }
+
+    public CarrierOfferResponse withoutFinancials() {
+        return new CarrierOfferResponse(
+                id,
+                freightId,
+                freightPickupLocation,
+                freightDestination,
+                carrierCompanyId,
+                carrierCompanyName,
+                submittedById,
+                submittedByName,
+                proposedDriverUserId,
+                proposedDriverName,
+                proposedVehicleId,
+                proposedVehiclePlate,
+                proposedVehicleType,
+                pricingType,
+                null,
+                status,
+                assignmentStatus,
+                nextActor,
+                null,
+                acceptedAt,
+                rejectedAt,
+                withdrawnAt,
+                createdAt,
+                updatedAt,
+                negotiationHistory == null
+                        ? List.of()
+                        : negotiationHistory.stream()
+                                .map(NegotiationEntryResponse::withoutAmount)
+                                .toList());
     }
 }

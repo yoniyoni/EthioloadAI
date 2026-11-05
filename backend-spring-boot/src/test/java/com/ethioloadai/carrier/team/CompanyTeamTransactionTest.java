@@ -26,6 +26,15 @@ class CompanyTeamTransactionTest extends TeamTestSupport {
   assertThatThrownBy(()->invite(employee,CompanyRole.DISPATCHER)).extracting("code").isEqualTo("INVITATION_EMAIL_FAILED");
   assertThat(invitationRepository.findByCarrierCompanyId(companyId,org.springframework.data.domain.Pageable.unpaged())).isEmpty();
  }
+ @Test void successfulEmailDeliveryCommitsInvitationAndAcceptanceLink() {
+  var created=invite(employee,CompanyRole.FLEET_MANAGER);
+
+  assertThat(invitationRepository.findById(created.getId())).isPresent()
+   .get().extracting("status").isEqualTo(InvitationStatus.PENDING);
+  assertThat(token(employee)).hasSize(43);
+  verify(email).sendInvitation(eq(employee.getEmail()),eq("Example Logistics"),
+   eq(CompanyRole.FLEET_MANAGER),contains("#token="),any());
+ }
  @Test void failedResendPreservesOldPendingToken() {
   var original=invite(employee,CompanyRole.DISPATCHER);
   String old=token(employee);
@@ -83,4 +92,3 @@ class CompanyTeamTransactionTest extends TeamTestSupport {
   }
  }
 }
-

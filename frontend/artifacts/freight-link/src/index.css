@@ -10,6 +10,21 @@
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
+  --color-focus: hsl(var(--ring));
+  --color-brand-primary: hsl(var(--brand-primary));
+  --color-brand-secondary: hsl(var(--brand-secondary));
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+  --color-success-subtle: hsl(var(--success-subtle));
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+  --color-warning-subtle: hsl(var(--warning-subtle));
+  --color-error: hsl(var(--error));
+  --color-error-foreground: hsl(var(--error-foreground));
+  --color-error-subtle: hsl(var(--error-subtle));
+  --color-info: hsl(var(--info));
+  --color-info-foreground: hsl(var(--info-foreground));
+  --color-info-subtle: hsl(var(--info-subtle));
 
   --color-card: hsl(var(--card));
   --color-card-foreground: hsl(var(--card-foreground));
@@ -55,15 +70,32 @@
   --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
   --color-sidebar-accent-border: var(--sidebar-accent-border);
   --color-sidebar-ring: hsl(var(--sidebar-ring));
+  --color-admin-sidebar: hsl(var(--admin-sidebar));
+  --color-admin-accent: hsl(var(--admin-accent));
 
   --font-sans: var(--app-font-sans);
   --font-serif: var(--app-font-serif);
   --font-mono: var(--app-font-mono);
+  --font-weight-heading: 650;
+  --font-weight-label: 600;
+
+  --text-page-title: 1.5rem;
+  --text-page-title--line-height: 1.25;
+  --text-section-title: 1rem;
+  --text-section-title--line-height: 1.5;
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.5;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.4;
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --radius-control: var(--radius-md);
+  --radius-surface: var(--radius-lg);
+
+  --shadow-card: var(--shadow-surface);
 }
 
 :root {
@@ -76,6 +108,8 @@
   --elevate-2: rgba(0,0,0, .08);
 
   /* Light Mode - Ethio-Freight */
+  --admin-sidebar: 145 61% 15%;
+  --admin-accent: 38 92% 50%;
   --background: 220 20% 98%;
   --foreground: 222 50% 10%;
 
@@ -89,12 +123,13 @@
   --popover-foreground: 222 50% 10%;
   --popover-border: 220 20% 90%;
 
-  /* Navy Blue Primary */
-  --primary: 220 60% 30%;
+  /* Navy Blue primary and emerald secondary retain the Freight-Link identity. */
+  --brand-primary: 220 60% 30%;
+  --brand-secondary: 160 55% 32%;
+  --primary: var(--brand-primary);
   --primary-foreground: 0 0% 100%;
 
-  /* Emerald Green Secondary */
-  --secondary: 160 55% 45%;
+  --secondary: var(--brand-secondary);
   --secondary-foreground: 0 0% 100%;
 
   --muted: 220 15% 95%;
@@ -103,12 +138,25 @@
   --accent: 220 15% 95%;
   --accent-foreground: 222 50% 10%;
 
-  /* Deep Red Destructive */
-  --destructive: 0 70% 50%;
-  --destructive-foreground: 0 0% 100%;
+  /* Semantic states use dark text-safe colors with separate subtle surfaces. */
+  --success: 142 64% 28%;
+  --success-foreground: 0 0% 100%;
+  --success-subtle: 142 45% 94%;
+  --warning: 32 88% 35%;
+  --warning-foreground: 0 0% 100%;
+  --warning-subtle: 40 90% 94%;
+  --error: 0 70% 42%;
+  --error-foreground: 0 0% 100%;
+  --error-subtle: 0 70% 96%;
+  --info: 204 75% 35%;
+  --info-foreground: 0 0% 100%;
+  --info-subtle: 204 70% 95%;
+
+  --destructive: var(--error);
+  --destructive-foreground: var(--error-foreground);
 
   --input: 220 20% 88%;
-  --ring: 220 60% 30%;
+  --ring: var(--brand-primary);
 
   /* Ethiopian Green + Teal accents */
   --chart-1: 160 55% 40%; /* Emerald */
@@ -120,16 +168,17 @@
   --sidebar: 220 60% 20%;
   --sidebar-foreground: 210 20% 95%;
   --sidebar-border: 220 60% 25%;
-  --sidebar-primary: 160 55% 45%;
+  --sidebar-primary: var(--brand-secondary);
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 220 60% 25%;
   --sidebar-accent-foreground: 210 20% 98%;
-  --sidebar-ring: 160 55% 45%;
+  --sidebar-ring: var(--brand-secondary);
 
   --app-font-sans: 'Inter', system-ui, sans-serif;
   --app-font-serif: Georgia, serif;
   --app-font-mono: 'JetBrains Mono', Menlo, monospace;
   --radius: 0.75rem;
+  --shadow-surface: 0 1px 2px 0 rgb(15 31 52 / 0.05), 0 1px 3px 0 rgb(15 31 52 / 0.04);
 
   --shadow-2xs: 0px 1px 2px 0px rgba(0,0,0,0.05);
   --shadow-xs: 0px 2px 4px 0px rgba(0,0,0,0.05);
@@ -152,6 +201,8 @@
 }
 
 .dark {
+  --admin-sidebar: 145 61% 15%;
+  --admin-accent: 38 92% 50%;
   --button-outline: rgba(255,255,255, .10);
   --badge-outline: rgba(255,255,255, .05);
 
@@ -174,10 +225,12 @@
   --popover-foreground: 210 20% 98%;
   --popover-border: 220 40% 18%;
 
-  --primary: 200 70% 55%;
+  --brand-primary: 200 70% 55%;
+  --brand-secondary: 160 55% 32%;
+  --primary: var(--brand-primary);
   --primary-foreground: 220 50% 8%;
 
-  --secondary: 160 55% 40%;
+  --secondary: var(--brand-secondary);
   --secondary-foreground: 0 0% 100%;
 
   --muted: 220 40% 18%;
@@ -186,11 +239,24 @@
   --accent: 220 40% 18%;
   --accent-foreground: 210 20% 98%;
 
-  --destructive: 0 70% 55%;
-  --destructive-foreground: 0 0% 100%;
+  --success: 142 55% 60%;
+  --success-foreground: 220 50% 8%;
+  --success-subtle: 142 35% 18%;
+  --warning: 42 95% 62%;
+  --warning-foreground: 220 50% 8%;
+  --warning-subtle: 38 55% 18%;
+  --error: 0 70% 65%;
+  --error-foreground: 220 50% 8%;
+  --error-subtle: 0 45% 20%;
+  --info: 200 70% 65%;
+  --info-foreground: 220 50% 8%;
+  --info-subtle: 200 45% 18%;
+
+  --destructive: var(--error);
+  --destructive-foreground: var(--error-foreground);
 
   --input: 220 40% 18%;
-  --ring: 200 70% 55%;
+  --ring: var(--brand-primary);
 
   --chart-1: 160 55% 50%;
   --chart-2: 142 70% 45%;
@@ -201,11 +267,13 @@
   --sidebar: 220 50% 6%;
   --sidebar-foreground: 210 20% 98%;
   --sidebar-border: 220 40% 15%;
-  --sidebar-primary: 160 55% 40%;
+  --sidebar-primary: var(--brand-secondary);
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-accent: 220 40% 15%;
   --sidebar-accent-foreground: 210 20% 98%;
-  --sidebar-ring: 160 55% 40%;
+  --sidebar-ring: var(--brand-secondary);
+
+  --shadow-surface: 0 1px 2px 0 rgb(0 0 0 / 0.28), 0 1px 3px 0 rgb(0 0 0 / 0.18);
 }
 
 @layer base {
@@ -215,6 +283,13 @@
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
   }
 }
 

@@ -1,0 +1,130 @@
+services:
+  mail-capture:
+    container_name: ethioloadai-e2e-mail-capture
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.e2e-mail-capture
+    restart: "no"
+    read_only: true
+    init: true
+    user: "10001:10001"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 32
+    mem_limit: 128m
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    environment:
+      TEST_MAIL_CAPTURE_SECRET_FILE: /run/secrets/test-mail-capture-key
+      CAPTURE_SMTP_BIND: 0.0.0.0
+    secrets:
+      - test-mail-capture-key
+    expose:
+      - "12525"
+    networks:
+      e2e:
+        ipv4_address: 172.26.0.4
+        aliases:
+          - ethioloadai-e2e-mail-capture
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - |
+          import json,urllib.request
+          from pathlib import Path
+          from urllib.error import URLError
+          try:
+              key=Path('/run/secrets/test-mail-capture-key').read_text(encoding='utf-8').rstrip('\r\n')
+              if len(key)<32: raise ValueError()
+              request=urllib.request.Request('http://127.0.0.1:12526/cursor',headers={'X-Test-Key':key})
+              with urllib.request.urlopen(request,timeout=3) as response:
+                  result=json.load(response)
+                  if response.status!=200 or type(result.get('cursor')) is not int or result['cursor']<0:
+                      raise ValueError()
+          except (OSError,URLError,ValueError,TypeError,KeyError,AttributeError,json.JSONDecodeError):
+              raise SystemExit(1)
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 2s
+
+  backend:
+    image: ${E2E_BACKEND_IMAGE:?Set the verified Spring E2E image reference}
+    restart: "no"
+    user: "10001:10001"
+    depends_on:
+      mail-capture:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: e2e
+      SPRING_CONFIG_IMPORT: configtree:/run/secrets/
+      E2E_DATASOURCE_MODE: docker-network
+      E2E_DATASOURCE_URL: jdbc:postgresql://ethioloadai-e2e-db:5432/ethioloadai_e2e
+      SPRING_DATASOURCE_URL: jdbc:postgresql://ethioloadai-e2e-db:5432/ethioloadai_e2e
+      SPRING_DATASOURCE_USERNAME: ${E2E_RUNTIME_DB_USER:?Set the isolated runtime database user}
+      SPRING_FLYWAY_USER: ${E2E_MIGRATION_DB_USER:?Set the distinct migration database user}
+      E2E_MAIL_CAPTURE_ENABLED: "true"
+      E2E_MAIL_CAPTURE_SENDER: ethioloadai-test@example.test
+      APP_DEMO_SEED_ENABLED: "false"
+      APP_DEMO_SEED_ROTATE_ADMIN_PASSWORD: "false"
+      FRONTEND_BASE_URL: http://localhost:5173
+    secrets:
+      - source: e2e-jwt-secret
+        target: JWT_SECRET
+      - source: e2e-runtime-db-password
+        target: SPRING_DATASOURCE_PASSWORD
+      - source: e2e-migration-db-password
+        target: SPRING_FLYWAY_PASSWORD
+    networks:
+      e2e:
+        ipv4_address: 172.26.0.3
+        mac_address: 82:c1:56:8b:59:3b
+
+  forwarder:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.e2e-tcp-forwarder
+    restart: "no"
+    init: true
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 128m
+    stop_grace_period: 5s
+    depends_on:
+      backend:
+        condition: service_started
+    healthcheck:
+      test:
+        - CMD
+        - /e2e-tcp-forwarder
+        - probe
+      interval: 5s
+      timeout: 2s
+      retries: 12
+      start_period: 5s
+    networks:
+      - e2e
+
+secrets:
+  test-mail-capture-key:
+    file: ${TEST_MAIL_CAPTURE_SECRET_FILE:?Set the protected host-only capture key file}
+  e2e-jwt-secret:
+    file: ${E2E_JWT_SECRET_FILE:?Set the protected E2E JWT secret file}
+  e2e-runtime-db-password:
+    file: ${E2E_RUNTIME_DB_PASSWORD_FILE:?Set the protected runtime DB password file}
+  e2e-migration-db-password:
+    file: ${E2E_MIGRATION_DB_PASSWORD_FILE:?Set the protected migration DB password file}
+
+networks:
+  e2e:
+    external: true
+    name: ${E2E_NETWORK_NAME:?Set the verified internal E2E network name}

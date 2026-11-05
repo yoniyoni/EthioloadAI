@@ -1,4 +1,4 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Redirect, Router as WouterRouter } from "wouter";
 import React from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/query-client";
@@ -8,6 +8,7 @@ import { AuthProvider } from "@/contexts/auth-context";
 import { LanguageProvider } from "@/lib/i18n/language-context";
 import { Layout } from "@/components/layout";
 import { ProtectedRoute } from "@/components/protected-route";
+import { ApprovedCompanyRoute } from "@/components/approved-company-route";
 import { AIChatWidget } from "@/components/ai-chat-widget";
 
 import Home from "@/pages/home";
@@ -15,10 +16,13 @@ import Login from "@/pages/login";
 import Register from "@/pages/register";
 import InvitationAccept from "@/pages/invitation-accept";
 import CompanyWorkspace from "@/pages/company-workspace";
+import CompanyBookings from "@/pages/company-bookings";
+import CompanyTrips from "@/pages/company-trips";
 import Dashboard from "@/pages/dashboard";
 import FreightList from "@/pages/freight-list";
 import FreightDetail from "@/pages/freight-detail";
 import FreightNew from "@/pages/freight-new";
+import FreightEdit from "@/pages/freight-edit";
 import Drivers from "@/pages/drivers";
 import DriverDetail from "@/pages/driver-detail";
 import Vehicles from "@/pages/vehicles";
@@ -52,15 +56,24 @@ function Router() {
         <Route path="/login" component={Login} />
         <Route path="/register" component={Register} />
         <Route path="/invitations/accept" component={InvitationAccept} />
-        <Route path="/company/:id">{params => <ProtectedRoute><CompanyWorkspace id={params.id} /></ProtectedRoute>}</Route>
+        <Route path="/company/:id">{params => <ProtectedRoute><CompanyWorkspace key={params.id} id={params.id} /></ProtectedRoute>}</Route>
 
         <Route path="/freight/new">
           <ProtectedRoute allowedRoles={["shipper", "admin"]}>
             <FreightNew />
           </ProtectedRoute>
         </Route>
-        <Route path="/freight/:id" component={FreightDetail} />
-        <Route path="/freight" component={FreightList} />
+        <Route path="/freight/:id/edit">
+          <ProtectedRoute allowedRoles={["shipper", "admin"]}>
+            <FreightEdit />
+          </ProtectedRoute>
+        </Route>
+        <Route path="/freight/:id">
+          <ProtectedRoute><FreightDetail /></ProtectedRoute>
+        </Route>
+        <Route path="/freight">
+          <ProtectedRoute><FreightList /></ProtectedRoute>
+        </Route>
 
         <Route path="/bids">
           <ProtectedRoute allowedRoles={["driver"]}>
@@ -112,6 +125,25 @@ function Router() {
         <Route path="/fleet/companies"><ProtectedRoute><CarrierCompanies /></ProtectedRoute></Route>
         <Route path="/admin/companies"><ProtectedRoute allowedRoles={["admin"]}><AdminCompanies /></ProtectedRoute></Route>
 
+        <Route path="/carrier-companies/:companyId/bookings">
+          {params => (
+            <ProtectedRoute>
+              <ApprovedCompanyRoute companyId={params.companyId} allowedRoles={["CARRIER_OWNER", "FLEET_MANAGER", "DISPATCHER"]}>
+                <CompanyBookings key={params.companyId} companyId={params.companyId} />
+              </ApprovedCompanyRoute>
+            </ProtectedRoute>
+          )}
+        </Route>
+        <Route path="/carrier-companies/:companyId/trips">
+          {params => (
+            <ProtectedRoute>
+              <ApprovedCompanyRoute companyId={params.companyId} allowedRoles={["CARRIER_OWNER", "FLEET_MANAGER", "DISPATCHER"]}>
+                <CompanyTrips key={params.companyId} companyId={params.companyId} />
+              </ApprovedCompanyRoute>
+            </ProtectedRoute>
+          )}
+        </Route>
+
         {/* Phase 5 — Carrier Offer routes */}
         <Route path="/carrier-offers/freight/:freightId">
           {params => (
@@ -123,47 +155,58 @@ function Router() {
         <Route path="/carrier-offers/company/:companyId/freight/:freightId">
           {params => (
             <ProtectedRoute>
-              <CarrierOffers companyId={params.companyId} freightId={params.freightId} />
+              <ApprovedCompanyRoute companyId={params.companyId} allowedRoles={["CARRIER_OWNER", "FLEET_MANAGER", "DISPATCHER"]}>
+                <CarrierOffers key={`${params.companyId}:${params.freightId}`} companyId={params.companyId} freightId={params.freightId} />
+              </ApprovedCompanyRoute>
             </ProtectedRoute>
           )}
         </Route>
         <Route path="/carrier-offers/company/:companyId">
           {params => (
             <ProtectedRoute>
-              <CarrierOffers companyId={params.companyId} />
+              <ApprovedCompanyRoute companyId={params.companyId} allowedRoles={["CARRIER_OWNER", "FLEET_MANAGER", "DISPATCHER"]}>
+                <CarrierOffers key={params.companyId} companyId={params.companyId} />
+              </ApprovedCompanyRoute>
             </ProtectedRoute>
           )}
         </Route>
         <Route path="/freight/:freightId/trips/:tripId/proof"><ProtectedRoute><ProofVerification /></ProtectedRoute></Route>
-        <Route path="/carrier/:companyId/settlements/:id"><ProtectedRoute><CarrierSettlement /></ProtectedRoute></Route>
-        <Route path="/carrier/:companyId/settlements"><ProtectedRoute><CarrierSettlement /></ProtectedRoute></Route>
+        <Route path="/carrier/:companyId/settlements/:id">{params => <ProtectedRoute><ApprovedCompanyRoute companyId={params.companyId} allowedRoles={["CARRIER_OWNER"]}><CarrierSettlement key={`${params.companyId}:${params.id}`} /></ApprovedCompanyRoute></ProtectedRoute>}</Route>
+        <Route path="/carrier/:companyId/settlements">{params => <ProtectedRoute><ApprovedCompanyRoute companyId={params.companyId} allowedRoles={["CARRIER_OWNER"]}><CarrierSettlement key={params.companyId} /></ApprovedCompanyRoute></ProtectedRoute>}</Route>
         {/* Phase 6 — Carrier Dispatch routes */}
         <Route path="/carrier-dispatch/company/:companyId">
           {params => (
             <ProtectedRoute>
-              <CarrierDispatch key={params.companyId} />
+              <ApprovedCompanyRoute companyId={params.companyId} allowedRoles={["CARRIER_OWNER", "FLEET_MANAGER", "DISPATCHER"]}>
+                <CarrierDispatch key={params.companyId} />
+              </ApprovedCompanyRoute>
             </ProtectedRoute>
           )}
         </Route>
         <Route path="/carrier-dispatch">
           <ProtectedRoute>
-            <CarrierDispatch />
+            <Redirect to="/dashboard" />
           </ProtectedRoute>
         </Route>
 
+        <Route path="/fleet/overview">
+          <ProtectedRoute allowedRoles={["fleet_owner"]}>
+            <Fleet />
+          </ProtectedRoute>
+        </Route>
         <Route path="/fleet">
           <ProtectedRoute allowedRoles={["fleet_owner"]}>
-            <Dashboard />
+            <Redirect to="/fleet/companies" />
           </ProtectedRoute>
         </Route>
         <Route path="/fleet/drivers">
           <ProtectedRoute allowedRoles={["fleet_owner"]}>
-            <Dashboard />
+            <Fleet />
           </ProtectedRoute>
         </Route>
         <Route path="/fleet/vehicles">
           <ProtectedRoute allowedRoles={["fleet_owner"]}>
-            <Dashboard />
+            <Fleet />
           </ProtectedRoute>
         </Route>
 

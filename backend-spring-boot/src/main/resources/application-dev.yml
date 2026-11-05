@@ -22,6 +22,8 @@ spring:
   # Flyway: the existing development history was repaired explicitly once;
   # future startup must fail on unexpected migration drift.
   flyway:
+    postgresql:
+      transactional-lock: false
     enabled: true
     baseline-on-migrate: true
     ignore-migration-patterns: "*:missing,*:future"

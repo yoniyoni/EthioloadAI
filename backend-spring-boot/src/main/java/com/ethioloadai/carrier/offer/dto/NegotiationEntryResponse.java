@@ -29,4 +29,9 @@ public record NegotiationEntryResponse(
             e.getCreatedAt()
         );
     }
+
+    public NegotiationEntryResponse withoutAmount() {
+        return new NegotiationEntryResponse(
+            id, actorType, actorUserId, action, null, note, createdAt);
+    }
 }

@@ -26,6 +26,8 @@ import '../../features/fleet/fleet_dispatch_screen.dart';
 import '../../features/fleet/fleet_driver_detail_screen.dart';
 import '../../features/fleet/fleet_live_map_screen.dart';
 import '../../features/driver/driver_documents_screen.dart';
+import '../../features/driver/driver_onboarding_screen.dart';
+import '../../features/driver/driver_navigation.dart';
 import '../../features/driver/navigation_screen.dart';
 import '../../features/bookings/my_bookings_screen.dart';
 import '../../features/profile/profile_screen.dart';
@@ -97,7 +99,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // Already authenticated on a public page → role dashboard (with gate)
       if (isLoggedIn && isPublic) {
         if (role == 'driver') {
-          return notifier.isVerified ? '/driver' : '/driver-documents';
+          return driverHomePath(notifier.isVerified);
         }
         if (role == 'fleet_owner') return '/fleet/companies';
         return '/shipper';
@@ -107,20 +109,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return '/fleet';
       }
       if (isLoggedIn && role == 'driver' && !_isDriverRoute(path)) {
-        return notifier.isVerified ? '/driver' : '/driver-documents';
+        return driverHomePath(notifier.isVerified);
       }
       if (isLoggedIn && role == 'shipper' && !_isShipperRoute(path)) {
         return '/shipper';
       }
 
-      // Driver verification gate — fires on every navigation attempt.
-      // Keeps unverified drivers on the documents screen regardless of
-      // where they navigate (deep links, back button, programmatic pushes).
-      if (isLoggedIn &&
-          role == 'driver' &&
-          !notifier.isVerified &&
-          path != '/driver-documents') {
-        return '/driver-documents';
+      if (isLoggedIn && role == 'driver') {
+        final verificationRedirect = driverVerificationRedirect(
+          isVerified: notifier.isVerified,
+          path: path,
+        );
+        if (verificationRedirect != null) return verificationRedirect;
       }
 
       return null;
@@ -322,6 +322,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             _wrap(const FleetDispatchScreen(), role: 'fleet_owner'),
       ),
       GoRoute(
+        path: driverOnboardingPath,
+        builder: (_, __) => const DriverOnboardingScreen(),
+      ),
+      GoRoute(
         path: '/driver-documents',
         builder: (_, __) => const DriverDocumentsScreen(),
       ),
@@ -449,6 +453,7 @@ bool _isDriverRoute(String path) =>
     path == '/freight' ||
     path.startsWith('/freight/') ||
     path == '/driver-documents' ||
+    path == driverOnboardingPath ||
     path == '/navigate' ||
     path == '/nearby-trucks' ||
     path == '/ai-tools' ||

@@ -6,8 +6,11 @@ import com.ethioloadai.vehicle.entity.Vehicle;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
@@ -17,7 +20,14 @@ import java.util.Collection;
 import java.util.Optional;
 
 @Repository
-public interface TripRepository extends JpaRepository<Trip, Long> {
+public interface TripRepository extends JpaRepository<Trip, Long>, JpaSpecificationExecutor<Trip> {
+
+    @Override
+    @EntityGraph(attributePaths = {
+            "booking", "booking.driver", "booking.vehicle", "booking.cargoRequest",
+            "booking.cargoRequest.shipper"
+    })
+    Page<Trip> findAll(Specification<Trip> specification, Pageable pageable);
 
     /** Find the trip for a specific booking (one-to-one). */
     Optional<Trip> findByBooking_Id(Long bookingId);
@@ -38,6 +48,10 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
 
     /** All ongoing trips - for admin monitoring. */
     List<Trip> findByTripStatus(Trip.TripStatus status);
+
+    @Query("SELECT t FROM Trip t WHERE t.booking.cargoRequest.id = :freightId " +
+           "ORDER BY t.endTime DESC")
+    List<Trip> findByFreightIdOrderByEndTimeDesc(@Param("freightId") Long freightId);
 
     /** Find a trip with its stops pre-loaded (avoids N+1 when rendering stops). */
     @Query("SELECT t FROM Trip t LEFT JOIN FETCH t.tripStops WHERE t.id = :tripId")
@@ -81,6 +95,18 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
            "WHERE t.id = :tripId AND t.booking.cargoRequest.shipper.id = :shipperId")
     Optional<Trip> findByIdAndShipperId(@Param("tripId") Long tripId, @Param("shipperId") Long shipperId);
 
+    @Query("SELECT t FROM Trip t LEFT JOIN FETCH t.tripStops " +
+            "WHERE t.id = :tripId AND t.booking.id IN (SELECT ownedBooking.id FROM Booking ownedBooking " +
+            "WHERE ownedBooking.carrierCompanyId IN :companyIds " +
+            "OR (ownedBooking.carrierCompanyId IS NULL AND (" +
+            "EXISTS (SELECT o.id FROM CarrierOffer o WHERE o.id = ownedBooking.carrierOfferId " +
+            "AND o.status = 'ACCEPTED' AND o.carrierCompany.id IN :companyIds) " +
+            "OR (ownedBooking.carrierOfferId IS NULL AND EXISTS (SELECT d.id FROM DispatchAssignment d " +
+            "WHERE d.id = ownedBooking.dispatchAssignmentId AND d.carrierCompanyId IN :companyIds)))))")
+    Optional<Trip> findByIdAndCarrierCompanyIds(
+            @Param("tripId") Long tripId,
+            @Param("companyIds") Collection<Long> companyIds);
+
     /** Find all trips with basic details (with booking for mapping). */
     @Query("SELECT t FROM Trip t LEFT JOIN FETCH t.booking b LEFT JOIN FETCH b.driver LEFT JOIN FETCH b.vehicle LEFT JOIN FETCH b.cargoRequest c LEFT JOIN FETCH c.shipper ORDER BY t.startTime DESC")
     Page<Trip> findAllWithBasicDetails(Pageable pageable);
@@ -88,6 +114,97 @@ public interface TripRepository extends JpaRepository<Trip, Long> {
     /** Find trips by shipper ID. */
     @Query("SELECT t FROM Trip t LEFT JOIN FETCH t.booking b LEFT JOIN FETCH b.driver LEFT JOIN FETCH b.vehicle LEFT JOIN FETCH b.cargoRequest c LEFT JOIN FETCH c.shipper WHERE t.booking.cargoRequest.shipper.id = :shipperId ORDER BY t.startTime DESC")
     Page<Trip> findByShipperId(@Param("shipperId") Long shipperId, Pageable pageable);
+
+    @Query(value = "SELECT t FROM Trip t " +
+            "LEFT JOIN FETCH t.booking b LEFT JOIN FETCH b.driver LEFT JOIN FETCH b.vehicle " +
+            "LEFT JOIN FETCH b.cargoRequest c LEFT JOIN FETCH c.shipper " +
+            "WHERE b.id IN (SELECT ownedBooking.id FROM Booking ownedBooking " +
+            "WHERE ownedBooking.carrierCompanyId IN :companyIds " +
+            "OR (ownedBooking.carrierCompanyId IS NULL AND (" +
+            "EXISTS (SELECT o.id FROM CarrierOffer o WHERE o.id = ownedBooking.carrierOfferId " +
+            "AND o.status = 'ACCEPTED' AND o.carrierCompany.id IN :companyIds) " +
+            "OR (ownedBooking.carrierOfferId IS NULL AND EXISTS (SELECT d.id FROM DispatchAssignment d " +
+            "WHERE d.id = ownedBooking.dispatchAssignmentId AND d.carrierCompanyId IN :companyIds)))))",
+            countQuery = "SELECT COUNT(t) FROM Trip t WHERE t.booking.id IN " +
+                    "(SELECT ownedBooking.id FROM Booking ownedBooking " +
+                    "WHERE ownedBooking.carrierCompanyId IN :companyIds " +
+                    "OR (ownedBooking.carrierCompanyId IS NULL AND (" +
+                    "EXISTS (SELECT o.id FROM CarrierOffer o WHERE o.id = ownedBooking.carrierOfferId " +
+                    "AND o.status = 'ACCEPTED' AND o.carrierCompany.id IN :companyIds) " +
+                    "OR (ownedBooking.carrierOfferId IS NULL AND EXISTS (SELECT d.id FROM DispatchAssignment d " +
+                    "WHERE d.id = ownedBooking.dispatchAssignmentId AND d.carrierCompanyId IN :companyIds)))))")
+    Page<Trip> findByCarrierCompanyIds(@Param("companyIds") Collection<Long> companyIds, Pageable pageable);
+
+    @Query(value = "SELECT t FROM Trip t " +
+            "LEFT JOIN FETCH t.booking b LEFT JOIN FETCH b.driver LEFT JOIN FETCH b.vehicle " +
+            "LEFT JOIN FETCH b.cargoRequest c LEFT JOIN FETCH c.shipper " +
+            "WHERE t.tripStatus = :status AND b.id IN (SELECT ownedBooking.id FROM Booking ownedBooking " +
+            "WHERE ownedBooking.carrierCompanyId IN :companyIds " +
+            "OR (ownedBooking.carrierCompanyId IS NULL AND (" +
+            "EXISTS (SELECT o.id FROM CarrierOffer o WHERE o.id = ownedBooking.carrierOfferId " +
+            "AND o.status = 'ACCEPTED' AND o.carrierCompany.id IN :companyIds) " +
+            "OR (ownedBooking.carrierOfferId IS NULL AND EXISTS (SELECT d.id FROM DispatchAssignment d " +
+            "WHERE d.id = ownedBooking.dispatchAssignmentId AND d.carrierCompanyId IN :companyIds)))))",
+            countQuery = "SELECT COUNT(t) FROM Trip t WHERE t.tripStatus = :status AND t.booking.id IN " +
+                    "(SELECT ownedBooking.id FROM Booking ownedBooking " +
+                    "WHERE ownedBooking.carrierCompanyId IN :companyIds " +
+                    "OR (ownedBooking.carrierCompanyId IS NULL AND (" +
+                    "EXISTS (SELECT o.id FROM CarrierOffer o WHERE o.id = ownedBooking.carrierOfferId " +
+                    "AND o.status = 'ACCEPTED' AND o.carrierCompany.id IN :companyIds) " +
+                    "OR (ownedBooking.carrierOfferId IS NULL AND EXISTS (SELECT d.id FROM DispatchAssignment d " +
+                    "WHERE d.id = ownedBooking.dispatchAssignmentId AND d.carrierCompanyId IN :companyIds)))))")
+    Page<Trip> findByCarrierCompanyIdsAndTripStatus(
+            @Param("companyIds") Collection<Long> companyIds,
+            @Param("status") Trip.TripStatus status,
+            Pageable pageable);
+
+    @Query(value = "SELECT t FROM Trip t " +
+            "LEFT JOIN FETCH t.booking b LEFT JOIN FETCH b.driver LEFT JOIN FETCH b.vehicle " +
+            "LEFT JOIN FETCH b.cargoRequest c LEFT JOIN FETCH c.shipper " +
+            "WHERE t.tripStatus IN :statuses AND b.id IN (SELECT ownedBooking.id FROM Booking ownedBooking " +
+            "WHERE ownedBooking.carrierCompanyId IN :companyIds " +
+            "OR (ownedBooking.carrierCompanyId IS NULL AND (" +
+            "EXISTS (SELECT o.id FROM CarrierOffer o WHERE o.id = ownedBooking.carrierOfferId " +
+            "AND o.status = 'ACCEPTED' AND o.carrierCompany.id IN :companyIds) " +
+            "OR (ownedBooking.carrierOfferId IS NULL AND EXISTS (SELECT d.id FROM DispatchAssignment d " +
+            "WHERE d.id = ownedBooking.dispatchAssignmentId AND d.carrierCompanyId IN :companyIds)))))",
+            countQuery = "SELECT COUNT(t) FROM Trip t WHERE t.tripStatus IN :statuses AND t.booking.id IN " +
+                    "(SELECT ownedBooking.id FROM Booking ownedBooking " +
+                    "WHERE ownedBooking.carrierCompanyId IN :companyIds " +
+                    "OR (ownedBooking.carrierCompanyId IS NULL AND (" +
+                    "EXISTS (SELECT o.id FROM CarrierOffer o WHERE o.id = ownedBooking.carrierOfferId " +
+                    "AND o.status = 'ACCEPTED' AND o.carrierCompany.id IN :companyIds) " +
+                    "OR (ownedBooking.carrierOfferId IS NULL AND EXISTS (SELECT d.id FROM DispatchAssignment d " +
+                    "WHERE d.id = ownedBooking.dispatchAssignmentId AND d.carrierCompanyId IN :companyIds)))))")
+    Page<Trip> findByCarrierCompanyIdsAndTripStatusIn(
+            @Param("companyIds") Collection<Long> companyIds,
+            @Param("statuses") Collection<Trip.TripStatus> statuses,
+            Pageable pageable);
+
+    @Query(value = "SELECT t FROM Trip t " +
+            "LEFT JOIN FETCH t.booking b LEFT JOIN FETCH b.driver LEFT JOIN FETCH b.vehicle " +
+            "LEFT JOIN FETCH b.cargoRequest c LEFT JOIN FETCH c.shipper " +
+            "WHERE t.startTime BETWEEN :startDate AND :endDate " +
+            "AND b.id IN (SELECT ownedBooking.id FROM Booking ownedBooking " +
+            "WHERE ownedBooking.carrierCompanyId IN :companyIds " +
+            "OR (ownedBooking.carrierCompanyId IS NULL AND (" +
+            "EXISTS (SELECT o.id FROM CarrierOffer o WHERE o.id = ownedBooking.carrierOfferId " +
+            "AND o.status = 'ACCEPTED' AND o.carrierCompany.id IN :companyIds) " +
+            "OR (ownedBooking.carrierOfferId IS NULL AND EXISTS (SELECT d.id FROM DispatchAssignment d " +
+            "WHERE d.id = ownedBooking.dispatchAssignmentId AND d.carrierCompanyId IN :companyIds)))))",
+            countQuery = "SELECT COUNT(t) FROM Trip t WHERE t.startTime BETWEEN :startDate AND :endDate " +
+                    "AND t.booking.id IN (SELECT ownedBooking.id FROM Booking ownedBooking " +
+                    "WHERE ownedBooking.carrierCompanyId IN :companyIds " +
+                    "OR (ownedBooking.carrierCompanyId IS NULL AND (" +
+                    "EXISTS (SELECT o.id FROM CarrierOffer o WHERE o.id = ownedBooking.carrierOfferId " +
+                    "AND o.status = 'ACCEPTED' AND o.carrierCompany.id IN :companyIds) " +
+                    "OR (ownedBooking.carrierOfferId IS NULL AND EXISTS (SELECT d.id FROM DispatchAssignment d " +
+                    "WHERE d.id = ownedBooking.dispatchAssignmentId AND d.carrierCompanyId IN :companyIds)))))")
+    Page<Trip> findByCarrierCompanyIdsAndStartTimeBetween(
+            @Param("companyIds") Collection<Long> companyIds,
+            @Param("startDate") java.time.LocalDateTime startDate,
+            @Param("endDate") java.time.LocalDateTime endDate,
+            Pageable pageable);
 
     @Query("SELECT COUNT(t) FROM Trip t " +
            "WHERE t.booking.cargoRequest.shipper.id = :shipperId " +

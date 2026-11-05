@@ -298,7 +298,7 @@ export default function DriverDetail() {
   return (
     <div className="min-h-screen bg-[#F8FAF8]">
       <EthioSidebar />
-      <div className="ml-0 min-w-0 md:ml-[240px]">
+      <div className="ml-0 min-w-0 lg:ml-[240px]">
         <EthioTopbar title="Driver Details" subtitle="Verified account and operational history" />
         <main className="mt-[60px] px-3 py-4 md:px-6 md:py-8">
           <div className="mx-auto max-w-5xl">

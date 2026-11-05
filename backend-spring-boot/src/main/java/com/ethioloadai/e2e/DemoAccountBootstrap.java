@@ -27,6 +27,8 @@ public class DemoAccountBootstrap implements ApplicationRunner {
 
     static final String ALLOWED_E2E_DATASOURCE_URL =
             E2eDatasourceGuardInitializer.ALLOWED_DATASOURCE_URL;
+    static final String ALLOWED_DOCKER_E2E_DATASOURCE_URL =
+            E2eDatasourceGuardInitializer.ALLOWED_DOCKER_DATASOURCE_URL;
 
     private static final Logger log = LoggerFactory.getLogger(DemoAccountBootstrap.class);
 
@@ -79,6 +81,7 @@ public class DemoAccountBootstrap implements ApplicationRunner {
         DemoAccount admin = new DemoAccount("Demo Administrator", "+251911000001",
                 "admin@freightlink.et", User.Role.ADMIN, true, true, adminPassword);
         if (rotateAdminPassword) {
+            requireHostLoopbackDatasource();
             rotateExistingAdminPassword(admin);
         } else {
             createIfAbsent(admin);
@@ -92,12 +95,24 @@ public class DemoAccountBootstrap implements ApplicationRunner {
 
     private void requireAllowedDatasource() {
         List<String> profiles = Arrays.asList(environment.getActiveProfiles());
+        String datasourceMode = environment.getProperty("e2e.datasource.mode");
         boolean allowedE2eTarget =
-                profiles.contains("e2e") && !profiles.contains("prod")
-                        && ALLOWED_E2E_DATASOURCE_URL.equals(datasourceUrl);
+                profiles.size() == 1
+                        && profiles.contains("e2e")
+                        && (("host-loopback".equals(datasourceMode)
+                        && ALLOWED_E2E_DATASOURCE_URL.equals(datasourceUrl))
+                        || ("docker-network".equals(datasourceMode)
+                        && ALLOWED_DOCKER_E2E_DATASOURCE_URL.equals(datasourceUrl)));
         if (!allowedE2eTarget) {
             throw new IllegalStateException(
                     "Demo seeding is restricted to its approved profile and datasource");
+        }
+    }
+
+    private void requireHostLoopbackDatasource() {
+        if (!ALLOWED_E2E_DATASOURCE_URL.equals(datasourceUrl)) {
+            throw new IllegalStateException(
+                    "Demo password rotation is restricted to the approved host-loopback E2E datasource");
         }
     }
 

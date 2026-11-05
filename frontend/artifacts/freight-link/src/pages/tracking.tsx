@@ -351,17 +351,17 @@ export default function Tracking() {
         {isOwner && tripId && ["DELIVERY_PENDING_VERIFICATION", "COMPLETED"].includes(tripDetail?.tripStatus?.toUpperCase()) &&
           <Link className="block p-4 text-primary underline" href={`/freight/${freightId}/trips/${tripId}/proof`}>Review proof of delivery</Link>}
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex min-w-0 flex-1 items-start gap-2">
               <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
                 <Navigation className="h-4 w-4 text-primary" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <CardTitle className="text-xl">Live Tracking</CardTitle>
-                <p className="text-sm text-muted-foreground">{freight.cargoType} · {freight.pickupLocation} → {freight.deliveryLocation}</p>
+                <p className="break-words text-sm text-muted-foreground">{freight.cargoType} · {freight.pickupLocation} → {freight.deliveryLocation}</p>
               </div>
             </div>
-            <Badge className={`border ${STATUS_COLORS[freight.status] ?? "bg-gray-50 text-gray-700 border-gray-200"}`}>
+            <Badge className={`max-w-full whitespace-normal break-words border ${STATUS_COLORS[freight.status] ?? "bg-gray-50 text-gray-700 border-gray-200"}`}>
               {freight.status}
             </Badge>
           </div>
@@ -376,24 +376,24 @@ export default function Tracking() {
 
           {/* Shipment Progress */}
           <div className="bg-[#0c1e4a] text-white rounded-xl p-5">
-            <div className="flex items-center justify-between mb-4">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Package className="h-4 w-4 text-emerald-400" />
                 <span className="text-sm font-semibold">Shipment Progress</span>
               </div>
               {freight.deadline && <span className="text-sm text-emerald-400">Deadline: {new Date(freight.deadline).toLocaleDateString()}</span>}
             </div>
-            <div className="flex items-center gap-0">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:flex sm:items-center sm:gap-0">
               {checkpoints.map((cp, i) => (
-                <div key={i} className="flex items-center flex-1">
-                  <div className="flex flex-col items-center">
+                <div key={i} className="flex min-w-0 items-center gap-2 sm:flex-1 sm:flex-col sm:gap-0">
+                  <div className="flex min-w-0 flex-col items-start sm:items-center">
                     <div className={`h-8 w-8 rounded-full flex items-center justify-center ${cp.status ? "bg-emerald-500" : "bg-white/10"}`}>
                       <CheckCircle className="h-4 w-4 text-white" />
                     </div>
-                    <span className="text-xs mt-1 text-slate-300">{cp.label}</span>
+                    <span className="mt-1 break-words text-xs text-slate-300 sm:text-center">{cp.label}</span>
                   </div>
                   {i < checkpoints.length - 1 && (
-                    <div className={`flex-1 h-0.5 mx-2 ${checkpoints[i+1].status ? "bg-emerald-500" : "bg-white/10"}`} />
+                    <div className={`hidden h-0.5 flex-1 sm:mx-2 sm:block ${checkpoints[i+1].status ? "bg-emerald-500" : "bg-white/10"}`} />
                   )}
                 </div>
               ))}
@@ -487,11 +487,11 @@ export default function Tracking() {
                   />
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <Button
                   onClick={() => updateMutation.mutate()}
                   disabled={!driverLat || !driverLng || updateMutation.isPending}
-                  className="flex-1 rounded-lg"
+                  className="min-h-11 flex-1 rounded-lg"
                   size="sm"
                 >
                   {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <MapPin className="h-4 w-4 mr-2" />}
@@ -502,7 +502,7 @@ export default function Tracking() {
                   disabled={arriveMutation.isPending || tripDetail?.tripStatus?.toUpperCase() !== "ONGOING"}
                   variant="outline"
                   size="sm"
-                  className="gap-2 rounded-lg"
+                  className="min-h-11 gap-2 rounded-lg"
                 >
                   {arriveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
                   Mark Arrived

@@ -95,6 +95,10 @@ public interface CarrierOfferService {
      */
     CarrierOfferResponse getOffer(Long offerId, User caller);
 
+    CarrierOfferResponse getOfferForCompany(Long companyId, Long offerId, User caller);
+
+    CarrierOfferResponse getOfferForFreight(Long freightId, Long offerId, User caller);
+
     /**
      * Get a carrier company's own offer on a specific freight.
      */
@@ -109,4 +113,10 @@ public interface CarrierOfferService {
      * Full negotiation history for an offer (authorized caller only).
      */
     List<NegotiationEntryResponse> getNegotiationHistory(Long offerId, User caller);
+
+    List<NegotiationEntryResponse> getNegotiationHistoryForCompany(
+            Long companyId, Long offerId, User caller);
+
+    List<NegotiationEntryResponse> getNegotiationHistoryForFreight(
+            Long freightId, Long offerId, User caller);
 }

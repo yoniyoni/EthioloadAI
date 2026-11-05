@@ -1,71 +1,50 @@
-# Run locally on this Windows computer
+# Local development and deployment modes
 
 | Component | Address |
 | --- | --- |
-| Web app | http://localhost:5174/ (or http://localhost:5173/) |
-| Mobile app browser preview | http://127.0.0.1:8765/ |
+| React web app | http://localhost:5173/ |
+| Optional Flutter Web preview | http://127.0.0.1:8765/ |
 | Backend health | http://127.0.0.1:8080/api/actuator/health |
-| AI service documentation | http://127.0.0.1:8000/docs |
 
-Both interfaces use the Spring Boot backend and the same PostgreSQL database, `ethioloadai_spring`, on port 5432. PostGIS is installed and enabled. Connection credentials are in `backend-spring-boot/.env`.
+## Normal development (Windows)
 
-Carrier Company Phase 2 uses migrations through V60. Its backend APIs and web invitation acceptance page are available; sending invitations also requires SMTP settings in the backend .env. See [Phase 2 configuration and verification](backend-spring-boot/CARRIER_COMPANY_PHASE2.md). Full team-management screens and Flutter employee screens are not part of Phase 2.
+Normal development uses the existing PostgreSQL 15 Windows service on **127.0.0.1:5433**, database `ethioloadai_spring`, and Spring's `dev` profile. The workspace's Docker database on 15433 is explicitly disposable-test data; the E2E database and production/demo stack are separate modes and are never started or stopped by these scripts.
 
-The database starts without demo accounts. Register a new account in either interface; it can be used in both.
-
-## Quick Start (Start All Services)
-
-To start all services with a single command, run in PowerShell from the project root:
+Configure `backend-spring-boot/.env` as described in [LOCAL_SETUP.md](backend-spring-boot/LOCAL_SETUP.md). Do not put credentials in scripts or source control. From PowerShell at the repository root:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\start-all.ps1
+.\scripts\dev-up.ps1
+# Include the existing Flutter Web build when needed:
+.\scripts\dev-up.ps1 -FlutterWeb
 ```
 
-To stop all running services:
+Stop only processes and the PostgreSQL service that this launcher started:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\stop-all.ps1
+.\scripts\dev-down.ps1
 ```
 
-## Restart Individually
+The launcher checks Docker Engine, verifies the PostgreSQL service configured for 5433, waits for `pg_isready`, starts the current Spring source (not a potentially stale JAR), waits for Spring health, starts Vite, and checks `/api/actuator/health` through Vite's proxy. PostgreSQL is shared infrastructure and remains running after `dev-down`. The launcher records only owned process identities under `%LOCALAPPDATA%\EthioloadAI\dev-workflow`; it stores no credentials. Existing healthy local services are reused. An occupied but unrecognized port causes a safe failure; the launcher never kills a process based on port number.
 
-If the services are already running, open the links above. Otherwise, open separate PowerShell terminals at the project root and run each command below. Keep those terminals open while using the apps.
+Startup is serialized with a machine-wide Windows named mutex. The backend launcher owns its Maven/Java descendants in a Windows Job Object and records the actual Java process identity. `dev-down` signals only that launcher's private shutdown event, terminates its owned process job, and verifies the JVM exits; this is process-level termination, not an application-level graceful drain. If the launcher process exits unexpectedly, Windows closes its Job Object and terminates its owned descendants. Spring startup is blocked while the frozen V78 migration file is present because Flyway could apply it automatically.
 
-Backend:
+The Docker Engine is checked but no Docker container, image, network, volume, or secret is started, stopped, or removed by the normal-development launcher. `start-all.ps1` and `stop-all.ps1` remain compatibility wrappers for the canonical scripts.
+The AI engine is not part of this default workflow; start it separately only when working on AI-backed features.
+
+## E2E testing with SMTP capture
+
+E2E is an independently guarded Docker workflow using the approved isolated E2E database/network and synthetic SMTP capture. Follow [TEAM_E2E_SETUP.md](TEAM_E2E_SETUP.md) and [E2E_MAIL_CAPTURE.md](backend-spring-boot/E2E_MAIL_CAPTURE.md); do not use `dev-up.ps1` to launch it. The capture sink does not deliver email externally.
+
+## Production/demo deployment
+
+Production/demo uses its separate Compose file, protected runtime secrets, production profile, B2 storage, and real SMTP provider configuration. See [docker-compose.spring-demo.yml](docker/docker-compose.spring-demo.yml) and the approved deployment procedure. Do not use the normal local `.env` or E2E secrets for that mode.
+
+## Optional Flutter Web preview
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\backend-spring-boot\start-local.ps1
+.\scripts\dev-up.ps1 -FlutterWeb
 ```
 
-Web app:
-
-```powershell
-Set-Location .\frontend
-pnpm.cmd --filter @workspace/freight-link dev
-```
-
-Mobile browser preview:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\frontend\artifacts\mobile-app\start-preview.ps1
-```
-
-AI service (uses the Python interpreter already bundled with PostgreSQL's pgAdmin on this computer):
-
-```powershell
-& 'C:\Program Files\PostgreSQL\18\pgAdmin 4\python\python.exe' .\ai_engine\run_local.py
-```
-
-The AI packages are installed only in `ai_engine/.runtime`. To restore them if necessary:
-
-```powershell
-& 'C:\Program Files\PostgreSQL\18\pgAdmin 4\python\python.exe' -m pip install --target .\ai_engine\.runtime -r .\ai_engine\requirements-runtime.txt
-```
-
-## Mobile preview and validation
-
-The mobile preview serves the Flutter web build supplied in `frontend/artifacts/mobile-app/build/web`. It is not a new Flutter compilation and does not update automatically when Dart source changes. Flutter is not currently installed; install it and rebuild the web target to include later Dart changes. No native phone or emulator build was performed.
-
-Verified: both interfaces render, database migrations through V56 complete, Hibernate schema validation passes, web registration and mobile login/profile calls work, mobile cross-origin requests are allowed, and authenticated price prediction works through the web proxy, backend, and AI service. Temporary verification accounts were removed.
+This serves the existing `frontend/artifacts/mobile-app/build/web`; it does not compile Dart or update that build. Rebuild separately when Flutter source changes.
 
 See `backend-spring-boot/FRESH_DATABASE_MIGRATIONS.md` before using the modified migration files against an older populated database.

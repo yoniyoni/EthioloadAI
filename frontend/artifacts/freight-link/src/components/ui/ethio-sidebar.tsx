@@ -1,159 +1,198 @@
-import { useLocation, useSearch } from 'wouter';
-import { useState } from 'react';
+import { Link, useLocation, useSearch } from 'wouter'
+import { useState } from 'react'
 import {
-  LayoutDashboard, Truck, Users, CreditCard,
-  AlertTriangle, LogOut, ChevronRight, Building2, Lock, FileText, TrendingUp, Banknote, Package, Bell, History,
-} from 'lucide-react';
-import { useAuth } from '@/contexts/auth-context';
-
-const GREEN = '#0F3D1A';
-const AMBER = '#F59E0B';
+  LayoutDashboard,
+  Truck,
+  Users,
+  CreditCard,
+  AlertTriangle,
+  LogOut,
+  ChevronRight,
+  Building2,
+  Lock,
+  FileText,
+  TrendingUp,
+  Banknote,
+  Package,
+  Bell,
+  History,
+  Menu,
+} from 'lucide-react'
+import { useAuth } from '@/contexts/auth-context'
+import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 
 type NavItem = {
-  label: string;
-  icon: React.ReactNode;
-  tab: string;
-};
+  label: string
+  icon: React.ReactNode
+  tab: string
+}
 
-const NAV_ITEMS: NavItem[] = [
-  { label: 'Overview',   icon: <LayoutDashboard size={18} />, tab: 'overview'  },
-  { label: 'Cargo & Bids', icon: <Package size={18} />,       tab: 'cargo'     },
-  { label: 'Drivers',    icon: <Truck size={18} />,           tab: 'drivers'   },
-  { label: 'Fleet Owners', icon: <Building2 size={18} />,     tab: 'fleet'     },
-  { label: 'Company reviews', icon: <Building2 size={18} />, tab: 'companies' },
-  { label: 'Users',      icon: <Users size={18} />,           tab: 'users'     },
-  { label: 'Payments',   icon: <CreditCard size={18} />,      tab: 'payments'  },
-  { label: 'Escrow',     icon: <Banknote size={18} />,        tab: 'escrow'    },
-  { label: 'Disputes',   icon: <AlertTriangle size={18} />,   tab: 'disputes'  },
-  { label: 'Documents',  icon: <FileText size={18} />,        tab: 'documents' },
-  { label: 'Vehicles',   icon: <Truck size={18} />,           tab: 'vehicles'  },
-  { label: 'Analytics',  icon: <TrendingUp size={18} />,      tab: 'analytics' },
-  { label: 'Notifications', icon: <Bell size={18} />,          tab: 'notifications' },
-  { label: 'Activity',   icon: <History size={18} />,          tab: 'activity' },
-  { label: 'Settings',   icon: <Lock size={18} />,             tab: 'settings' },
-];
+type NavGroup = {
+  label: string
+  items: NavItem[]
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    label: 'Overview',
+    items: [{ label: 'Overview', icon: <LayoutDashboard size={18} />, tab: 'overview' }],
+  },
+  {
+    label: 'Freight & people',
+    items: [
+      { label: 'Cargo & Bids', icon: <Package size={18} />, tab: 'cargo' },
+      { label: 'Drivers', icon: <Truck size={18} />, tab: 'drivers' },
+      { label: 'Fleet Owners', icon: <Building2 size={18} />, tab: 'fleet' },
+      { label: 'Company reviews', icon: <Building2 size={18} />, tab: 'companies' },
+      { label: 'Users', icon: <Users size={18} />, tab: 'users' },
+    ],
+  },
+  {
+    label: 'Finance',
+    items: [
+      { label: 'Payments', icon: <CreditCard size={18} />, tab: 'payments' },
+      { label: 'Escrow', icon: <Banknote size={18} />, tab: 'escrow' },
+      { label: 'Disputes', icon: <AlertTriangle size={18} />, tab: 'disputes' },
+    ],
+  },
+  {
+    label: 'Platform',
+    items: [
+      { label: 'Documents', icon: <FileText size={18} />, tab: 'documents' },
+      { label: 'Vehicles', icon: <Truck size={18} />, tab: 'vehicles' },
+      { label: 'Analytics', icon: <TrendingUp size={18} />, tab: 'analytics' },
+      { label: 'Notifications', icon: <Bell size={18} />, tab: 'notifications' },
+      { label: 'Activity', icon: <History size={18} />, tab: 'activity' },
+      { label: 'Settings', icon: <Lock size={18} />, tab: 'settings' },
+    ],
+  },
+]
 
 export function EthioSidebar() {
-  const [, navigate] = useLocation();
-  const rawSearch = useSearch();
-  const { user, logout } = useAuth();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [location, navigate] = useLocation()
+  const rawSearch = useSearch()
+  const { user, logout } = useAuth()
+  const [mobileOpen, setMobileOpen] = useState(false)
 
-  const searchStr = rawSearch.startsWith('?') ? rawSearch.slice(1) : rawSearch;
-  const currentTab = new URLSearchParams(searchStr).get('tab') || 'overview';
+  const searchStr = rawSearch.startsWith('?') ? rawSearch.slice(1) : rawSearch
+  const queryTab = new URLSearchParams(searchStr).get('tab')
+  const currentTab =
+    location === '/admin/companies'
+      ? 'companies'
+      : location === '/drivers' || location.startsWith('/drivers/') || location.startsWith('/admin/drivers/')
+        ? 'drivers'
+        : queryTab || 'overview'
 
   const handleNav = (tab: string) => {
-    setMobileOpen(false);
-    navigate(tab === 'companies' ? '/admin/companies' : tab === 'overview' ? '/admin' : `/admin?tab=${tab}`);
-  };
+    setMobileOpen(false)
+    navigate(tab === 'companies' ? '/admin/companies' : tab === 'overview' ? '/admin' : `/admin?tab=${tab}`)
+  }
 
-  return (
+  const renderSidebarContent = (onNavigate?: () => void) => (
     <>
-      <button
-        type="button"
-        aria-label="Open admin navigation"
-        onClick={() => setMobileOpen(true)}
-        className="fixed left-3 top-3 z-50 flex h-10 w-10 items-center justify-center rounded-lg text-white shadow-md md:hidden"
-        style={{ background: GREEN }}
+      <Link
+        href='/admin'
+        onClick={onNavigate}
+        className='flex min-h-16 items-center gap-3 border-b border-white/10 px-5 py-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-admin-accent'
+        aria-label='EthioLoad Admin overview'
       >
-        <span className="sr-only">Open admin navigation</span>
-        <span className="flex flex-col gap-1" aria-hidden="true">
-          <span className="h-0.5 w-4 bg-white" />
-          <span className="h-0.5 w-4 bg-white" />
-          <span className="h-0.5 w-4 bg-white" />
+        <span className='flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-admin-accent text-admin-sidebar'>
+          <Truck size={20} aria-hidden='true' />
         </span>
-      </button>
-      {mobileOpen && (
-        <button
-          type="button"
-          aria-label="Close admin navigation"
-          onClick={() => setMobileOpen(false)}
-          className="fixed inset-0 z-40 bg-black/40 md:hidden"
-        />
-      )}
-      <aside
-        style={{ background: GREEN, width: 240, flexShrink: 0 }}
-        className={`fixed left-0 top-0 z-50 flex h-screen flex-col transition-transform md:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} md:flex`}
-      >
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10">
-        <div
-          className="flex items-center justify-center rounded-lg"
-          style={{ background: AMBER, width: 36, height: 36 }}
-        >
-          <Truck size={20} color="white" />
-        </div>
-        <div>
-          <p className="text-white font-bold text-sm leading-none">EthioLoad</p>
-          <p style={{ color: AMBER }} className="text-xs font-semibold">AI Admin</p>
-        </div>
-      </div>
+        <span className='min-w-0'>
+          <span className='block truncate text-sm font-bold text-white'>EthioLoad</span>
+          <span className='block truncate text-xs font-semibold text-admin-accent'>AI Admin</span>
+        </span>
+      </Link>
 
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3">
-        <p className="text-white/40 text-[10px] font-semibold uppercase tracking-widest px-2 mb-2">
-          Management
-        </p>
-        <ul className="space-y-0.5">
-          {NAV_ITEMS.map((item) => {
-            const active = currentTab === item.tab;
-            return (
-              <li key={item.tab}>
-                <button
-                  onClick={() => handleNav(item.tab)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group relative"
-                  style={{
-                    color: active ? 'white' : 'rgba(255,255,255,0.6)',
-                    background: active ? 'rgba(255,255,255,0.1)' : 'transparent',
-                    borderLeft: active ? `3px solid ${AMBER}` : '3px solid transparent',
-                  }}
-                >
-                  <span style={{ color: active ? AMBER : 'rgba(255,255,255,0.6)' }}>
-                    {item.icon}
-                  </span>
-                  {item.label}
-                  {active && (
-                    <ChevronRight size={14} className="ml-auto" style={{ color: AMBER }} />
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+      <nav aria-label='Admin navigation' className='flex-1 space-y-5 overflow-y-auto px-3 py-5'>
+        {NAV_GROUPS.map((group) => (
+          <section key={group.label} aria-label={group.label}>
+            <h2 className='mb-2 px-2 text-[10px] font-semibold uppercase tracking-widest text-white/55'>
+              {group.label}
+            </h2>
+            <ul className='space-y-1'>
+              {group.items.map((item) => {
+                const active = currentTab === item.tab
+                return (
+                  <li key={item.tab}>
+                    <button
+                      type='button'
+                      onClick={() => {
+                        onNavigate?.()
+                        handleNav(item.tab)
+                      }}
+                      aria-current={active ? 'page' : undefined}
+                      className={`group relative flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-lg border-l-2 px-3 py-2.5 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-admin-accent ${
+                        active
+                          ? 'border-admin-accent bg-white/10 text-white'
+                          : 'border-transparent text-white/75 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      <span className={active ? 'text-admin-accent' : 'text-white/65'} aria-hidden='true'>
+                        {item.icon}
+                      </span>
+                      <span className='min-w-0 flex-1'>{item.label}</span>
+                      {active && <ChevronRight size={14} className='shrink-0 text-admin-accent' aria-hidden='true' />}
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          </section>
+        ))}
       </nav>
 
-      {/* User + Logout */}
-      <div className="border-t border-white/10 p-4">
+      <div className='border-t border-white/10 p-4'>
         {user && (
-          <div className="flex items-center gap-3 mb-3">
-            <div
-              className="flex items-center justify-center rounded-full text-white text-xs font-bold shrink-0"
-              style={{ background: AMBER, width: 34, height: 34 }}
-            >
+          <div className='mb-3 flex min-w-0 items-center gap-3'>
+            <span className='flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-admin-accent text-xs font-bold text-admin-sidebar'>
               {user.name?.charAt(0).toUpperCase() ?? 'A'}
-            </div>
-            <div className="min-w-0">
-              <p className="text-white text-sm font-semibold truncate">{user.name}</p>
-              <p className="text-white/40 text-xs truncate">{user.role}</p>
-            </div>
+            </span>
+            <span className='min-w-0'>
+              <span className='block truncate text-sm font-semibold text-white'>{user.name}</span>
+              <span className='block truncate text-xs text-white/55'>{user.role}</span>
+            </span>
           </div>
         )}
         <button
+          type='button'
           onClick={() => logout()}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors"
-          style={{ color: 'rgba(255,255,255,0.5)' }}
-          onMouseEnter={(e) =>
-            ((e.currentTarget as HTMLElement).style.color = 'white')
-          }
-          onMouseLeave={(e) =>
-            ((e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.5)')
-          }
+          className='flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-white/70 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-admin-accent'
         >
-          <LogOut size={16} />
+          <LogOut size={16} aria-hidden='true' />
           Sign out
         </button>
       </div>
+    </>
+  )
+
+  return (
+    <>
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+        <SheetTrigger asChild>
+          <button
+            type='button'
+            aria-label='Open admin navigation'
+            aria-expanded={mobileOpen}
+            className='fixed left-3 top-2.5 z-40 flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg bg-admin-sidebar text-white shadow-md transition-colors hover:bg-admin-sidebar/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-admin-accent focus-visible:ring-offset-2 lg:hidden'
+          >
+            <Menu size={20} aria-hidden='true' />
+          </button>
+        </SheetTrigger>
+        <SheetContent side='left' className='flex w-60 flex-col gap-0 border-white/10 bg-admin-sidebar p-0 text-white'>
+          <SheetTitle className='sr-only'>Admin navigation</SheetTitle>
+          <SheetDescription className='sr-only'>Navigate to platform administration sections.</SheetDescription>
+          {renderSidebarContent()}
+        </SheetContent>
+      </Sheet>
+
+      <aside
+        aria-label='Admin sidebar'
+        className='fixed left-0 top-0 z-30 hidden h-dvh w-[240px] shrink-0 flex-col bg-admin-sidebar text-white lg:flex'
+      >
+        {renderSidebarContent()}
       </aside>
     </>
-  );
+  )
 }

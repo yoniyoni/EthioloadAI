@@ -13,9 +13,13 @@ import com.ethioloadai.booking.dto.BookingTripResponse;
 import com.ethioloadai.booking.exception.BookingNotFoundException;
 import com.ethioloadai.booking.repository.BookingRepository;
 import com.ethioloadai.booking.repository.BookingRepository.BookingIdProjection;
+import com.ethioloadai.booking.repository.BookingVisibilitySpecifications;
+import com.ethioloadai.carrier.team.service.FleetOwnerHistoryScopeService;
 import com.ethioloadai.exception.AuthorizationException;
 import com.ethioloadai.freight.entity.Freight;
 import com.ethioloadai.freight.repository.FreightRepository;
+import com.ethioloadai.freight.service.FreightVisibilityProperties;
+import com.ethioloadai.trip.entity.Trip;
 import com.ethioloadai.user.entity.User;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -24,6 +28,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Slice;
+import org.springframework.data.domain.SliceImpl;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +40,7 @@ import com.ethioloadai.booking.dto.BookingResponse;
 import org.hibernate.Hibernate;
 import java.math.BigDecimal;
 import java.util.Arrays;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -47,6 +55,8 @@ public class BookingServiceImpl implements BookingService {
     private final BookingRepository bookingRepository;
     private final FreightRepository freightRepository;
     private final CommissionService commissionService;
+    private final FleetOwnerHistoryScopeService fleetOwnerHistoryScope;
+    private final FreightVisibilityProperties visibilityProperties;
 
     @Override
     @Transactional(isolation = Isolation.READ_COMMITTED)
@@ -209,12 +219,22 @@ public class BookingServiceImpl implements BookingService {
                 .orElseThrow(() -> new BookingNotFoundException(bookingId));
 
         // Check authorization: booking driver, freight shipper, or admin
-        boolean isDriver = booking.getDriver().getId().equals(user.getId());
-        boolean isShipper = booking.getCargoRequest().getShipper().getId().equals(user.getId());
+        boolean isDriver = user.getRole() == User.Role.DRIVER
+                && booking.getDriver().getId().equals(user.getId());
+        boolean isShipper = user.getRole() == User.Role.SHIPPER
+                && booking.getCargoRequest().getShipper().getId().equals(user.getId());
         boolean isAdmin = user.getRole() == User.Role.ADMIN;
+        List<Long> companyIds = user.getRole() == User.Role.FLEET_OWNER
+                ? fleetOwnerHistoryScope.getApprovedCompanyIds(user)
+                : List.of();
+        boolean isFleetCompanyMember = !companyIds.isEmpty()
+                && bookingRepository.existsByIdAndCarrierCompanyIds(bookingId, companyIds);
 
-        if (!isDriver && !isShipper && !isAdmin) {
+        if (!isDriver && !isShipper && !isAdmin && !isFleetCompanyMember) {
             throw new AuthorizationException("You are not authorized to view this booking");
+        }
+        if (!hasHistoricalAccess(booking, user)) {
+            throw new BookingNotFoundException(bookingId);
         }
 
         return booking;
@@ -226,7 +246,7 @@ public class BookingServiceImpl implements BookingService {
         log.info("Getting booking response {} for user {}", bookingId, user.getId());
         
         Booking booking = getBookingWithAuthorization(bookingId, user);
-        return mapToBookingResponse(booking);
+        return mapToBookingResponse(booking, user.getRole() != User.Role.FLEET_OWNER);
     }
 
     @Override
@@ -273,50 +293,111 @@ public class BookingServiceImpl implements BookingService {
     @Override
     @Transactional(readOnly = true)
     public List<BookingResponse> getBookingsForCaller(User user) {
-        List<Booking> bookings = switch (user.getRole()) {
-            case DRIVER -> bookingRepository.findByDriver_Id(user.getId());
-            case SHIPPER -> bookingRepository.findByShipperId(user.getId());
-            case ADMIN -> bookingRepository.findAll();
-            case FLEET_OWNER -> bookingRepository.findByDriver_Id(user.getId());
-        };
-
-        return bookings.stream().map(this::mapToBookingResponse).toList();
+        return bookingRepository.findAll(callerVisibility(user),
+                        Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")))
+                .stream()
+                .map(booking -> mapToBookingResponse(
+                        booking, user.getRole() != User.Role.FLEET_OWNER))
+                .toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public BookingPageResponse getBookingsPageForCaller(User user, Pageable pageable, Long adminDriverId) {
-        Slice<BookingIdProjection> bookingIds;
         Long totalBookings = null;
         if (adminDriverId != null) {
             if (user.getRole() != User.Role.ADMIN) {
                 throw new AuthorizationException("Only administrators can filter bookings by driver");
             }
-            bookingIds = bookingRepository.findPageIdsByDriverIdForAdmin(adminDriverId, pageable);
+            Slice<BookingIdProjection> bookingIds =
+                    bookingRepository.findPageIdsByDriverIdForAdmin(adminDriverId, pageable);
             totalBookings = bookingRepository.countByDriver_IdForAdmin(adminDriverId);
-        } else {
-            bookingIds = switch (user.getRole()) {
-                case DRIVER, FLEET_OWNER ->
-                        bookingRepository.findPageIdsByDriver_Id(user.getId(), pageable);
-                case SHIPPER -> bookingRepository.findPageIdsByShipperId(user.getId(), pageable);
-                case ADMIN -> bookingRepository.findAllPageIds(pageable);
-            };
+            List<Long> orderedIds = bookingIds.getContent().stream()
+                    .map(BookingIdProjection::getId)
+                    .toList();
+            List<BookingResponse> content = loadBookingResponses(orderedIds);
+            return new BookingPageResponse(
+                    content, bookingIds.getNumber(), bookingIds.getSize(), bookingIds.hasNext(), totalBookings);
         }
 
-        List<Long> orderedIds = bookingIds.getContent().stream()
-                .map(BookingIdProjection::getId)
+        Page<Booking> bookings = bookingRepository.findAll(callerVisibility(user), pageable);
+        List<BookingResponse> content = bookings.getContent().stream()
+                .map(booking -> mapToBookingResponse(
+                        booking, user.getRole() != User.Role.FLEET_OWNER))
                 .toList();
-        List<BookingResponse> content = List.of();
-        if (!orderedIds.isEmpty()) {
-            Map<Long, Booking> bookingsById = bookingRepository.findByIdIn(orderedIds).stream()
-                    .collect(Collectors.toMap(Booking::getId, booking -> booking));
-            content = orderedIds.stream()
-                    .map(bookingsById::get)
-                    .map(this::mapToBookingResponse)
-                    .toList();
-        }
         return new BookingPageResponse(
-                content, bookingIds.getNumber(), bookingIds.getSize(), bookingIds.hasNext(), totalBookings);
+                content, bookings.getNumber(), bookings.getSize(), bookings.hasNext(), totalBookings);
+    }
+
+    private List<BookingResponse> loadBookingResponses(List<Long> orderedIds) {
+        if (orderedIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, Booking> bookingsById = bookingRepository.findByIdIn(orderedIds).stream()
+                .collect(Collectors.toMap(Booking::getId, booking -> booking));
+        return orderedIds.stream()
+                .map(bookingsById::get)
+                .map(this::mapToBookingResponse)
+                .toList();
+    }
+
+    private Specification<Booking> callerVisibility(User user) {
+        List<Long> companyIds = user.getRole() == User.Role.FLEET_OWNER
+                ? fleetOwnerHistoryScope.getApprovedCompanyIds(user)
+                : List.of();
+        Specification<Booking> specification =
+                BookingVisibilitySpecifications.callerScope(user, companyIds);
+        if (user.getRole() == User.Role.DRIVER || user.getRole() == User.Role.FLEET_OWNER) {
+            long historyDays = user.getRole() == User.Role.DRIVER
+                    ? visibilityProperties.getDriverHistoryDays()
+                    : visibilityProperties.getCarrierHistoryDays();
+            specification = specification.and(
+                    BookingVisibilitySpecifications.withinHistoryWindow(historyDays, LocalDateTime.now()));
+        }
+        return specification;
+    }
+
+    private boolean hasHistoricalAccess(Booking booking, User user) {
+        if (user.getRole() != User.Role.DRIVER && user.getRole() != User.Role.FLEET_OWNER) {
+            return true;
+        }
+
+        Freight freight = booking.getCargoRequest();
+        Trip trip = booking.getTrip();
+        boolean bookingCancelled = booking.getBookingStatus() == Booking.BookingStatus.CANCELLED;
+        boolean freightCancelled = freight.getStatus() == Freight.FreightStatus.CANCELLED;
+        boolean bookingCompleted = booking.getBookingStatus() == Booking.BookingStatus.COMPLETED;
+        boolean freightCompleted = freight.getStatus() == Freight.FreightStatus.COMPLETED;
+        boolean tripCompleted = trip != null && trip.getTripStatus() == Trip.TripStatus.COMPLETED;
+        if (tripCompleted && trip.getEndTime() == null) {
+            return false;
+        }
+        if (!bookingCancelled && !freightCancelled && !bookingCompleted && !freightCompleted && !tripCompleted) {
+            return true;
+        }
+
+        long historyDays = user.getRole() == User.Role.DRIVER
+                ? visibilityProperties.getDriverHistoryDays()
+                : visibilityProperties.getCarrierHistoryDays();
+        if (historyDays <= 0) {
+            return false;
+        }
+        LocalDateTime terminalAt;
+        if (freightCancelled) {
+            terminalAt = freight.getUpdatedAt();
+        } else if (tripCompleted) {
+            terminalAt = trip.getEndTime();
+        } else if (bookingCancelled || bookingCompleted) {
+            terminalAt = booking.getUpdatedAt();
+        } else {
+            terminalAt = freight.getUpdatedAt();
+        }
+        LocalDateTime now = LocalDateTime.now();
+        return withinHistoryWindow(terminalAt, now.minusDays(historyDays), now);
+    }
+
+    private boolean withinHistoryWindow(LocalDateTime timestamp, LocalDateTime cutoff, LocalDateTime now) {
+        return timestamp != null && !timestamp.isBefore(cutoff) && !timestamp.isAfter(now);
     }
 
     @Override
@@ -390,6 +471,10 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private BookingResponse mapToBookingResponse(Booking booking) {
+        return mapToBookingResponse(booking, true);
+    }
+
+    private BookingResponse mapToBookingResponse(Booking booking, boolean includeFinancial) {
         return BookingResponse.builder()
                 .id(booking.getId())
                 .freightId(booking.getCargoRequest().getId())
@@ -404,8 +489,8 @@ public class BookingServiceImpl implements BookingService {
                         ? booking.getTrip().getTripStatus().name().toLowerCase(Locale.ROOT) : null)
                 .bidId(booking.getBid() != null ? booking.getBid().getId() : null)
                 .bookingStatus(booking.getBookingStatus() != null ? booking.getBookingStatus().name().toLowerCase() : null)
-                .estimatedPrice(booking.getEstimatedPrice())
-                .commissionFee(booking.getCommissionFee())
+                .estimatedPrice(includeFinancial ? booking.getEstimatedPrice() : null)
+                .commissionFee(includeFinancial ? booking.getCommissionFee() : null)
                 .createdAt(booking.getCreatedAt())
                 .updatedAt(booking.getUpdatedAt())
                 .build();

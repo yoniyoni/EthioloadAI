@@ -19,6 +19,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Bell, Gavel, CheckCircle, XCircle, ArrowLeftRight, Package } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/contexts/auth-context'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -69,7 +70,7 @@ export function NotificationBell() {
   const qc = useQueryClient()
   const [open, setOpen] = useState(false)
 
-  const { data } = useQuery<NotificationListResponse>({
+  const { data, isLoading, isError, isFetching, refetch } = useQuery<NotificationListResponse>({
     queryKey: ['notifications'],
     queryFn: () => api.get<NotificationListResponse>('/notifications'),
     enabled: isAuthenticated,
@@ -94,52 +95,63 @@ export function NotificationBell() {
   if (!isAuthenticated) return null
 
   return (
-    <div className="relative">
-      {/* Bell button */}
-      <button
-        onClick={() => setOpen((o) => !o)}
-        aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
-        className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-border hover:bg-muted transition-colors"
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
+          className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-background/90 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          <Bell className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          {unreadCount > 0 && (
+            <span
+              aria-hidden="true"
+              className="absolute -top-1 -right-1 flex min-w-[16px] h-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold text-white leading-none"
+            >
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        sideOffset={8}
+        aria-label="Notifications"
+        className="w-[min(20rem,calc(100vw-1.5rem))] overflow-hidden p-0"
       >
-        <Bell className="h-4 w-4 text-muted-foreground" />
-        {unreadCount > 0 && (
-          <span
-            aria-hidden="true"
-            className="absolute -top-1 -right-1 flex min-w-[16px] h-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold text-white leading-none"
-          >
-            {unreadCount > 99 ? '99+' : unreadCount}
-          </span>
-        )}
-      </button>
+        <div className="flex max-h-[calc(100dvh-6rem)] flex-col overflow-hidden rounded-xl border border-border bg-background shadow-xl">
+          <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
+            <p className="text-sm font-semibold text-foreground">Notifications</p>
+            {unreadCount > 0 && (
+              <button
+                type="button"
+                onClick={() => markAllRead.mutate()}
+                disabled={markAllRead.isPending}
+                className="min-h-11 shrink-0 rounded-sm px-1 text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
+              >
+                Mark all read
+              </button>
+            )}
+          </div>
 
-      {/* Dropdown */}
-      {open && (
-        <>
-          {/* Backdrop */}
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-
-          <div
-            role="dialog"
-            aria-label="Notifications"
-            className="absolute right-0 top-full mt-2 z-50 flex flex-col w-80 max-h-96 rounded-xl shadow-xl bg-background border border-border overflow-hidden"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
-              <p className="text-sm font-semibold text-foreground">Notifications</p>
-              {unreadCount > 0 && (
-                <button
-                  onClick={() => markAllRead.mutate()}
-                  disabled={markAllRead.isPending}
-                  className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
-                >
-                  Mark all read
-                </button>
-              )}
-            </div>
-
-            {/* List */}
-            <div className="overflow-y-auto flex-1">
-              {notifications.length === 0 ? (
+          <div className="flex-1 overflow-y-auto">
+              {isLoading ? (
+                <p role="status" className="px-4 py-8 text-center text-xs text-muted-foreground">
+                  Loading notifications…
+                </p>
+              ) : isError ? (
+                <div role="alert" className="flex flex-col items-center gap-3 px-4 py-8 text-center">
+                  <p className="text-xs text-destructive">Unable to load notifications.</p>
+                  <button
+                    type="button"
+                    onClick={() => void refetch()}
+                    disabled={isFetching}
+                    className="min-h-11 rounded-md px-3 text-xs font-medium text-primary hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
+                  >
+                    {isFetching ? 'Retrying…' : 'Retry'}
+                  </button>
+                </div>
+              ) : notifications.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10 gap-2 text-center px-4">
                   <Bell className="h-7 w-7 text-muted-foreground/30" />
                   <p className="text-xs text-muted-foreground">No notifications yet</p>
@@ -147,16 +159,14 @@ export function NotificationBell() {
               ) : (
                 notifications.map((n) => {
                   const isRead = n.read_at !== null
-                  return (
-                    <div
-                      key={n.id}
-                      onClick={() => {
-                        if (!isRead) markOneRead.mutate(n.id)
-                      }}
-                      className={`flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-muted/60 border-b border-border/40 last:border-b-0 transition-colors ${
-                        isRead ? 'bg-background' : 'bg-amber-50/60 dark:bg-amber-950/20'
-                      }`}
-                    >
+                  const route = typeof n.data?.route === 'string' ? n.data.route : null
+                  const rowClassName = `flex w-full items-start gap-3 border-b border-border/40 px-4 py-3 text-left last:border-b-0 transition-colors ${
+                    isRead
+                      ? 'bg-background'
+                      : 'bg-amber-50/60 hover:bg-muted/60 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring dark:bg-amber-950/20'
+                  }`
+                  const rowContent = (
+                    <>
                       {/* Icon */}
                       <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border bg-muted">
                         {notifIcon(n.type)}
@@ -167,6 +177,7 @@ export function NotificationBell() {
                         <p className={`text-xs leading-snug text-foreground ${isRead ? 'font-normal' : 'font-semibold'}`}>
                           {getMessage(n)}
                         </p>
+                        {route && <p className="mt-0.5 truncate text-xs text-muted-foreground">{route}</p>}
                         <p className="text-[10px] mt-1 text-muted-foreground">
                           {timeAgo(n.created_at)}
                         </p>
@@ -176,14 +187,29 @@ export function NotificationBell() {
                       {!isRead && (
                         <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-amber-500" />
                       )}
+                    </>
+                  )
+                  return isRead ? (
+                    <div key={n.id} className={rowClassName}>
+                      {rowContent}
                     </div>
+                  ) : (
+                    <button
+                      key={n.id}
+                      type="button"
+                      onClick={() => markOneRead.mutate(n.id)}
+                      disabled={markOneRead.isPending}
+                      aria-label={`Mark notification as read: ${getMessage(n)}`}
+                      className={`${rowClassName} disabled:cursor-not-allowed disabled:opacity-60`}
+                    >
+                      {rowContent}
+                    </button>
                   )
                 })
               )}
-            </div>
           </div>
-        </>
-      )}
-    </div>
+        </div>
+      </PopoverContent>
+    </Popover>
   )
 }

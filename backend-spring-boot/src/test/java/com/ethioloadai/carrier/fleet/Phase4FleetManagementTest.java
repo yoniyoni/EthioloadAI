@@ -66,8 +66,10 @@ class Phase4FleetManagementTest extends FleetTestSupport {
         var req = new AddCarrierDriverRequest();
         req.setDriverUserId(abcFm.getId()); // FLEET_MANAGER, not DRIVER
         assertThatThrownBy(() -> fleetService.addDriver(abcCompanyId, req, abcOwner))
-                .isInstanceOf(CarrierFleetException.class)
-                .hasMessageContaining("role DRIVER");
+                .isInstanceOfSatisfying(CarrierFleetException.class, exception -> {
+                    assertThat(exception.getCode()).isEqualTo("FLEET_INVALID");
+                    assertThat(exception.getHttpStatus()).isEqualTo(422);
+                });
     }
 
     @Test
@@ -611,8 +613,8 @@ class Phase4FleetManagementTest extends FleetTestSupport {
     }
 
     @Test
-    void dispatcherCannotAssign() throws Exception {
-        // Use a valid body so authorization check is reached before validation
+    void dispatcherCanAssign() throws Exception {
+        approveVehicle(abcVehicle1);
         var req = new CreateAssignmentRequest();
         req.setCarrierDriverId(abcCd1.getId());
         req.setVehicleId(abcVehicle1.getId());
@@ -620,7 +622,15 @@ class Phase4FleetManagementTest extends FleetTestSupport {
                         .header("Authorization", auth(abcDispatcher))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body(req)))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.carrierCompanyId").value(abcCompanyId))
+                .andExpect(jsonPath("$.carrierDriverId").value(abcCd1.getId()))
+                .andExpect(jsonPath("$.vehicleId").value(abcVehicle1.getId()));
+        assertThat(driverRepo.findById(abcCd1.getId()).orElseThrow().getAvailability())
+                .isEqualTo(DriverAvailability.ASSIGNED);
+        assertThat(vehicleRepo.findById(abcVehicle1.getId()).orElseThrow().getAvailabilityStatus())
+                .isEqualTo("assigned");
     }
 
     @Test

@@ -863,7 +863,7 @@ class _CargoCard extends StatelessWidget {
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
-                            cargo.city ?? 'Unknown city',
+                            cargo.city ?? 'Location details shared after award',
                             style: const TextStyle(
                                 fontSize: 10,
                                 color: Color(0xFF1E40AF),
@@ -881,7 +881,11 @@ class _CargoCard extends StatelessWidget {
                       ]),
                     ] else ...[
                       Text(
-                        '${cargo.pickupLocation} → ${cargo.destination}',
+                        cargo.pickupLocation.isNotEmpty ||
+                                cargo.destination.isNotEmpty
+                            ? '${cargo.pickupLocation.isEmpty ? 'Pickup' : cargo.pickupLocation} → '
+                                '${cargo.destination.isEmpty ? 'Delivery' : cargo.destination}'
+                            : 'Route details shared after award',
                         style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,

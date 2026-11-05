@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import {
   ArrowRight, BarChart3, Globe, ShieldCheck, Truck, Users,
-  Zap, MapPin, Package, TrendingUp, ChevronRight, Star, Clock,
+  Zap, Package, TrendingUp, ChevronRight, Star, Clock,
   Route, CheckCircle2, Shield, CreditCard, Headphones, Award, MessageCircle
 } from "lucide-react";
 import { motion, useScroll, useTransform } from "framer-motion";
@@ -17,18 +17,6 @@ function FadeIn({ children, delay = 0, className = "" }: { children: React.React
       viewport={{ once: true, margin: "-80px" }}
       transition={{ duration: 0.7, delay, ease: [0.22, 1, 0.36, 1] }}
       className={className}
-    >
-      {children}
-    </motion.div>
-  );
-}
-
-function FloatingCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return (
-    <motion.div
-      className={`bg-white/90 backdrop-blur-xl rounded-2xl border border-white/20 shadow-xl ${className}`}
-      whileHover={{ y: -4, scale: 1.02 }}
-      transition={{ type: "spring", stiffness: 300, damping: 20 }}
     >
       {children}
     </motion.div>
@@ -82,135 +70,34 @@ export default function Home() {
                     <ArrowRight className="ml-2 h-5 w-5" />
                   </Button>
                 </Link>
-                <Link href="/freight">
-                  <Button size="lg" variant="outline" className="h-12 rounded-lg border-white/25 bg-slate-950/35 px-7 text-sm font-bold text-white backdrop-blur-sm hover:bg-slate-900/70 hover:text-white">
-                    View Live Loads
-                  </Button>
-                </Link>
               </motion.div>
 
-              <motion.div
-                className="hidden"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.4 }}
-              >
-                <div className="flex -space-x-2">
-                  {[1,2,3,4].map(i => (
-                    <div key={i} className="h-8 w-8 rounded-full bg-slate-600 border-2 border-[#0c1e4a] flex items-center justify-center text-xs font-bold text-slate-300">
-                      {String.fromCharCode(64 + i)}
-                    </div>
-                  ))}
-                </div>
-                <p>Trusted by 2,400+ shippers</p>
-              </motion.div>
             </div>
 
-            {/* Right - Visual Cards */}
-            <motion.div
-              className="hidden"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.8, delay: 0.3 }}
-            >
-              <div className="relative h-[480px] w-full">
-                <FloatingCard className="absolute top-0 left-0 w-72 p-5 z-20">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="h-10 w-10 rounded-lg bg-emerald-100 flex items-center justify-center">
-                      <Truck className="h-5 w-5 text-emerald-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">Active Load</p>
-                      <p className="text-xs text-slate-500">Addis Ababa — Hawassa</p>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-500">Cargo</span>
-                      <span className="font-medium text-slate-900">Electronics</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-500">Weight</span>
-                      <span className="font-medium text-slate-900">12,500 kg</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-slate-500">Price</span>
-                      <span className="font-medium text-emerald-600">ETB 45,000</span>
-                    </div>
-                    <div className="h-2 bg-slate-100 rounded-full mt-2">
-                      <div className="h-full w-2/3 bg-emerald-500 rounded-full" />
-                    </div>
-                    <p className="text-xs text-slate-500 text-center">In transit — 67% complete</p>
-                  </div>
-                </FloatingCard>
-
-                <FloatingCard className="absolute top-8 right-0 w-56 p-5 z-10">
-                  <div className="flex items-center gap-2 mb-3">
-                    <TrendingUp className="h-4 w-4 text-emerald-500" />
-                    <span className="text-xs font-semibold text-emerald-600">+34% this month</span>
-                  </div>
-                  <p className="text-3xl font-bold text-slate-900 mb-1">ETB 1.2M</p>
-                  <p className="text-xs text-slate-500">Total freight value matched</p>
-                </FloatingCard>
-
-                <FloatingCard className="absolute bottom-16 left-12 w-64 p-4 z-30">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-600">
-                      BG
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-slate-900">Bekele Girma</p>
-                      <div className="flex items-center gap-1 text-xs text-slate-500">
-                        <Star className="h-3 w-3 text-amber-500 fill-amber-500" />
-                        <span className="text-amber-600 font-medium">4.9</span>
-                        <span>• 127 deliveries</span>
-                      </div>
-                    </div>
-                    <div className="h-8 w-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                    </div>
-                  </div>
-                </FloatingCard>
-
-                <motion.div
-                  className="absolute bottom-4 right-8 h-12 w-12 rounded-xl bg-slate-900/80 backdrop-blur border border-slate-700 flex items-center justify-center"
-                  animate={{ y: [0, -8, 0] }}
-                  transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                >
-                  <MapPin className="h-5 w-5 text-emerald-400" />
-                </motion.div>
-                <motion.div
-                  className="absolute top-32 left-8 h-10 w-10 rounded-lg bg-slate-900/80 backdrop-blur border border-slate-700 flex items-center justify-center"
-                  animate={{ y: [0, -6, 0] }}
-                  transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
-                >
-                  <Zap className="h-4 w-4 text-emerald-400" />
-                </motion.div>
-              </div>
-            </motion.div>
           </div>
         </motion.div>
 
         <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-background to-transparent" />
       </section>
 
-      {/* Stats Bar */}
+      {/* Freight capabilities */}
       <section className="relative z-10 w-full border-b border-slate-200 bg-white py-12 md:py-14">
         <div className="container px-4 md:px-6 mx-auto max-w-6xl">
-          <div className="grid grid-cols-2 gap-y-8 md:grid-cols-4 md:gap-8 text-center">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
             {[
-              { value: "12,000+", label: "Verified Drivers", icon: Users },
-              { value: "4.8M", label: "Tons Moved", icon: Package },
-              { value: "850+", label: "Active Routes", icon: Route },
-              { value: "99.2%", label: "On-Time Delivery", icon: Clock },
-            ].map((stat, i) => (
-              <FadeIn key={i} delay={i * 0.1}>
-                <div className="flex flex-col items-center">
-                  <div className="h-10 w-10 rounded-lg bg-slate-50 flex items-center justify-center mb-3">
-                    <stat.icon className="h-5 w-5 text-slate-600" />
+              { title: "Role-aware workflows", description: "Tools shaped around your account permissions.", icon: Users },
+              { title: "Shipment coordination", description: "Manage freight activity through one workspace.", icon: Route },
+              { title: "Company operations", description: "Coordinate fleet resources and assignments.", icon: Clock },
+            ].map((feature, i) => (
+              <FadeIn key={feature.title} delay={i * 0.1}>
+                <div className="flex h-full items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white">
+                    <feature.icon className="h-5 w-5 text-slate-600" />
                   </div>
-                  <span className="text-2xl font-extrabold tracking-tight text-slate-900 md:text-3xl">{stat.value}</span>
-                  <span className="text-sm font-medium text-slate-500 mt-1">{stat.label}</span>
+                  <div>
+                    <p className="font-semibold text-slate-900">{feature.title}</p>
+                    <p className="mt-1 text-sm text-slate-500">{feature.description}</p>
+                  </div>
                 </div>
               </FadeIn>
             ))}
@@ -338,12 +225,11 @@ export default function Home() {
                     <span className="font-semibold">Escrow Protected</span>
                   </div>
                   <div className="space-y-2">
-                    <p className="text-sm text-slate-400">Shipment ID</p>
-                    <p className="text-2xl font-bold">#EF-99281-AD</p>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-sm text-slate-400">Total Amount</p>
-                    <p className="text-4xl font-bold">ETB 42,500.00</p>
+                    <p className="text-sm text-slate-400">Private freight workspace</p>
+                    <p className="text-xl font-bold">Details for authorized users</p>
+                    <p className="text-sm leading-relaxed text-slate-300">
+                      Sign in to access freight listings and shipment information.
+                    </p>
                   </div>
                   <div className="grid grid-cols-2 gap-4 pt-4">
                     <div className="flex items-center gap-2 text-sm">
@@ -362,38 +248,28 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Testimonials */}
+      {/* Role workflows */}
       <section className="relative w-full overflow-hidden bg-[#0c1e4a] py-20 text-white md:py-24">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(20,184,166,0.08)_0%,_transparent_50%)]" />
         <div className="container px-4 md:px-6 mx-auto max-w-6xl relative z-10">
           <FadeIn className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-4">Loved by Shippers Across Ethiopia</h2>
-            <p className="text-lg text-slate-400">From small businesses to enterprise logistics teams.</p>
+            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-4">Tools for every freight role</h2>
+            <p className="text-lg text-slate-400">Coordinate freight through role-aware, authenticated workspaces.</p>
           </FadeIn>
 
           <div className="grid md:grid-cols-3 gap-6">
             {[
-              { name: "Alemu Tadesse", role: "Logistics Manager", company: "Addis Trading Co.", quote: "Ethio-Freight cut our shipping costs by 23% and we always know exactly where our cargo is. Game changer.", rating: 5 },
-              { name: "Tigist Kebede", role: "Operations Director", company: "AgroFresh Ethiopia", quote: "We move 200 tons of produce weekly. The instant matching and verified drivers give us total peace of mind.", rating: 5 },
-              { name: "Dawit Mekonnen", role: "Fleet Owner", company: "Dawit Transports", quote: "As a fleet owner, Ethio-Freight keeps my 12 trucks busy. The payment system is fast and reliable.", rating: 5 },
+              { title: "Shippers", description: "Create freight requests and coordinate shipments.", icon: Package },
+              { title: "Drivers", description: "Manage assignments and track active shipments.", icon: Truck },
+              { title: "Fleet owners", description: "Coordinate company drivers, vehicles and dispatch activity.", icon: Users },
             ].map((t, i) => (
-              <FadeIn key={i} delay={i * 0.15}>
-                <div className="rounded-xl border border-white/10 bg-white/[0.06] p-6 transition-all duration-300 hover:bg-white/[0.1]">
-                  <div className="flex gap-1 mb-4">
-                    {Array(t.rating).fill(0).map((_, j) => (
-                      <Star key={j} className="h-4 w-4 text-emerald-400 fill-emerald-400" />
-                    ))}
+              <FadeIn key={t.title} delay={i * 0.15}>
+                <div className="h-full rounded-xl border border-white/10 bg-white/[0.06] p-6 transition-all duration-300 hover:bg-white/[0.1]">
+                  <div className="mb-5 flex h-10 w-10 items-center justify-center rounded-lg bg-white/10">
+                    <t.icon className="h-5 w-5 text-emerald-300" />
                   </div>
-                  <p className="text-slate-300 leading-relaxed mb-6 italic">"{t.quote}"</p>
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-emerald-500/20 flex items-center justify-center text-sm font-bold text-emerald-400">
-                      {t.name.split(" ").map(n => n[0]).join("")}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-white">{t.name}</p>
-                      <p className="text-xs text-slate-400">{t.role}, {t.company}</p>
-                    </div>
-                  </div>
+                  <h3 className="mb-2 text-lg font-semibold text-white">{t.title}</h3>
+                  <p className="text-sm leading-relaxed text-slate-300">{t.description}</p>
                 </div>
               </FadeIn>
             ))}
@@ -401,16 +277,16 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Live Activity / CTA */}
+      {/* Registration CTA */}
       <section className="w-full bg-white py-20 md:py-24">
         <div className="container px-4 md:px-6 mx-auto max-w-6xl">
-          <div className="grid md:grid-cols-2 gap-12 items-center">
+          <div className="mx-auto max-w-3xl">
             <FadeIn>
               <h2 className="text-3xl md:text-5xl font-extrabold tracking-tight text-slate-900 mb-6">
                 Ready to Move Smarter?
               </h2>
               <p className="text-xl text-slate-600 mb-10 max-w-xl">
-                Join thousands of shippers and drivers who are already saving time and money with Ethio-Freight.
+                Bring your freight coordination into one role-aware workspace.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <Link href="/register">
@@ -419,39 +295,8 @@ export default function Home() {
                     <ChevronRight className="ml-2 h-5 w-5" />
                   </Button>
                 </Link>
-                <Link href="/freight">
-                  <Button size="lg" variant="outline" className="h-12 rounded-lg border-slate-300 px-7 text-sm font-bold text-slate-700 hover:bg-slate-100">
-                    Explore Loads
-                  </Button>
-                </Link>
               </div>
               <p className="text-sm text-slate-500 mt-6">Free for shippers. No credit card required.</p>
-            </FadeIn>
-            <FadeIn delay={0.2}>
-              <div className="space-y-4">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 shadow-sm">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="h-3 w-3 rounded-full bg-emerald-500 animate-pulse" />
-                    <p className="font-semibold text-slate-900">Live Freight Activity</p>
-                  </div>
-                  <div className="space-y-3">
-                    {[
-                      { from: "Addis Ababa", to: "Dire Dawa", type: "Industrial Cement", price: "18,500", status: "In Transit" },
-                      { from: "Hawassa", to: "Addis Ababa", type: "Coffee Export", price: "15,900", status: "Active" },
-                      { from: "Bahir Dar", to: "Mekelle", type: "Machinery", price: "21,000", status: "Matched" },
-                    ].map((load, i) => (
-                      <div key={i} className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-100">
-                        <div>
-                          <p className="text-xs text-slate-500">{load.type}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-bold text-emerald-600">ETB {load.price}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
             </FadeIn>
           </div>
         </div>
@@ -475,7 +320,6 @@ export default function Home() {
             <div>
               <p className="text-sm font-semibold text-white mb-4">Product</p>
               <div className="space-y-2 text-sm text-slate-400">
-                <Link href="/freight" className="block hover:text-white transition-colors">Freight Marketplace</Link>
                 <Link href="/drivers" className="block hover:text-white transition-colors">Drivers</Link>
                 <Link href="/register" className="block hover:text-white transition-colors">Get Started</Link>
               </div>

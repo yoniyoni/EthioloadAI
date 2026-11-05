@@ -2,8 +2,6 @@ import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/auth-context'
 import { useLanguage } from '@/lib/i18n/language-context'
 import { api, auth } from '@/lib/api'
-import Fleet from '@/pages/fleet'
-import CompanyWorkspace from '@/pages/company-workspace'
 import { Link } from 'wouter'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -45,6 +43,13 @@ function statusColor(status: string) {
   return map[status] ?? 'bg-gray-50 text-gray-700 border-gray-200'
 }
 
+function statusLabel(status: string) {
+  return status
+    .toLowerCase()
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, character => character.toUpperCase())
+}
+
 function StatCard({
   label,
   value,
@@ -78,9 +83,10 @@ function StatCard({
 }
 
 export default function Dashboard() {
-  const { user, memberships } = useAuth()
+  const { user, memberships, membershipError, refreshMemberships } = useAuth()
   const { t } = useLanguage()
   const role = user?.role
+  const firstName = user?.name?.trim().split(/\s+/)[0]
 
   const { data: dashboardData, isLoading: dashboardLoading, isError: dashboardError } = useQuery({
     queryKey: ['dashboard-summary', user?.id],
@@ -166,22 +172,64 @@ export default function Dashboard() {
   const shipperDataError = role === 'shipper' && dashboardError
   const apps = appsData?.applications ?? []
 
-  if (memberships.length > 0) return <CompanyWorkspace id={String(memberships[0].carrierCompanyId)} />
-  if (role === 'fleet_owner') return <div className='p-6'><Link href='/fleet/companies'>Manage your carrier company application</Link></div>
+  if (memberships.length > 0) return (
+    <main className='container mx-auto max-w-6xl space-y-6 px-3 py-5 sm:px-5 sm:py-7 lg:px-7'>
+      <header className='border-b border-border/70 pb-5'>
+        <p className='mb-2 text-sm font-medium text-muted-foreground'>Workspace selection</p>
+        <h1 className='text-2xl font-bold tracking-tight sm:text-3xl'>Choose a company workspace</h1>
+        <p className='mt-2 max-w-2xl text-sm leading-6 text-muted-foreground'>Select the company you want to manage. Each active membership opens its company-scoped workspace.</p>
+      </header>
+      {membershipError && <div role='alert' className='flex flex-col gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 sm:flex-row sm:items-center sm:justify-between'><p className='text-sm text-destructive'>{membershipError}</p><Button type='button' variant='outline' className='min-h-11' onClick={() => void refreshMemberships().catch(() => undefined)}>Retry company access</Button></div>}
+      <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3'>
+        {memberships.map((membership) => (
+          <Link key={membership.carrierCompanyId} href={`/company/${membership.carrierCompanyId}`} className='group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'>
+            <Card className='h-full border-border/70 shadow-sm transition-all group-hover:-translate-y-0.5 group-hover:border-primary/40 group-hover:shadow-md'>
+              <CardContent className='flex h-full flex-col items-start gap-3 p-5'>
+                <div className='flex w-full items-start justify-between gap-3'>
+                  <h2 className='break-words font-semibold'>{membership.companyName || `Company #${membership.carrierCompanyId}`}</h2>
+                  <span className='shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5' aria-hidden='true'>→</span>
+                </div>
+                <Badge variant='outline' className='capitalize'>{membership.role.replaceAll('_', ' ')}</Badge>
+                <p className='mt-auto pt-1 text-sm text-muted-foreground'>Open this company workspace</p>
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
+      </div>
+      {role === 'fleet_owner' && (
+        <Button asChild variant='outline' className='min-h-11'>
+          <Link href='/fleet/companies'>Manage companies and applications</Link>
+        </Button>
+      )}
+    </main>
+  )
+  if (role === 'fleet_owner') return (
+    <main className='container mx-auto max-w-3xl space-y-4 px-3 py-6 sm:px-5 sm:py-8'>
+      <header><h1 className='text-2xl font-bold tracking-tight'>No active company workspace</h1><p className='mt-2 text-sm leading-6 text-muted-foreground'>Register a company or wait for an invitation to become active before opening company operations.</p></header>
+      {membershipError && <div role='alert' className='flex flex-col gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 sm:flex-row sm:items-center sm:justify-between'><p className='text-sm text-destructive'>{membershipError}</p><Button type='button' variant='outline' className='min-h-11' onClick={() => void refreshMemberships().catch(() => undefined)}>Retry company access</Button></div>}
+      <Button asChild className='min-h-11'><Link href='/fleet/companies'>Manage company applications</Link></Button>
+    </main>
+  )
 
   return (
     <div className='container mx-auto max-w-6xl px-4 py-8'>
-      <div className='flex items-center justify-between mb-8'>
+      <div className='mb-8 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between'>
         <div>
-          <h1 className='text-3xl font-bold tracking-tight'>
-            {t('nav.dashboard')}
+          <h1 className='text-2xl font-bold tracking-tight sm:text-3xl'>
+            {role === 'shipper'
+              ? `${t('dashboard.welcome')}${firstName ? `, ${firstName}` : ''}`
+              : t('nav.dashboard')}
           </h1>
-          <p className='text-muted-foreground mt-1'>{user?.name}</p>
+          {role === 'shipper' ? (
+            <p className='mt-2 max-w-xl text-sm leading-6 text-muted-foreground'>{t('dashboard.welcomeSubtitle')}</p>
+          ) : (
+            <p className='mt-1 text-muted-foreground'>{user?.name}</p>
+          )}
         </div>
         {(role === 'shipper' || role === 'admin') && (
-          <div className='flex flex-wrap gap-2'>
-            <Link href='/freight/new'><Button className='gap-2 rounded-lg bg-primary hover:bg-primary/90'><Plus className='h-4 w-4' />{t('freight.postNew')}</Button></Link>
-            {role === 'shipper' && <><Link href='/tracking'><Button variant='outline' className='gap-2 rounded-lg'><Navigation className='h-4 w-4' />Track Shipments</Button></Link><Link href='/history'><Button variant='outline' className='gap-2 rounded-lg'><Calendar className='h-4 w-4' />History</Button></Link></>}
+          <div role='group' aria-label='Quick actions' className='flex flex-wrap gap-2'>
+            <Link href='/freight/new'><Button className='min-h-11 gap-2 rounded-lg bg-primary hover:bg-primary/90'><Plus className='h-4 w-4' />{t('freight.postNew')}</Button></Link>
+            {role === 'shipper' && <><Link href='/tracking'><Button variant='outline' className='min-h-11 gap-2 rounded-lg'><Navigation className='h-4 w-4' />Track Shipments</Button></Link><Link href='/history'><Button variant='outline' className='min-h-11 gap-2 rounded-lg'><Calendar className='h-4 w-4' />History</Button></Link></>}
           </div>
         )}
       </div>
@@ -218,10 +266,10 @@ export default function Dashboard() {
           </>
         ) : role === 'shipper' ? (
           <>
-            <StatCard label={t('freight.totalPosts')} value={dashboardLoading ? '—' : dashboardData?.totalFreightPosts ?? 0} icon={Package} sub='Your freight postings' />
-            <StatCard label='Active shipments' value={dashboardLoading ? '—' : dashboardData?.operationalShipments ?? 0} icon={Clock} sub='Posted, matched, or in transit' />
-            <StatCard label='Active bookings' value={dashboardLoading ? '—' : dashboardData?.activeBookings ?? 0} icon={Truck} sub='Spring booking status' />
-            <StatCard label='Active trips' value={dashboardLoading ? '—' : dashboardData?.activeTrips ?? 0} icon={Navigation} sub='Authorized trip records' />
+            <StatCard label={t('freight.totalPosts')} value={dashboardLoading ? '—' : dashboardData?.totalFreightPosts ?? 0} icon={Package} sub={t('dashboard.totalFreightPostsHelp')} />
+            <StatCard label={t('dashboard.activeShipments')} value={dashboardLoading ? '—' : dashboardData?.operationalShipments ?? 0} icon={Clock} sub={t('dashboard.activeShipmentsHelp')} />
+            <StatCard label={t('dashboard.confirmedBookings')} value={dashboardLoading || dashboardData?.confirmedBookings == null ? '—' : dashboardData.confirmedBookings} icon={Truck} sub={t('dashboard.confirmedBookingsHelp')} />
+            <StatCard label={t('dashboard.completedDeliveries')} value={dashboardLoading ? '—' : dashboardData?.completedFreight ?? 0} icon={CheckCircle} sub={t('dashboard.completedDeliveriesHelp')} />
           </>
         ) : (
           <>
@@ -258,15 +306,77 @@ export default function Dashboard() {
       {role === 'shipper' && (
         <div className='grid gap-6 md:grid-cols-2 mb-6'>
           <Card className='border-border/60'>
-            <CardHeader className='flex flex-row items-center justify-between pb-3'><CardTitle className='text-base font-semibold'>Active shipments</CardTitle><Link href='/freight'><Button variant='ghost' size='sm' className='gap-1 text-xs'>{t('common.viewAll')} <ArrowRight className='h-3 w-3' /></Button></Link></CardHeader>
+            <CardHeader className='flex flex-row items-center justify-between pb-3'>
+              <CardTitle className='text-base font-semibold'>{t('dashboard.activeShipments')}</CardTitle>
+              <Link href='/freight'>
+                <Button variant='ghost' size='sm' className='gap-1 text-xs'>
+                  {t('common.viewAll')} <ArrowRight className='h-3 w-3' />
+                </Button>
+              </Link>
+            </CardHeader>
             <CardContent className='space-y-3'>
-              {dashboardLoading ? <Skeleton className='h-16 w-full' /> : activeFreight.length === 0 ? <div className='py-8 text-center text-sm text-muted-foreground'><Package className='h-8 w-8 mx-auto mb-2 opacity-50' /><p>No active shipments to track</p><div className='mt-3 flex justify-center gap-2'><Link href='/freight/new'><Button size='sm'>Create Freight</Button></Link><Link href='/history'><Button size='sm' variant='outline'>History</Button></Link></div></div> : activeFreight.map((shipment: any) => <Link key={shipment.id} href={`/tracking/${shipment.id}`}><div className='flex items-center justify-between gap-3 rounded-lg border border-border/60 p-3 hover:bg-muted/40'><div className='min-w-0'><p className='truncate text-sm font-medium'>{shipment.cargoType ?? shipment.materialType ?? `Shipment #${shipment.id}`}</p><p className='truncate text-xs text-muted-foreground'>{shipment.pickupLocation} → {shipment.deliveryLocation ?? shipment.destination}</p></div><Badge variant='outline'>{shipment.status}</Badge></div></Link>)}
+              {dashboardLoading ? (
+                <Skeleton className='h-16 w-full' />
+              ) : activeFreight.length === 0 ? (
+                <div className='py-8 text-center text-sm text-muted-foreground'>
+                  <Package className='mx-auto mb-2 h-8 w-8 opacity-50' />
+                  <p>{dashboardData?.totalFreightPosts ? t('dashboard.noActiveShipments') : t('dashboard.noFreightYet')}</p>
+                  <p className='mx-auto mt-1 max-w-xs text-xs'>{t('dashboard.activeShipmentsEmptyHelp')}</p>
+                  <div className='mt-4 flex flex-wrap justify-center gap-2'>
+                    <Link href='/freight/new'>
+                      <Button size='sm'>{t('freight.postNew')}</Button>
+                    </Link>
+                    <Link href='/history'>
+                      <Button size='sm' variant='outline'>{t('nav.history')}</Button>
+                    </Link>
+                  </div>
+                </div>
+              ) : activeFreight.map((shipment: any) => (
+                <Link key={shipment.id} href={`/tracking/${shipment.id}`}>
+                  <div className='flex items-center justify-between gap-3 rounded-lg border border-border/60 p-3 hover:bg-muted/40'>
+                    <div className='min-w-0'>
+                      <p className='truncate text-sm font-medium'>{shipment.cargoType ?? shipment.materialType ?? `Shipment #${shipment.id}`}</p>
+                      <p className='truncate text-xs text-muted-foreground'>{shipment.pickupLocation} → {shipment.deliveryLocation ?? shipment.destination}</p>
+                    </div>
+                    <Badge variant='outline'>{statusLabel(shipment.status)}</Badge>
+                  </div>
+                </Link>
+              ))}
             </CardContent>
           </Card>
           <Card className='border-border/60'>
-            <CardHeader className='flex flex-row items-center justify-between pb-3'><CardTitle className='text-base font-semibold'>Recent shipment activity</CardTitle><Link href='/history'><Button variant='ghost' size='sm' className='gap-1 text-xs'>History <ArrowRight className='h-3 w-3' /></Button></Link></CardHeader>
+            <CardHeader className='flex flex-row items-center justify-between pb-3'>
+              <CardTitle className='text-base font-semibold'>{t('dashboard.recentActivity')}</CardTitle>
+              <Link href='/history'>
+                <Button variant='ghost' size='sm' className='gap-1 text-xs'>
+                  {t('nav.history')} <ArrowRight className='h-3 w-3' />
+                </Button>
+              </Link>
+            </CardHeader>
             <CardContent className='space-y-3'>
-              {dashboardLoading ? <Skeleton className='h-16 w-full' /> : bookings.length === 0 && trips.length === 0 ? <div className='py-8 text-center text-sm text-muted-foreground'><Clock className='h-8 w-8 mx-auto mb-2 opacity-50' />No booking or trip activity yet.</div> : <>{bookings.map((booking: any) => <div key={`booking-${booking.id}`} className='flex items-center justify-between gap-3 rounded-lg border border-border/60 p-3 text-sm'><span>Booking #{booking.id}</span><Badge variant='outline'>{booking.bookingStatus}</Badge></div>)}{trips.map((trip: any) => <div key={`trip-${trip.id}`} className='flex items-center justify-between gap-3 rounded-lg border border-border/60 p-3 text-sm'><span>Trip #{trip.id}</span><Badge variant='outline'>{trip.tripStatus}</Badge></div>)}</>}
+              {dashboardLoading ? (
+                <Skeleton className='h-16 w-full' />
+              ) : bookings.length === 0 && trips.length === 0 ? (
+                <div className='py-8 text-center text-sm text-muted-foreground'>
+                  <Clock className='mx-auto mb-2 h-8 w-8 opacity-50' />
+                  <p>{t('dashboard.activityEmpty')}</p>
+                </div>
+              ) : (
+                <>
+                  {bookings.map((booking: any) => (
+                    <div key={`booking-${booking.id}`} className='flex items-center justify-between gap-3 rounded-lg border border-border/60 p-3 text-sm'>
+                      <span>{t('dashboard.booking')} #{booking.id}</span>
+                      <Badge variant='outline'>{statusLabel(booking.bookingStatus)}</Badge>
+                    </div>
+                  ))}
+                  {trips.map((trip: any) => (
+                    <div key={`trip-${trip.id}`} className='flex items-center justify-between gap-3 rounded-lg border border-border/60 p-3 text-sm'>
+                      <span>{t('dashboard.delivery')} #{trip.id}</span>
+                      <Badge variant='outline'>{statusLabel(trip.tripStatus)}</Badge>
+                    </div>
+                  ))}
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -380,16 +490,9 @@ export default function Dashboard() {
               {role === 'driver'
                 ? 'Available Loads Near You'
                 : t('dashboard.myFreight')}
-            </CardTitle>
-            <div className='flex items-center gap-2'>
-              <Button
-                variant='ghost'
-                size='sm'
-                className='text-xs text-muted-foreground'
-              >
-                Filter
-              </Button>
-              <Link href='/freight'>
+          </CardTitle>
+          <div className='flex items-center gap-2'>
+            <Link href='/freight'>
                 <Button variant='ghost' size='sm' className='gap-1 text-xs'>
                   {t('common.viewAll')} <ArrowRight className='h-3 w-3' />
                 </Button>
@@ -404,7 +507,13 @@ export default function Dashboard() {
             ) : freight.length === 0 ? (
               <div className='text-center py-8 text-muted-foreground text-sm'>
                 <Package className='h-8 w-8 mx-auto mb-2 opacity-50' />
-                {t('freight.noResults')}
+                {role === 'shipper' ? (
+                  <>
+                    <p>{t('dashboard.noFreightYet')}</p>
+                    <p className='mt-1 text-xs'>{t('dashboard.noFreightHelp')}</p>
+                    <Link href='/freight/new'><Button className='mt-4 min-h-10' size='sm'>{t('freight.postNew')}</Button></Link>
+                  </>
+                ) : t('freight.noResults')}
               </div>
             ) : (
               freight.slice(0, 5).map((f: any) => (
@@ -550,17 +659,18 @@ export default function Dashboard() {
         {/* Recent Deliveries / Earnings */}
         {!role || role === 'shipper' || role === 'admin' ? (
           <Card className='border-border/60'>
-            <CardHeader className='pb-3'>
+            <CardHeader className='flex flex-row items-center justify-between pb-3'>
               <CardTitle className='text-base font-semibold'>
-                Recent Deliveries
+                {t('dashboard.recentDeliveries')}
               </CardTitle>
+              <Link href='/history'><Button variant='ghost' size='sm' className='gap-1 text-xs'>{t('common.viewAll')} <ArrowRight className='h-3 w-3' /></Button></Link>
             </CardHeader>
             <CardContent className='space-y-3'>
               {freight.filter((f: any) => f.status === 'completed').length ===
               0 ? (
                 <div className='text-center py-8 text-muted-foreground text-sm'>
                   <CheckCircle className='h-8 w-8 mx-auto mb-2 opacity-50' />
-                  No completed deliveries yet
+                  <p>{t('dashboard.deliveriesEmpty')}</p>
                 </div>
               ) : (
                 freight

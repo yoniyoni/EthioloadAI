@@ -210,6 +210,25 @@ class DriverDocumentServiceTest {
             "file", "license.pdf", "application/pdf", "%PDF-1.7 test".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
     }
 
+    @Test
+    void uploadRejectsUnsupportedOversizedAndMismatchedFilesBeforeStorage() {
+        assertThatThrownBy(() -> service.uploadDocument(DocumentType.LICENSE,
+            new MockMultipartFile("file", "script.html", "text/html", "<html>".getBytes()), driver))
+            .isInstanceOf(DocumentException.DocumentValidationException.class)
+            .hasMessageContaining("Only PDF, JPG, and PNG");
+        assertThatThrownBy(() -> service.uploadDocument(DocumentType.LICENSE,
+            new MockMultipartFile("file", "large.pdf", "application/pdf", new byte[5 * 1024 * 1024 + 1]), driver))
+            .isInstanceOf(DocumentException.DocumentValidationException.class)
+            .hasMessageContaining("5 MB or smaller");
+        assertThatThrownBy(() -> service.uploadDocument(DocumentType.LICENSE,
+            new MockMultipartFile("file", "invalid.pdf", "application/pdf", "not a pdf".getBytes()), driver))
+            .isInstanceOf(DocumentException.DocumentValidationException.class)
+            .hasMessageContaining("does not match");
+
+        verifyNoInteractions(documentStorage);
+        verify(documentRepository, never()).save(any(DriverDocument.class));
+    }
+
     private String capturedStoredObjectKey() throws IOException {
         var key = org.mockito.ArgumentCaptor.forClass(String.class);
         verify(documentStorage).put(key.capture(), any());

@@ -242,6 +242,11 @@ class DriverDocumentTransactionIntegrationTest {
         }
 
         @Override
+        public boolean exists(String objectKey) {
+            return objects.containsKey(objectKey);
+        }
+
+        @Override
         public void delete(String objectKey) {
             objects.remove(objectKey);
             deleted.add(objectKey);

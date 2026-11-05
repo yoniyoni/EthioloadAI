@@ -2,20 +2,26 @@ package com.ethioloadai.carrier.dispatch;
 
 import com.ethioloadai.booking.entity.Booking;
 import com.ethioloadai.booking.repository.BookingRepository;
+import com.ethioloadai.carrier.dispatch.entity.DispatchAssignment;
 import com.ethioloadai.carrier.dispatch.entity.DispatchStatus;
+import com.ethioloadai.carrier.dispatch.service.DispatchService;
 import com.ethioloadai.carrier.fleet.entity.CarrierDriverStatus;
 import com.ethioloadai.carrier.fleet.entity.DriverAvailability;
 import com.ethioloadai.carrier.fleet.repository.CarrierDriverRepository;
 import com.ethioloadai.freight.entity.Freight;
 import com.ethioloadai.freight.repository.FreightRepository;
+import com.ethioloadai.trip.entity.Trip;
+import com.ethioloadai.trip.repository.TripRepository;
 import com.ethioloadai.vehicle.entity.Vehicle;
 import com.ethioloadai.vehicle.repository.VehicleRepository;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -50,7 +56,61 @@ class Phase6DispatchIntegrationTest extends DispatchTestSupport {
     @Autowired FreightRepository freightRepository;
     @Autowired CarrierDriverRepository carrierDriverRepo;
     @Autowired VehicleRepository vehicleRepository;
+    @Autowired TripRepository tripRepository;
+    @Autowired DispatchService dispatchService;
     @Autowired EntityManager entityManager;
+
+    @Test
+    @DisplayName("Company dispatch pagination excludes completed trips with null end times from content and total")
+    void companyDispatchPageExcludesCompletedTripWithNullEndTime() {
+        DispatchAssignment visible = saveAssignment(
+                awardedFreight, abcAwardOfferId, agreedAmount);
+        DispatchAssignment excluded = saveAssignment(
+                awardedFreight2, abc2ndOfferId, new BigDecimal("55000.00"));
+        awardedFreight2.setStatus(Freight.FreightStatus.POSTED);
+        freightRepository.saveAndFlush(awardedFreight2);
+        Booking booking = bookingRepo.saveAndFlush(Booking.builder()
+                .cargoRequest(awardedFreight2)
+                .vehicle(vehicleRepository.findById(abcVehicle1Id).orElseThrow())
+                .driver(abcDriverA)
+                .carrierOfferId(abc2ndOfferId)
+                .dispatchAssignmentId(excluded.getId())
+                .carrierCompanyId(abcCompanyId)
+                .bookingStatus(Booking.BookingStatus.COMPLETED)
+                .commissionFee(BigDecimal.ZERO)
+                .build());
+        tripRepository.saveAndFlush(Trip.builder()
+                .booking(booking)
+                .driver(abcDriverA)
+                .vehicle(booking.getVehicle())
+                .startLocation("Pickup")
+                .destination("Destination")
+                .tripStatus(Trip.TripStatus.COMPLETED)
+                .endTime(null)
+                .build());
+
+        var page = dispatchService.listCompanyDispatches(
+                abcCompanyId, abcOwner, PageRequest.of(0, 1));
+
+        assertThat(page.getContent()).extracting("id").containsExactly(visible.getId());
+        assertThat(page.getTotalElements()).isEqualTo(1);
+        assertThat(page.getTotalPages()).isEqualTo(1);
+    }
+
+    private DispatchAssignment saveAssignment(
+            Freight freight, Long offerId, BigDecimal agreedAmount) {
+        return dispatchRepo.saveAndFlush(DispatchAssignment.builder()
+                .freightId(freight.getId())
+                .carrierOfferId(offerId)
+                .carrierCompanyId(abcCompanyId)
+                .driverUserId(abcDriverA.getId())
+                .vehicleId(abcVehicle1Id)
+                .assignedBy(abcOwner.getId())
+                .status(DispatchStatus.ASSIGNED)
+                .agreedAmount(agreedAmount)
+                .assignedAt(LocalDateTime.now())
+                .build());
+    }
 
     @Test
     @DisplayName("Company dispatch pages normalize bounds without weakening membership authorization")

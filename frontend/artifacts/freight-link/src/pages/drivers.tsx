@@ -63,8 +63,8 @@ export default function Drivers() {
         <p className="text-muted-foreground mt-1">Browse verified truck drivers across Ethiopia</p>
       </div>
 
-      <div className="flex gap-3 mb-6">
-        <div className="relative flex-1">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative w-full min-w-0 sm:flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search by name or location…"
@@ -74,7 +74,7 @@ export default function Drivers() {
           />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[160px] rounded-lg">
+          <SelectTrigger className="h-11 w-full rounded-lg sm:w-[160px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

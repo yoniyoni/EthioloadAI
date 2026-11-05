@@ -45,7 +45,7 @@ export default function Notifications() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const enabled = user?.role === "driver" || user?.role === "shipper" || user?.role === "fleet_owner";
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: ["notifications"],
     queryFn: () => api.get<NotificationResponse>("/notifications"),
     enabled,
@@ -79,12 +79,56 @@ export default function Notifications() {
     <div className="container mx-auto max-w-4xl px-4 py-8">
       <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
         <div><h1 className="text-3xl font-bold tracking-tight">Notifications</h1><p className="text-muted-foreground mt-1">Updates about bids, trips, and freight activity</p></div>
-        <Button variant="outline" className="rounded-lg" onClick={() => markAllRead.mutate()} disabled={!unread || markAllRead.isPending}>Mark all read</Button>
+        <Button type="button" variant="outline" aria-label="Mark all notifications as read" className="rounded-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" onClick={() => markAllRead.mutate()} disabled={!unread || markAllRead.isPending}>Mark all read</Button>
       </div>
-      {isLoading && <div className="space-y-3"><Skeleton className="h-20 w-full rounded-xl" /><Skeleton className="h-20 w-full rounded-xl" /></div>}
-      {isError && <p className="text-sm text-destructive">Unable to load notifications.</p>}
+      {isLoading && <div role="status" aria-label="Loading notifications" className="space-y-3"><Skeleton className="h-20 w-full rounded-xl" /><Skeleton className="h-20 w-full rounded-xl" /></div>}
+      {isError && <div role="alert" className="flex flex-col gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-destructive">Unable to load notifications.</p><Button type="button" variant="outline" className="min-h-11 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" onClick={() => void refetch()} disabled={isFetching}>{isFetching ? "Retrying…" : "Retry"}</Button></div>}
       {!isLoading && !isError && notifications.length === 0 && <Card className="rounded-xl border-border/60"><CardContent className="py-16 text-center"><Bell className="h-10 w-10 mx-auto mb-3 text-muted-foreground/40" /><p className="font-medium">No notifications yet.</p><p className="text-sm text-muted-foreground mt-1">New activity will appear here.</p></CardContent></Card>}
-      <div className="space-y-3">{notifications.map((notification) => { const read = (notification.read_at ?? notification.readAt) != null; return <Card key={notification.id} className={`rounded-xl border-border/60 ${read ? "" : "border-primary/40 bg-primary/[0.03]"}`}><CardContent className="flex items-start gap-3 p-4"><div className="h-9 w-9 shrink-0 rounded-full bg-muted flex items-center justify-center">{iconFor(notification.type)}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className={`text-sm ${read ? "" : "font-semibold"}`}>{messageFor(notification)}</p>{!read && <Badge className="bg-amber-50 text-amber-700 border-amber-200">Unread</Badge>}</div><p className="text-xs text-muted-foreground mt-1">{timeFor(notification)}</p></div>{!read && <Button size="sm" variant="ghost" onClick={() => markRead.mutate(notification.id)} disabled={markRead.isPending}><CheckCircle className="h-4 w-4 mr-1" />Read</Button>}</CardContent></Card>; })}</div>
+      {!isLoading && !isError && (
+        <div className="space-y-3">
+          {notifications.map((notification) => {
+            const read = (notification.read_at ?? notification.readAt) != null;
+            return (
+              <Card
+                key={notification.id}
+                className={`rounded-xl border-border/60 ${read ? "" : "border-primary/40 bg-primary/[0.03]"}`}
+              >
+                <CardContent className="flex items-start gap-3 p-4">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted">
+                    {iconFor(notification.type)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className={`text-sm ${read ? "" : "font-semibold"}`}>
+                        {messageFor(notification)}
+                      </p>
+                      {!read && (
+                        <Badge className="border-amber-200 bg-amber-50 text-amber-700">
+                          Unread
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">{timeFor(notification)}</p>
+                  </div>
+                  {!read && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      aria-label={`Mark notification as read: ${messageFor(notification)}`}
+                      className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      onClick={() => markRead.mutate(notification.id)}
+                      disabled={markRead.isPending}
+                    >
+                      <CheckCircle className="mr-1 h-4 w-4" />
+                      Read
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

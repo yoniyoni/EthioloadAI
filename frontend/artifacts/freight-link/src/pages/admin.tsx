@@ -415,7 +415,12 @@ export default function Admin() {
   const [pricingForm, setPricingForm] = useState({ rate_min: 18, rate_max: 28 });
   const [failedPaymentId, setFailedPaymentId] = useState<number | null>(null);
 
-  const { data: stats, isLoading: statsLoading } = useQuery({
+  const {
+    data: stats,
+    isLoading: statsLoading,
+    isError: statsError,
+    refetch: refetchStats,
+  } = useQuery({
     queryKey: ["admin-stats"],
     queryFn: () => api.get<AdminStatsData>("/admin/stats"),
   });
@@ -916,7 +921,7 @@ export default function Admin() {
   return (
     <div className="flex min-h-screen" style={{ background: "#F8FAF8" }}>
       <EthioSidebar />
-      <div className="ml-0 min-w-0 flex-1 md:ml-[240px]">
+      <div className="ml-0 min-w-0 flex-1 lg:ml-[240px]">
         <EthioTopbar title={adminTitle} subtitle={adminSubtitle} />
         <main className="mt-[60px] px-3 py-4 md:px-6 md:py-6">
 
@@ -929,6 +934,11 @@ export default function Admin() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {statsLoading ? (
                 Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)
+              ) : statsError ? (
+                <div role="alert" className="col-span-full flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+                  <span>Unable to load admin statistics. The displayed totals are unavailable.</span>
+                  <Button variant="outline" onClick={() => void refetchStats()}>Retry statistics</Button>
+                </div>
               ) : (
                 <>
                   <MetricCard label="Total Users"      value={stats?.users?.total ?? 0}       icon={<Users size={18}/>}         accentColor="#0F3D1A" />
@@ -1487,7 +1497,7 @@ export default function Admin() {
                     </div>
                     <div className="space-y-1.5">
                       <Label className="text-sm font-medium">Password</Label>
-                      <Input type="text" placeholder="Temporary password" value={createForm.password}
+                      <Input type="password" autoComplete="new-password" placeholder="Temporary password" value={createForm.password}
                         onChange={e => setCreateForm(f => ({ ...f, password: e.target.value }))} className="rounded-lg" />
                     </div>
                     <Button className="w-full rounded-lg" onClick={() => createDriver.mutate()}
@@ -1605,7 +1615,7 @@ export default function Admin() {
                     </div>
                     <div className="space-y-1.5">
                       <Label className="text-sm font-medium">Password</Label>
-                      <Input type="text" placeholder="Temporary password" value={userForm.password}
+                      <Input type="password" autoComplete="new-password" placeholder="Temporary password" value={userForm.password}
                         onChange={e => setUserForm(f => ({ ...f, password: e.target.value }))} className="rounded-lg" />
                     </div>
                     <Button className="w-full rounded-lg" onClick={() => createUser.mutate()}
@@ -2677,7 +2687,7 @@ export default function Admin() {
                   These rates are used when the AI engine is unavailable to estimate price ranges
                   shown to shippers when posting cargo.
                 </p>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-1">
                     <Label htmlFor="rate-min">Minimum rate</Label>
                     <Input
@@ -2729,7 +2739,7 @@ export default function Admin() {
                 <p className="text-sm text-muted-foreground">
                   Reference price range displayed to shippers for intra-city moving requests. Configure these in the backend settings.
                 </p>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-1">
                     <Label className="text-muted-foreground">Minimum rate</Label>
                     <div className="h-9 px-3 flex items-center rounded-md border bg-muted/40 text-sm text-muted-foreground">

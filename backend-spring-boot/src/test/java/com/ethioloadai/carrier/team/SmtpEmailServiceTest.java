@@ -7,6 +7,7 @@ import jakarta.mail.*;
 import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.*;
 import org.springframework.boot.autoconfigure.mail.MailProperties;
+import org.springframework.mock.env.MockEnvironment;
 import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.JavaMailSender;
 import java.time.LocalDateTime;
@@ -18,6 +19,7 @@ class SmtpEmailServiceTest {
  JavaMailSender sender;
  MailProperties mail;
  InvitationProperties config;
+ MockEnvironment environment;
  SmtpEmailService service;
  MimeMessage message;
  @BeforeEach void setup() {
@@ -25,9 +27,10 @@ class SmtpEmailServiceTest {
   mail=new MailProperties();
   mail.setUsername("test-user"); mail.setPassword("test-only-secret");
   config=new InvitationProperties(); config.setEmailFrom("sender@example.test");
+  environment=new MockEnvironment();
   message=new MimeMessage(Session.getInstance(new Properties()));
   when(sender.createMimeMessage()).thenReturn(message);
-  service=new SmtpEmailService(sender,mail,config);
+  service=new SmtpEmailService(sender,mail,config,environment);
  }
  @Test void emailHasRecipientCompanyRoleExpirationAndPlainTextAndHtml() throws Exception {
   String url="https://example.test/invitations/accept#token=test-only-value";
@@ -71,6 +74,60 @@ class SmtpEmailServiceTest {
   assertThatThrownBy(()->service.sendInvitation("recipient@example.test","ABC",CompanyRole.DISPATCHER,"https://example.test",LocalDateTime.now()))
    .isInstanceOf(CompanyTeamException.class);
   verifyNoInteractions(sender);
+ }
+ @Test void explicitlyEnabledCaptureUsesOnlyTheFixedUnauthenticatedSink() throws Exception {
+  environment.setProperty("e2e.mail.capture.enabled","true");
+  mail.setHost("ethioloadai-e2e-mail-capture");
+  mail.setPort(12525);
+  mail.setUsername("");
+  mail.setPassword("");
+  mail.getProperties().put("mail.smtp.auth","false");
+  mail.getProperties().put("mail.smtp.ssl.enable","false");
+  mail.getProperties().put("mail.smtp.starttls.enable","false");
+  config.setEmailFrom("ethioloadai-test@example.test");
+
+  String link="http://localhost:5173/invitations/accept#token=test-only-value";
+  service.sendInvitation("employee@example.test","Demo Fleet Logistics",CompanyRole.DISPATCHER,
+    link,LocalDateTime.of(2026,11,3,14,0));
+
+  verify(sender).send(message);
+  assertThat(message.getAllRecipients()[0].toString()).isEqualTo("employee@example.test");
+  assertThat(content(message)).contains("Demo Fleet Logistics","DISPATCHER",link,"2026-11-03T14:00");
+ }
+ @Test void captureModeRejectsWrongSinkTlsAuthenticationCredentialsAndSender() {
+  environment.setProperty("e2e.mail.capture.enabled","true");
+  mail.setHost("smtp-relay.brevo.com");
+  mail.setPort(587);
+  mail.setUsername("");
+  mail.setPassword("");
+  mail.getProperties().put("mail.smtp.auth","false");
+  mail.getProperties().put("mail.smtp.ssl.enable","false");
+  mail.getProperties().put("mail.smtp.starttls.enable","false");
+  config.setEmailFrom("ethioloadai-test@example.test");
+  assertCaptureRejected();
+
+  mail.setHost("ethioloadai-e2e-mail-capture");
+  mail.setPort(12525);
+  mail.setUsername("unexpected-user");
+  assertCaptureRejected();
+
+  mail.setUsername("");
+  mail.getProperties().put("mail.smtp.auth","true");
+  assertCaptureRejected();
+
+  mail.getProperties().put("mail.smtp.auth","false");
+  mail.getProperties().put("mail.smtp.starttls.enable","true");
+  assertCaptureRejected();
+
+  mail.getProperties().put("mail.smtp.starttls.enable","false");
+  config.setEmailFrom("real@example.com");
+  assertCaptureRejected();
+  verifyNoInteractions(sender);
+ }
+ private void assertCaptureRejected() {
+  assertThatThrownBy(()->service.sendInvitation("employee@example.test","Demo",CompanyRole.DISPATCHER,
+    "https://example.test/invitations/accept#token=secret",LocalDateTime.now()))
+    .isInstanceOf(CompanyTeamException.class);
  }
  String content(Part part) throws Exception {
   Object value=part.getContent();

@@ -8,8 +8,11 @@ import com.ethioloadai.contract.exception.ContractException.UnauthorizedContract
 import com.ethioloadai.contract.service.ContractServiceImpl;
 import com.ethioloadai.freight.entity.Freight;
 import com.ethioloadai.freight.repository.FreightRepository;
+import com.ethioloadai.freight.service.FreightVisibilityProperties;
 import com.ethioloadai.payment.entity.Payment;
 import com.ethioloadai.payment.repository.PaymentRepository;
+import com.ethioloadai.trip.entity.Trip;
+import com.ethioloadai.trip.repository.TripRepository;
 import com.ethioloadai.user.entity.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -21,6 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,6 +45,12 @@ class ContractServiceImplTest {
 
     @Mock
     private PaymentRepository paymentRepository;
+
+    @Mock
+    private TripRepository tripRepository;
+
+    @Mock
+    private FreightVisibilityProperties visibilityProperties;
 
     @InjectMocks
     private ContractServiceImpl contractService;
@@ -287,7 +297,7 @@ class ContractServiceImplTest {
     }
 
     @Test
-    @DisplayName("Fallback to Freight matchedDriver when no Booking record exists")
+    @DisplayName("Legacy matched-driver fallback preserves terms but redacts stale contact details")
     void getContract_fallbackToMatchedDriver() {
         when(freightRepository.findById(10L)).thenReturn(Optional.of(freight));
         when(bookingRepository.findFirstByCargoRequest_IdAndBookingStatusNotOrderByIdDesc(
@@ -297,8 +307,11 @@ class ContractServiceImplTest {
 
         assertThat(res).isNotNull();
         assertThat(res.id()).isEqualTo(10L); // Falls back to freight ID
-        assertThat(res.driver().name()).isEqualTo("Kebede Driver");
+        assertThat(res.driver().name()).isEqualTo("Assigned driver");
+        assertThat(res.driver().email()).isEqualTo("Contact details unavailable");
         assertThat(res.agreedPrice()).isEqualByComparingTo("28000.00");
+        assertThat(res.freight().pickupLocation()).isEqualTo("Addis Ababa, Bole");
+        assertThat(res.freight().deliveryLocation()).isEqualTo("Hawassa Industrial Park");
         assertThat(res.paymentStatus()).isEqualTo("pending");
         assertThat(res.status()).isEqualTo("active");
     }
@@ -313,7 +326,8 @@ class ContractServiceImplTest {
         ContractResponse response = contractService.getContractByFreightId(10L, shipper);
 
         assertThat(response.id()).isEqualTo(freight.getId());
-        assertThat(response.driver().name()).isEqualTo(driver.getFullName());
+        assertThat(response.driver().name()).isEqualTo("Assigned driver");
+        assertThat(response.driver().email()).isEqualTo("Contact details unavailable");
     }
 
     @Test
@@ -370,5 +384,78 @@ class ContractServiceImplTest {
 
         ContractResponse response = contractService.getContractByFreightId(10L, selectedDriver);
         assertThat(response.driver().name()).isEqualTo("Selected Driver");
+    }
+
+    @Test
+    @DisplayName("Stale matched driver cannot access contract without an eligible booking")
+    void getContract_staleMatchedDriverWithoutBooking_isUnauthorized() {
+        when(freightRepository.findById(10L)).thenReturn(Optional.of(freight));
+        when(bookingRepository.findFirstByCargoRequest_IdAndBookingStatusNotOrderByIdDesc(
+                10L, Booking.BookingStatus.CANCELLED)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> contractService.getContractByFreightId(10L, driver))
+                .isInstanceOf(UnauthorizedContractAccessException.class);
+    }
+
+    @Test
+    @DisplayName("Assigned driver cannot read completed contract after history window")
+    void getContract_completedDriverHistoryExpired_isUnauthorized() {
+        freight.setStatus(Freight.FreightStatus.COMPLETED);
+        when(freightRepository.findById(10L)).thenReturn(Optional.of(freight));
+        when(bookingRepository.findFirstByCargoRequest_IdAndBookingStatusNotOrderByIdDesc(
+                10L, Booking.BookingStatus.CANCELLED)).thenReturn(Optional.of(booking));
+        when(tripRepository.findByBooking_Id(50L))
+                .thenReturn(Optional.of(Trip.builder().tripStatus(Trip.TripStatus.COMPLETED)
+                        .endTime(LocalDateTime.now().minusDays(31)).build()));
+        when(visibilityProperties.getDriverHistoryDays()).thenReturn(30L);
+
+        assertThatThrownBy(() -> contractService.getContractByFreightId(10L, driver))
+                .isInstanceOf(UnauthorizedContractAccessException.class);
+    }
+
+    @Test
+    @DisplayName("Completed booking history expires despite stale freight status")
+    void getContract_completedBookingHistoryExpiredWithStaleFreight_isUnauthorized() {
+        freight.setStatus(Freight.FreightStatus.MATCHED);
+        booking.setBookingStatus(Booking.BookingStatus.COMPLETED);
+        booking.setUpdatedAt(LocalDateTime.now().minusDays(31));
+        when(freightRepository.findById(10L)).thenReturn(Optional.of(freight));
+        when(bookingRepository.findFirstByCargoRequest_IdAndBookingStatusNotOrderByIdDesc(
+                10L, Booking.BookingStatus.CANCELLED)).thenReturn(Optional.of(booking));
+        when(visibilityProperties.getDriverHistoryDays()).thenReturn(30L);
+
+        assertThatThrownBy(() -> contractService.getContractByFreightId(10L, driver))
+                .isInstanceOf(UnauthorizedContractAccessException.class);
+    }
+
+    @Test
+    @DisplayName("Completed trip history expires despite stale freight and booking statuses")
+    void getContract_completedTripHistoryExpiredWithStaleStatuses_isUnauthorized() {
+        freight.setStatus(Freight.FreightStatus.MATCHED);
+        booking.setBookingStatus(Booking.BookingStatus.ACCEPTED);
+        when(freightRepository.findById(10L)).thenReturn(Optional.of(freight));
+        when(bookingRepository.findFirstByCargoRequest_IdAndBookingStatusNotOrderByIdDesc(
+                10L, Booking.BookingStatus.CANCELLED)).thenReturn(Optional.of(booking));
+        when(tripRepository.findByBooking_Id(50L)).thenReturn(Optional.of(
+                Trip.builder().tripStatus(Trip.TripStatus.COMPLETED)
+                        .endTime(LocalDateTime.now().minusDays(31)).build()));
+        when(visibilityProperties.getDriverHistoryDays()).thenReturn(30L);
+
+        assertThatThrownBy(() -> contractService.getContractByFreightId(10L, driver))
+                .isInstanceOf(UnauthorizedContractAccessException.class);
+    }
+
+    @Test
+    @DisplayName("Zero-day driver history denies a recently completed booking")
+    void getContract_zeroDayDriverHistory_deniesCompletedBooking() {
+        booking.setBookingStatus(Booking.BookingStatus.COMPLETED);
+        booking.setUpdatedAt(LocalDateTime.now());
+        when(freightRepository.findById(10L)).thenReturn(Optional.of(freight));
+        when(bookingRepository.findFirstByCargoRequest_IdAndBookingStatusNotOrderByIdDesc(
+                10L, Booking.BookingStatus.CANCELLED)).thenReturn(Optional.of(booking));
+        when(visibilityProperties.getDriverHistoryDays()).thenReturn(0L);
+
+        assertThatThrownBy(() -> contractService.getContractByFreightId(10L, driver))
+                .isInstanceOf(UnauthorizedContractAccessException.class);
     }
 }

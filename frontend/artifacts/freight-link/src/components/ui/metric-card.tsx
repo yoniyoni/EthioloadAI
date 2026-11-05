@@ -1,6 +1,10 @@
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 type Trend = 'up' | 'down' | 'neutral';
+type TrendColors = {
+  color: string;
+  backgroundColor: string;
+};
 
 type Props = {
   label: string;
@@ -12,10 +16,19 @@ type Props = {
   sublabel?: string;
 };
 
-const TREND_COLORS: Record<Trend, string> = {
-  up: '#16A34A',
-  down: '#DC2626',
-  neutral: '#8FA893',
+const TREND_COLORS: Record<Trend, TrendColors> = {
+  up: {
+    color: 'hsl(var(--success))',
+    backgroundColor: 'hsl(var(--success-subtle))',
+  },
+  down: {
+    color: 'hsl(var(--error))',
+    backgroundColor: 'hsl(var(--error-subtle))',
+  },
+  neutral: {
+    color: 'hsl(var(--muted-foreground))',
+    backgroundColor: 'hsl(var(--muted))',
+  },
 };
 
 const TREND_ICONS: Record<Trend, React.ReactNode> = {
@@ -28,25 +41,22 @@ export function MetricCard({
   label,
   value,
   icon,
-  accentColor = '#0F3D1A',
+  accentColor = 'hsl(var(--brand-primary))',
   trend,
   trendLabel,
   sublabel,
 }: Props) {
   return (
     <div
-      className="rounded-xl bg-white flex flex-col gap-3 p-5 relative overflow-hidden"
-      style={{ border: '1px solid #E2E8E2', borderLeft: `4px solid ${accentColor}` }}
+      className="relative flex flex-col gap-3 overflow-hidden rounded-surface border border-card-border border-l-4 bg-card p-5 text-card-foreground shadow-card"
+      style={{ borderLeftColor: accentColor }}
     >
-      {/* Icon bubble */}
       <div className="flex items-start justify-between">
         <div
-          className="flex items-center justify-center rounded-lg"
+          className="flex h-10 w-10 items-center justify-center rounded-lg"
           style={{
-            background: accentColor + '18',
+            backgroundColor: `color-mix(in srgb, ${accentColor} 12%, transparent)`,
             color: accentColor,
-            width: 40,
-            height: 40,
           }}
         >
           {icon}
@@ -55,8 +65,8 @@ export function MetricCard({
           <span
             className="flex items-center gap-1 text-xs font-semibold rounded-full px-2 py-0.5"
             style={{
-              color: TREND_COLORS[trend],
-              background: TREND_COLORS[trend] + '18',
+              color: TREND_COLORS[trend].color,
+              backgroundColor: TREND_COLORS[trend].backgroundColor,
             }}
           >
             {TREND_ICONS[trend]}
@@ -65,19 +75,15 @@ export function MetricCard({
         )}
       </div>
 
-      {/* Value + label */}
       <div>
-        <p
-          className="text-2xl font-bold leading-none"
-          style={{ color: '#0D1F12' }}
-        >
+        <p className="text-2xl font-heading leading-none text-foreground">
           {value}
         </p>
-        <p className="text-sm mt-1" style={{ color: '#6B7F6B' }}>
+        <p className="mt-1 text-sm text-muted-foreground">
           {label}
         </p>
         {sublabel && (
-          <p className="text-xs mt-0.5" style={{ color: '#8FA893' }}>
+          <p className="mt-0.5 text-caption text-muted-foreground">
             {sublabel}
           </p>
         )}

@@ -7,14 +7,16 @@ import com.ethioloadai.user.repository.UserRepository;
 import com.ethioloadai.websocket.service.WebSocketSessionManager;
 import com.ethioloadai.websocket.security.WebSocketRateLimitService;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.socket.*;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 
@@ -49,8 +51,9 @@ import static org.mockito.Mockito.when;
     "jwt.secret=websocket-integration-test-secret-with-at-least-32-bytes",
     "logging.level.com.ethioloadai.websocket=DEBUG"
 })
-@Slf4j
+@ActiveProfiles("test")
 class WebSocketInfrastructureTest {
+    private static final Logger log = LoggerFactory.getLogger(WebSocketInfrastructureTest.class);
 
     @LocalServerPort
     private int port;

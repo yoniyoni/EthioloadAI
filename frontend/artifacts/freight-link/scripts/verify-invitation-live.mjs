@@ -1,5 +1,7 @@
 // Real browser forms with actual Spring responses and PostgreSQL persistence.
 // Loopback proxy forwarding avoids changing the user's Vite configuration.
+import { captureCursor, capturedMessage } from './e2e-mail-capture.mjs';
+
 const base = `http://127.0.0.1:${process.env.VERIFICATION_PORT}/api`;
 const company = Number(process.env.VERIFICATION_COMPANY);
 const owner = process.env.VERIFICATION_OWNER_TOKEN;
@@ -81,11 +83,13 @@ try {
     const email = "live-browser-" + flow + "@example.test";
     if (flow === "existing") await api("/auth/register", { fullName: "Browser Existing", email,
       phone: "+251934000001", password, role: "shipper" });
+    const cursor = await captureCursor();
     await api(`/carrier-companies/${company}/team/invitations`, { email, role: "DISPATCHER" }, owner);
-    const mail = await (await fetch("http://127.0.0.1:12526/", { headers: {
-      "X-Test-Key": process.env.TEST_MAIL_CAPTURE_SECRET
-    } })).json();
-    const raw = mail.latest.token;
+    const mail = await capturedMessage(cursor, email);
+    if (mail.envelope_recipients.length !== 1 || mail.envelope_recipients[0] !== email) {
+      throw new Error("Captured invitation envelope recipient mismatch");
+    }
+    const raw = mail.token;
     await evaluate("localStorage.clear(); sessionStorage.clear()");
     await send("Page.navigate", { url: "about:blank" });
     await send("Page.navigate", { url: "http://localhost:5173/invitations/accept#token=" + raw });

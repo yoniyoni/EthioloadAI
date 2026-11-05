@@ -2,6 +2,8 @@ package com.ethioloadai.carrier.offer.repository;
 
 import com.ethioloadai.carrier.offer.entity.CarrierOffer;
 import com.ethioloadai.carrier.offer.entity.CarrierOffer.OfferStatus;
+import com.ethioloadai.freight.entity.Freight;
+import com.ethioloadai.trip.entity.Trip;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -13,6 +15,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
+import java.time.LocalDateTime;
 
 /**
  * Phase 5 — Data access for {@link CarrierOffer}.
@@ -61,6 +64,35 @@ public interface CarrierOfferRepository extends JpaRepository<CarrierOffer, Long
                    "WHERE o.carrierCompany.id = :companyId ORDER BY o.createdAt DESC",
            countQuery = "SELECT COUNT(o) FROM CarrierOffer o WHERE o.carrierCompany.id = :companyId")
     Page<CarrierOffer> findByCarrierCompanyId(@Param("companyId") Long companyId, Pageable pageable);
+
+    @Query(value = "SELECT o FROM CarrierOffer o JOIN o.freight f " +
+                   "WHERE o.carrierCompany.id = :companyId AND (" +
+                   "f.status NOT IN (:completedStatus, :cancelledStatus) " +
+                   "OR (f.status = :cancelledStatus AND f.updatedAt BETWEEN :cutoff AND :now) " +
+                   "OR (f.status <> :cancelledStatus AND " +
+                   "(f.status = :completedStatus OR EXISTS (SELECT completedTrip.id FROM Trip completedTrip " +
+                   "WHERE completedTrip.booking.cargoRequest.id = f.id " +
+                   "AND completedTrip.tripStatus = :completedTripStatus)) AND " +
+                   "(SELECT MAX(t.endTime) FROM Trip t WHERE t.booking.cargoRequest.id = f.id) " +
+                   "BETWEEN :cutoff AND :now)) ORDER BY o.createdAt DESC",
+           countQuery = "SELECT COUNT(o) FROM CarrierOffer o JOIN o.freight f " +
+                   "WHERE o.carrierCompany.id = :companyId AND (" +
+                   "f.status NOT IN (:completedStatus, :cancelledStatus) " +
+                   "OR (f.status = :cancelledStatus AND f.updatedAt BETWEEN :cutoff AND :now) " +
+                   "OR (f.status <> :cancelledStatus AND " +
+                   "(f.status = :completedStatus OR EXISTS (SELECT completedTrip.id FROM Trip completedTrip " +
+                   "WHERE completedTrip.booking.cargoRequest.id = f.id " +
+                   "AND completedTrip.tripStatus = :completedTripStatus)) AND " +
+                   "(SELECT MAX(t.endTime) FROM Trip t WHERE t.booking.cargoRequest.id = f.id) " +
+                   "BETWEEN :cutoff AND :now))")
+    Page<CarrierOffer> findVisibleByCarrierCompanyId(
+            @Param("companyId") Long companyId,
+            @Param("completedStatus") Freight.FreightStatus completedStatus,
+            @Param("cancelledStatus") Freight.FreightStatus cancelledStatus,
+            @Param("completedTripStatus") Trip.TripStatus completedTripStatus,
+            @Param("cutoff") LocalDateTime cutoff,
+            @Param("now") LocalDateTime now,
+            Pageable pageable);
 
     // ── Single offer lookup with company validation (IDOR guard) ─────────────
 

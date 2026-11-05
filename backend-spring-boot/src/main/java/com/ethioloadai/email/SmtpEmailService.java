@@ -4,6 +4,7 @@ import com.ethioloadai.carrier.team.entity.CompanyRole;
 import com.ethioloadai.carrier.team.exception.CompanyTeamException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.mail.MailProperties;
+import org.springframework.core.env.Environment;
 import org.springframework.mail.javamail.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.HtmlUtils;
@@ -15,9 +16,12 @@ public class SmtpEmailService implements EmailService {
  private final JavaMailSender sender;
  private final MailProperties mail;
  private final InvitationProperties invitations;
+ private final Environment environment;
 
  @Override public void sendInvitation(String recipient, String companyName, CompanyRole role, String url, LocalDateTime expiresAt) {
-  if (blank(mail.getUsername()) || blank(mail.getPassword()) || blank(invitations.getEmailFrom())) {
+  if (captureMode()) {
+   if (!captureConfigurationIsSafe()) throw CompanyTeamException.mail();
+  } else if (blank(mail.getUsername()) || blank(mail.getPassword()) || blank(invitations.getEmailFrom())) {
    throw CompanyTeamException.mail();
   }
   try {
@@ -44,7 +48,19 @@ public class SmtpEmailService implements EmailService {
    throw CompanyTeamException.mail();
   }
  }
+ private boolean captureMode() {
+  return environment.getProperty("e2e.mail.capture.enabled", Boolean.class, false);
+ }
+ private boolean captureConfigurationIsSafe() {
+  return "ethioloadai-e2e-mail-capture".equals(mail.getHost())
+    && Integer.valueOf(12525).equals(mail.getPort())
+    && blank(mail.getUsername())
+    && blank(mail.getPassword())
+    && "ethioloadai-test@example.test".equals(invitations.getEmailFrom())
+    && "false".equals(mail.getProperties().get("mail.smtp.auth"))
+    && "false".equals(mail.getProperties().get("mail.smtp.ssl.enable"))
+    && "false".equals(mail.getProperties().get("mail.smtp.starttls.enable"));
+ }
  private boolean blank(String value) { return value == null || value.isBlank(); }
  private String esc(String value) { return HtmlUtils.htmlEscape(value); }
 }
-

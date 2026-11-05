@@ -22,13 +22,17 @@ import com.ethioloadai.carrier.fleet.entity.CarrierDriverStatus;
 import com.ethioloadai.carrier.fleet.repository.CarrierDriverRepository;
 import com.ethioloadai.carrier.fleet.repository.VehicleDriverAssignmentRepository;
 import com.ethioloadai.carrier.team.entity.CompanyRole;
+import com.ethioloadai.carrier.team.entity.CompanyMembership;
 import com.ethioloadai.carrier.team.entity.MembershipStatus;
 import com.ethioloadai.carrier.team.repository.CompanyMembershipRepository;
 import com.ethioloadai.carrier.team.service.CompanyContext;
 import com.ethioloadai.carrier.team.service.CompanyContextService;
 import com.ethioloadai.freight.entity.Freight;
 import com.ethioloadai.freight.repository.FreightRepository;
+import com.ethioloadai.freight.service.FreightVisibilityProperties;
 import com.ethioloadai.notification.service.NotificationStoreService;
+import com.ethioloadai.trip.entity.Trip;
+import com.ethioloadai.trip.repository.TripRepository;
 import com.ethioloadai.user.entity.User;
 import com.ethioloadai.user.repository.UserRepository;
 import com.ethioloadai.vehicle.entity.Vehicle;
@@ -45,6 +49,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -80,6 +85,8 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
     private final CarrierOfferRepository offerRepo;
     private final OfferNegotiationEntryRepository historyRepo;
     private final FreightRepository freightRepo;
+    private final TripRepository tripRepository;
+    private final FreightVisibilityProperties visibilityProperties;
     private final CarrierCompanyRepository companyRepo;
     private final CompanyMembershipRepository membershipRepo;
     private final CompanyContextService companyContextService;
@@ -175,7 +182,9 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
 
         log.info("Carrier offer created: offerId={} freight={} company={} amount={}",
                 offer.getId(), freightId, companyId, offerAmount);
-        return CarrierOfferResponse.from(loadWithHistory(offer.getId()));
+        CarrierOffer carrierView = loadWithHistory(offer.getId());
+        return carrierResponse(carrierView, ctx.role(),
+                isCarrierRouteWithinHistoryWindow(carrierView.getFreight()));
     }
 
     @Override
@@ -211,7 +220,9 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
         notifyShipper(offer.getFreight(), offer, "CARRIER_COUNTER_OFFER",
                 Map.of("offerId", offer.getId(), "amount", request.amount()));
 
-        return CarrierOfferResponse.from(loadWithHistory(offer.getId()));
+        CarrierOffer carrierView = loadWithHistory(offer.getId());
+        return carrierResponse(carrierView, ctx.role(),
+                isCarrierRouteWithinHistoryWindow(carrierView.getFreight()));
     }
 
     @Override
@@ -235,7 +246,9 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
             throw CarrierOfferException.forbidden();
         }
         if (isRecordedAward(freight, offer)) {
-            return CarrierOfferResponse.from(loadWithHistory(offerId));
+            CarrierOffer carrierView = loadWithHistory(offerId);
+            return carrierResponse(carrierView, ctx.role(),
+                    isCarrierRouteWithinHistoryWindow(carrierView.getFreight()));
         }
         requireFreightOpen(freight);
         // Carrier can only accept when it's their turn (shipper counter was last)
@@ -246,7 +259,7 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
         }
         requireActorTurn(offer, ActorType.CARRIER);
 
-        return performAcceptance(offer, caller, ActorType.CARRIER);
+        return performAcceptance(offer, caller, ActorType.CARRIER, ctx.role());
     }
 
     @Override
@@ -279,7 +292,9 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
                        "companyName", companyNameForNotif));
 
         log.info("Offer withdrawn: offerId={}", offer.getId());
-        return CarrierOfferResponse.from(loadWithHistory(offer.getId()));
+        CarrierOffer carrierView = loadWithHistory(offer.getId());
+        return carrierResponse(carrierView, ctx.role(),
+                isCarrierRouteWithinHistoryWindow(carrierView.getFreight()));
     }
 
     // ════════════════════════════════════════════════════════════════════════════
@@ -355,7 +370,7 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
         requireActiveOffer(offer, "accept");
         requireActorTurn(offer, ActorType.SHIPPER);
 
-        return performAcceptance(offer, shipper, ActorType.SHIPPER);
+        return performAcceptance(offer, shipper, ActorType.SHIPPER, null);
     }
 
     @Override
@@ -416,20 +431,43 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
                     .toList();
         }
 
-        // Carrier member: show own offer with history, others as summary
-        Long callerCompanyId = resolveCallerCompanyId(caller);
+        // A carrier can inspect competing summaries only after its company has an offer.
+        List<CompanyMembership> callerMemberships = membershipRepo.findActiveByUserId(caller.getId()).stream()
+                .filter(m -> m.getStatus() == MembershipStatus.ACTIVE)
+                .toList();
+        List<Long> callerCompanyIds = callerMemberships.stream()
+                .map(CompanyMembership::getCarrierCompanyId)
+                .toList();
+        if (callerCompanyIds.isEmpty()
+                || offers.stream().noneMatch(o -> callerCompanyIds.contains(o.getCarrierCompany().getId()))) {
+            throw CarrierOfferException.forbidden();
+        }
+        if (!isCarrierRouteWithinHistoryWindow(freight)) {
+            throw CarrierOfferException.freightNotFound(freightId);
+        }
+        List<Long> viewerCompaniesWithOffers = offers.stream()
+                .map(o -> o.getCarrierCompany().getId())
+                .filter(callerCompanyIds::contains)
+                .distinct()
+                .toList();
+        boolean canViewMarketplaceFinancials = callerMemberships.stream()
+                .filter(m -> viewerCompaniesWithOffers.contains(m.getCarrierCompanyId()))
+                .anyMatch(m -> canViewFinancials(m.getRole()));
         return offers.stream()
                 .map(o -> {
-                    boolean isOwn = callerCompanyId != null
-                            && o.getCarrierCompany().getId().equals(callerCompanyId);
+                    boolean isOwn = callerCompanyIds.contains(o.getCarrierCompany().getId());
                     if (isOwn) {
                         List<OfferNegotiationEntry> hist = historyRepo
                                 .findByCarrierOfferIdOrderByCreatedAtAsc(o.getId());
                         o.getNegotiationHistory().clear();
                         o.getNegotiationHistory().addAll(hist);
-                        return CarrierOfferResponse.from(o);
+                        return carrierResponse(o, roleForOffer(o, caller),
+                                isCarrierRouteWithinHistoryWindow(o.getFreight()));
                     }
-                    return CarrierOfferResponse.summary(o);
+                    CarrierOfferResponse summary = CarrierOfferResponse.summary(o);
+                    return canViewMarketplaceFinancials
+                            ? summary
+                            : summary.withoutFinancials();
                 })
                 .toList();
     }
@@ -440,17 +478,38 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
         CarrierOffer offer = offerRepo.findByIdEager(offerId)
                 .orElseThrow(() -> CarrierOfferException.offerNotFound(offerId));
         authorizeOfferView(offer, caller);
+        requireCarrierHistoryVisible(offer, caller);
         List<OfferNegotiationEntry> hist = historyRepo
                 .findByCarrierOfferIdOrderByCreatedAtAsc(offerId);
         offer.getNegotiationHistory().clear();
         offer.getNegotiationHistory().addAll(hist);
-        return CarrierOfferResponse.from(offer);
+        return isFreightOwnerOrAdmin(offer.getFreight(), caller)
+                ? CarrierOfferResponse.from(offer)
+                : carrierResponse(offer, roleForOffer(offer, caller),
+                        isCarrierRouteWithinHistoryWindow(offer.getFreight()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CarrierOfferResponse getOfferForCompany(Long companyId, Long offerId, User caller) {
+        companyContextService.resolveForCompany(companyId, caller);
+        offerRepo.findByIdAndCarrierCompanyId(offerId, companyId)
+                .orElseThrow(() -> CarrierOfferException.offerNotFound(offerId));
+        return getOffer(offerId, caller);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CarrierOfferResponse getOfferForFreight(Long freightId, Long offerId, User caller) {
+        offerRepo.findByIdAndFreightId(offerId, freightId)
+                .orElseThrow(() -> CarrierOfferException.offerNotFound(offerId));
+        return getOffer(offerId, caller);
     }
 
     @Override
     @Transactional(readOnly = true)
     public CarrierOfferResponse getCompanyOfferForFreight(Long freightId, Long companyId, User caller) {
-        companyContextService.resolveForCompany(companyId, caller); // validates membership
+        CompanyContext context = companyContextService.resolveForCompany(companyId, caller);
         // Find the offer directly by freight+company scope
         CarrierOffer offer = offerRepo.findByFreightId(freightId).stream()
                 .filter(o -> o.getCarrierCompany().getId().equals(companyId))
@@ -459,19 +518,36 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
         // Reload eagerly for safe access
         CarrierOffer eager = offerRepo.findByIdEager(offer.getId())
                 .orElseThrow(() -> CarrierOfferException.offerNotFound(offer.getId()));
+        authorizeOfferView(eager, caller);
+        requireCarrierHistoryVisible(eager, caller);
         List<OfferNegotiationEntry> hist = historyRepo
                 .findByCarrierOfferIdOrderByCreatedAtAsc(eager.getId());
         eager.getNegotiationHistory().clear();
         eager.getNegotiationHistory().addAll(hist);
-        return CarrierOfferResponse.from(eager);
+        CarrierOfferResponse response = CarrierOfferResponse.forCarrier(eager,
+                isCarrierRouteWithinHistoryWindow(eager.getFreight()));
+        return canViewFinancials(context.role()) ? response : response.withoutFinancials();
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<CarrierOfferResponse> getCompanyOffers(Long companyId, User caller, Pageable pageable) {
-        companyContextService.resolveForCompany(companyId, caller); // validates membership
-        return offerRepo.findByCarrierCompanyId(companyId, pageable)
-                .map(CarrierOfferResponse::summary);
+        CompanyContext context = companyContextService.resolveForCompany(companyId, caller);
+        LocalDateTime now = LocalDateTime.now();
+        return offerRepo.findVisibleByCarrierCompanyId(
+                        companyId,
+                        Freight.FreightStatus.COMPLETED,
+                        Freight.FreightStatus.CANCELLED,
+                        Trip.TripStatus.COMPLETED,
+                        historyCutoff(visibilityProperties.getCarrierHistoryDays(), now),
+                        now,
+                        pageable)
+                .map(offer -> {
+                    CarrierOfferResponse response = CarrierOfferResponse.summary(offer);
+                    return canViewFinancials(context.role())
+                            ? response
+                            : response.withoutFinancials();
+                });
     }
 
     @Override
@@ -480,8 +556,34 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
         CarrierOffer offer = offerRepo.findByIdEager(offerId)
                 .orElseThrow(() -> CarrierOfferException.offerNotFound(offerId));
         authorizeOfferView(offer, caller);
-        return historyRepo.findByCarrierOfferIdOrderByCreatedAtAsc(offerId)
+        requireCarrierHistoryVisible(offer, caller);
+        List<NegotiationEntryResponse> history = historyRepo
+                .findByCarrierOfferIdOrderByCreatedAtAsc(offerId)
                 .stream().map(NegotiationEntryResponse::from).toList();
+        if (isFreightOwnerOrAdmin(offer.getFreight(), caller)
+                || canViewFinancials(offer, caller)) {
+            return history;
+        }
+        return history.stream().map(NegotiationEntryResponse::withoutAmount).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<NegotiationEntryResponse> getNegotiationHistoryForCompany(
+            Long companyId, Long offerId, User caller) {
+        companyContextService.resolveForCompany(companyId, caller);
+        offerRepo.findByIdAndCarrierCompanyId(offerId, companyId)
+                .orElseThrow(() -> CarrierOfferException.offerNotFound(offerId));
+        return getNegotiationHistory(offerId, caller);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<NegotiationEntryResponse> getNegotiationHistoryForFreight(
+            Long freightId, Long offerId, User caller) {
+        offerRepo.findByIdAndFreightId(offerId, freightId)
+                .orElseThrow(() -> CarrierOfferException.offerNotFound(offerId));
+        return getNegotiationHistory(offerId, caller);
     }
 
     // ════════════════════════════════════════════════════════════════════════════
@@ -498,7 +600,8 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
      *   <li>Fires notifications.</li>
      * </ol>
      */
-    private CarrierOfferResponse performAcceptance(CarrierOffer offer, User actor, ActorType actorType) {
+    private CarrierOfferResponse performAcceptance(
+            CarrierOffer offer, User actor, ActorType actorType, CompanyRole companyRole) {
         BigDecimal agreedAmount = offer.getCurrentAmount();
         Long freightId = offer.getFreight().getId();
         // Capture company name BEFORE any cache-clearing operations
@@ -551,9 +654,15 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
                        "companyName", companyName,
                        "agreedAmount", agreedAmount));
         try {
+            Map<String, Object> notificationData = new HashMap<>();
+            notificationData.put("offerId", offer.getId());
+            membershipRepo.findByCarrierCompanyIdAndUserId(
+                            offer.getCarrierCompany().getId(), submittedByUserId)
+                    .filter(m -> m.getStatus() == MembershipStatus.ACTIVE)
+                    .filter(m -> canViewFinancials(m.getRole()))
+                    .ifPresent(m -> notificationData.put("agreedAmount", agreedAmount));
             notificationService.recordNotification(submittedByUserId,
-                    "OFFER_ACCEPTED_NOTIFICATION",
-                    Map.of("offerId", offer.getId(), "agreedAmount", agreedAmount));
+                    "OFFER_ACCEPTED_NOTIFICATION", notificationData);
         } catch (Exception e) {
             log.warn("Failed to notify carrier submitter {} for offer {}: {}",
                     submittedByUserId, offer.getId(), e.getMessage());
@@ -562,7 +671,11 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
         log.info("Offer ACCEPTED: offerId={} freight={} company={} agreedAmount={}",
                 offer.getId(), freightId, companyName, agreedAmount);
 
-        return CarrierOfferResponse.from(loadWithHistory(offer.getId()));
+        CarrierOffer acceptedOffer = loadWithHistory(offer.getId());
+        return actorType == ActorType.SHIPPER
+                ? CarrierOfferResponse.from(acceptedOffer)
+                : carrierResponse(acceptedOffer, companyRole,
+                        isCarrierRouteWithinHistoryWindow(freshFreight));
     }
 
     // ════════════════════════════════════════════════════════════════════════════
@@ -682,6 +795,28 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
         }
     }
 
+    private CarrierOfferResponse carrierResponse(
+            CarrierOffer offer, CompanyRole role, boolean includeOperationalRoute) {
+        CarrierOfferResponse response = CarrierOfferResponse.forCarrier(offer, includeOperationalRoute);
+        return canViewFinancials(role) ? response : response.withoutFinancials();
+    }
+
+    private CompanyRole roleForOffer(CarrierOffer offer, User caller) {
+        return membershipRepo
+                .findByCarrierCompanyIdAndUserId(offer.getCarrierCompany().getId(), caller.getId())
+                .filter(m -> m.getStatus() == MembershipStatus.ACTIVE)
+                .map(CompanyMembership::getRole)
+                .orElseThrow(CarrierOfferException::forbidden);
+    }
+
+    private boolean canViewFinancials(CarrierOffer offer, User caller) {
+        return canViewFinancials(roleForOffer(offer, caller));
+    }
+
+    private boolean canViewFinancials(CompanyRole role) {
+        return role == CompanyRole.CARRIER_OWNER || role == CompanyRole.FLEET_MANAGER;
+    }
+
     /**
      * Authorize view access: caller must be the freight shipper, an active
      * member of the carrier company that owns the offer, or an ADMIN.
@@ -697,10 +832,45 @@ public class CarrierOfferServiceImpl implements CarrierOfferService {
         if (!isCarrierMember) throw CarrierOfferException.forbidden();
     }
 
-    /** Resolve the first active company membership for a caller (for view decisions). */
-    private Long resolveCallerCompanyId(User caller) {
-        var active = membershipRepo.findActiveByUserId(caller.getId());
-        return active.isEmpty() ? null : active.get(0).getCarrierCompanyId();
+    private boolean isFreightOwnerOrAdmin(Freight freight, User caller) {
+        return caller.getRole() == User.Role.ADMIN
+                || freight.getShipper().getId().equals(caller.getId());
+    }
+
+    private void requireCarrierHistoryVisible(CarrierOffer offer, User caller) {
+        if (!isFreightOwnerOrAdmin(offer.getFreight(), caller)
+                && !isCarrierRouteWithinHistoryWindow(offer.getFreight())) {
+            throw CarrierOfferException.offerNotFound(offer.getId());
+        }
+    }
+
+    private boolean isCarrierRouteWithinHistoryWindow(Freight freight) {
+        if (freight.getStatus() == Freight.FreightStatus.CANCELLED) {
+            return withinHistoryWindow(freight.getUpdatedAt(), visibilityProperties.getCarrierHistoryDays());
+        }
+        List<Trip> trips = tripRepository.findByFreightIdOrderByEndTimeDesc(freight.getId());
+        boolean completed = freight.getStatus() == Freight.FreightStatus.COMPLETED
+                || trips.stream().anyMatch(trip -> trip.getTripStatus() == Trip.TripStatus.COMPLETED);
+        if (completed) {
+            LocalDateTime completedAt = trips.stream()
+                    .map(Trip::getEndTime)
+                    .filter(time -> time != null)
+                    .max(java.util.Comparator.naturalOrder())
+                    .orElse(null);
+            return withinHistoryWindow(completedAt, visibilityProperties.getCarrierHistoryDays());
+        }
+        return true;
+    }
+
+    private boolean withinHistoryWindow(LocalDateTime terminalAt, long historyDays) {
+        return terminalAt != null
+                && historyDays > 0
+                && !terminalAt.isAfter(LocalDateTime.now())
+                && !terminalAt.isBefore(LocalDateTime.now().minusDays(historyDays));
+    }
+
+    private LocalDateTime historyCutoff(long historyDays, LocalDateTime now) {
+        return historyDays > 0 ? now.minusDays(historyDays) : now.plusNanos(1);
     }
 
     private void notifyShipper(Freight freight, CarrierOffer offer, String type, Map<String, Object> data) {

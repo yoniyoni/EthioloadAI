@@ -1,27 +1,8 @@
 spring:
-  mail:
-    host: ${SMTP_HOST:smtp-relay.brevo.com}
-    port: ${SMTP_PORT:465}
-    username: ${SMTP_USER:}
-    password: ${SMTP_PASSWORD:}
-    properties:
-      mail.smtp.auth: true
-      mail.smtp.ssl.enable: ${SMTP_SECURE:true}
-      mail.smtp.ssl.checkserveridentity: true
-      mail.smtp.starttls.enable: ${SMTP_STARTTLS:false}
-      mail.smtp.connectiontimeout: 5000
-      mail.smtp.timeout: 5000
-      mail.smtp.writetimeout: 5000
-      mail.debug: false
   application:
     name: ethioloadai-backend
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
-
-  flyway:
-    postgresql:
-      # V16 creates indexes concurrently; use a session lock to avoid blocking them.
-      transactional-lock: false
 
   jpa:
     hibernate:
@@ -170,3 +151,23 @@ logging:
     com.ethioloadai: DEBUG
     org.springframework.security: INFO
     org.hibernate.SQL: DEBUG
+
+---
+spring:
+  config:
+    activate:
+      on-profile: "!e2e"
+  mail:
+    host: ${SMTP_HOST:smtp-relay.brevo.com}
+    port: ${SMTP_PORT:465}
+    username: ${SMTP_USER:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.ssl.enable: ${SMTP_SECURE:true}
+      mail.smtp.ssl.checkserveridentity: true
+      mail.smtp.starttls.enable: ${SMTP_STARTTLS:false}
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
+      mail.debug: false

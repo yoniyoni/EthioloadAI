@@ -2,10 +2,9 @@ package com.ethioloadai.bid.mapper;
 
 import com.ethioloadai.bid.dto.BidResponse;
 import com.ethioloadai.bid.entity.Bid;
-import lombok.extern.slf4j.Slf4j;
+import com.ethioloadai.freight.entity.Freight;
 import org.springframework.stereotype.Component;
 
-@Slf4j
 @Component
 public class BidMapper {
 
@@ -28,9 +27,17 @@ public class BidMapper {
                 .status(bid.getStatus().name().toLowerCase())
                 .aiScore(bid.getAiScore())
                 .isRecommended(bid.getIsRecommended())
-                .distanceKm(bid.getDistanceKm())
                 .createdAt(bid.getCreatedAt())
                 .updatedAt(bid.getUpdatedAt());
+
+        Freight freight = bid.getCargoRequest();
+        if (freight != null) {
+            builder.materialType(freight.getMaterialType())
+                    .weightTons(freight.getWeightTons());
+            if (freight.getPriceType() == Freight.PriceType.FIXED) {
+                builder.budget(freight.getBudget());
+            }
+        }
 
         // Counter-offer fields (only if present)
         if (bid.getCounterAmount() != null) {
@@ -38,26 +45,6 @@ public class BidMapper {
                    .counterNote(bid.getCounterNote())
                    .counterBy(bid.getCounterBy() != null ? bid.getCounterBy().name().toLowerCase() : null)
                    .counterAt(bid.getCounterAt());
-        }
-
-        // Cargo summary fields
-        try {
-            if (bid.getCargoRequest() != null) {
-                builder.pickupLocation(bid.getCargoRequest().getPickupLocation())
-                       .destination(bid.getCargoRequest().getDestination())
-                       .materialType(bid.getCargoRequest().getMaterialType())
-                       .weightTons(bid.getCargoRequest().getWeightTons())
-                       .budget(bid.getCargoRequest().getBudget());
-
-                if (bid.getCargoRequest().getShipper() != null) {
-                    builder.shipperName(bid.getCargoRequest().getShipper().getFullName());
-                    if (bid.getStatus() == Bid.BidStatus.ACCEPTED) {
-                        builder.shipperPhone(bid.getCargoRequest().getShipper().getPhone());
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Could not map cargo details for bid {}: {}", bid.getId(), e.getMessage());
         }
 
         return builder.build();

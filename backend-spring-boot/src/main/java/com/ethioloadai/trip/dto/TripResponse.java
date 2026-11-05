@@ -20,6 +20,7 @@ import java.util.Map;
 public class TripResponse {
 
     private Long id;
+    private Long carrierCompanyId;
     
     // Basic trip information
     private String startLocation;

@@ -11,9 +11,8 @@ import java.time.LocalDateTime;
 /**
  * Phase 6 — Response DTO for a dispatch assignment.
  *
- * <p>Returned to the carrier dispatcher and to the assigned driver.
- * Sensitive fields (agreedAmount) are included because the driver needs to
- * know the commercial amount they are accepting responsibility for.
+ * <p>Company-facing projections redact financial fields for dispatchers.
+ * The existing assigned-driver projection retains its established response shape.
  */
 @Getter
 @Builder
@@ -47,6 +46,11 @@ public class DispatchAssignmentResponse {
     // ── Factory ───────────────────────────────────────────────────────────────
 
     public static DispatchAssignmentResponse from(DispatchAssignment d) {
+        return fromCompany(d, true);
+    }
+
+    public static DispatchAssignmentResponse fromCompany(
+            DispatchAssignment d, boolean includeFinancial) {
         return DispatchAssignmentResponse.builder()
                 .id(d.getId())
                 .freightId(d.getFreightId())
@@ -56,7 +60,7 @@ public class DispatchAssignmentResponse {
                 .vehicleId(d.getVehicleId())
                 .assignedBy(d.getAssignedBy())
                 .status(d.getStatus())
-                .agreedAmount(d.getAgreedAmount())
+                .agreedAmount(includeFinancial ? d.getAgreedAmount() : null)
                 .notes(d.getNotes())
                 .rejectionReason(d.getRejectionReason())
                 .assignedAt(d.getAssignedAt())

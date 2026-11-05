@@ -54,12 +54,12 @@ export default defineConfig(async ({ mode }) => {
   server: {
     port,
     strictPort: true,
-    host: "0.0.0.0",
-    allowedHosts: true,
+    host: "127.0.0.1",
+    allowedHosts: ["localhost", "127.0.0.1"],
     fs: {
       strict: true,
     },
-    // Proxy /api to the Node.js api-server in local dev.
+    // Proxy /api to the Spring Boot API in local development.
     // In Replit (REPL_ID is set), platform routing handles this.
     ...(env.REPL_ID || process.env.REPL_ID
       ? {}
@@ -85,8 +85,8 @@ export default defineConfig(async ({ mode }) => {
   },
   preview: {
     port,
-    host: "0.0.0.0",
-    allowedHosts: true,
+    host: "127.0.0.1",
+    allowedHosts: ["localhost", "127.0.0.1"],
   },
   };
 });

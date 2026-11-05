@@ -4,6 +4,7 @@ import com.ethioloadai.bid.service.CommissionService;
 import com.ethioloadai.booking.entity.Booking;
 import com.ethioloadai.booking.repository.BookingRepository;
 import com.ethioloadai.carrier.company.entity.CarrierCompany;
+import com.ethioloadai.carrier.company.entity.VerificationStatus;
 import com.ethioloadai.carrier.company.repository.CarrierCompanyRepository;
 import com.ethioloadai.carrier.dispatch.dto.*;
 import com.ethioloadai.carrier.dispatch.entity.DispatchAssignment;
@@ -23,7 +24,10 @@ import com.ethioloadai.carrier.team.service.CompanyContext;
 import com.ethioloadai.carrier.team.service.CompanyContextService;
 import com.ethioloadai.freight.entity.Freight;
 import com.ethioloadai.freight.repository.FreightRepository;
+import com.ethioloadai.freight.service.FreightVisibilityProperties;
 import com.ethioloadai.notification.service.NotificationStoreService;
+import com.ethioloadai.trip.entity.Trip;
+import com.ethioloadai.trip.repository.TripRepository;
 import com.ethioloadai.user.entity.User;
 import com.ethioloadai.user.repository.UserRepository;
 import com.ethioloadai.vehicle.entity.Vehicle;
@@ -84,6 +88,8 @@ public class DispatchServiceImpl implements DispatchService {
     private final CompanyContextService companyContextService;
     private final NotificationStoreService notificationService;
     private final CommissionService commissionService;
+    private final TripRepository tripRepository;
+    private final FreightVisibilityProperties visibilityProperties;
 
     // ════════════════════════════════════════════════════════════════════════════
     // Carrier-facing operations
@@ -134,7 +140,8 @@ public class DispatchServiceImpl implements DispatchService {
                     && existing.getCarrierCompanyId().equals(companyId)
                     && existing.getDriverUserId().equals(request.getDriverUserId())
                     && existing.getVehicleId().equals(request.getVehicleId())) {
-                return DispatchAssignmentResponse.from(existing);
+                return DispatchAssignmentResponse.fromCompany(
+                        existing, canViewFinancials(ctx.role()));
             }
             throw DispatchException.activeDispatchExists(freightId);
         }
@@ -203,7 +210,7 @@ public class DispatchServiceImpl implements DispatchService {
                 dispatch.getId(), freightId, companyId,
                 request.getDriverUserId(), request.getVehicleId(), agreedAmount);
 
-        return DispatchAssignmentResponse.from(dispatch);
+        return DispatchAssignmentResponse.fromCompany(dispatch, canViewFinancials(ctx.role()));
     }
 
     @Override
@@ -241,43 +248,74 @@ public class DispatchServiceImpl implements DispatchService {
         releaseDriverAndVehicle(dispatch);
 
         log.info("cancelDispatch: dispatchId={} cancelled by={}", dispatchId, caller.getId());
-        return DispatchAssignmentResponse.from(dispatch);
+        return DispatchAssignmentResponse.fromCompany(dispatch, canViewFinancials(ctx.role()));
     }
 
     @Override
     @Transactional(readOnly = true)
     public DispatchAssignmentResponse getDispatch(Long dispatchId, Long companyId, User caller) {
-        companyContextService.resolveForCompany(companyId, caller); // membership check
+        CompanyContext context = companyContextService.resolveForCompany(companyId, caller);
         DispatchAssignment d = dispatchRepo.findByIdAndCarrierCompanyId(dispatchId, companyId)
                 .orElseThrow(() -> DispatchException.notFound(dispatchId));
-        return DispatchAssignmentResponse.from(d);
+        Freight freight = freightRepo.findById(d.getFreightId())
+                .orElseThrow(() -> DispatchException.notFound(dispatchId));
+        if (!isCarrierHistoryVisible(freight)) {
+            throw DispatchException.notFound(dispatchId);
+        }
+        return DispatchAssignmentResponse.fromCompany(d, canViewFinancials(context.role()));
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<DispatchAssignmentResponse> listCompanyDispatches(Long companyId, User caller, Pageable pageable) {
-        companyContextService.resolveForCompany(companyId, caller); // membership check
-        return dispatchRepo.findByCarrierCompanyIdOrderByAssignedAtDesc(companyId, pageable)
-                .map(DispatchAssignmentResponse::from);
+        CompanyContext context = companyContextService.resolveForCompany(companyId, caller);
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime cutoff = historyCutoff(visibilityProperties.getCarrierHistoryDays(), now);
+        return dispatchRepo.findVisibleByCarrierCompanyId(
+                        companyId,
+                        List.of(Freight.FreightStatus.COMPLETED, Freight.FreightStatus.CANCELLED),
+                        Freight.FreightStatus.CANCELLED,
+                        Freight.FreightStatus.COMPLETED,
+                        Trip.TripStatus.COMPLETED,
+                        List.of(Booking.BookingStatus.CANCELLED, Booking.BookingStatus.COMPLETED),
+                        cutoff,
+                        now,
+                        pageable)
+                .map(dispatch -> DispatchAssignmentResponse.fromCompany(
+                        dispatch, canViewFinancials(context.role())));
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<DispatchAssignmentResponse> listFreightDispatches(Long freightId, Long companyId, User caller) {
-        companyContextService.resolveForCompany(companyId, caller); // membership check
-        return dispatchRepo.findByFreightIdAndCarrierCompanyIdOrderByAssignedAtDesc(freightId, companyId)
-                .stream().map(DispatchAssignmentResponse::from).collect(Collectors.toList());
+        CompanyContext context = companyContextService.resolveForCompany(companyId, caller);
+        List<DispatchAssignment> assignments =
+                dispatchRepo.findByFreightIdAndCarrierCompanyIdOrderByAssignedAtDesc(freightId, companyId);
+        if (assignments.isEmpty()) {
+            return List.of();
+        }
+        Freight freight = freightRepo.findById(freightId)
+                .orElseThrow(() -> DispatchException.notFound(assignments.get(0).getId()));
+        if (!isCarrierHistoryVisible(freight)) {
+            return List.of();
+        }
+        return assignments.stream()
+                .map(dispatch -> DispatchAssignmentResponse.fromCompany(
+                        dispatch, canViewFinancials(context.role())))
+                .collect(Collectors.toList());
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<AwardedFreightSummary> getAwardedFreights(Long companyId, User caller) {
-        companyContextService.resolveForCompany(companyId, caller); // membership check
+        CompanyContext context = companyContextService.resolveForCompany(companyId, caller);
 
         // Load all accepted offers for this company
         List<CarrierOffer> acceptedOffers = offerRepo.findAcceptedByCompanyId(companyId);
 
-        return acceptedOffers.stream().map(offer -> {
+        return acceptedOffers.stream()
+                .filter(offer -> isCarrierHistoryVisible(offer.getFreight()))
+                .map(offer -> {
             Freight freight = offer.getFreight();
 
             // Find active dispatch for this freight (if any)
@@ -297,16 +335,73 @@ public class DispatchServiceImpl implements DispatchService {
 
             return AwardedFreightSummary.builder()
                     .freightId(freight.getId())
+                    .carrierCompanyId(companyId)
                     .pickupLocation(freight.getPickupLocation())
                     .destination(freight.getDestination())
                     .materialType(freight.getMaterialType())
                     .weightTons(freight.getWeightTons())
-                    .agreedAmount(offer.getAgreedAmount())
+                    .agreedAmount(canViewFinancials(context.role()) ? offer.getAgreedAmount() : null)
                     .carrierOfferId(offer.getId())
                     .activeDispatch(dispatchSummary)
                     .awardedAt(offer.getAcceptedAt())
                     .build();
         }).collect(Collectors.toList());
+    }
+
+    private boolean isCarrierHistoryVisible(Freight freight) {
+        TerminalEvent terminalEvent = carrierTerminalEvent(freight);
+        if (terminalEvent == null) {
+            return true;
+        }
+        LocalDateTime terminalAt = terminalEvent.occurredAt();
+        return terminalAt != null
+                && visibilityProperties.getCarrierHistoryDays() > 0
+                && !terminalAt.isAfter(LocalDateTime.now())
+                && !terminalAt.isBefore(LocalDateTime.now()
+                        .minusDays(visibilityProperties.getCarrierHistoryDays()));
+    }
+
+    private TerminalEvent carrierTerminalEvent(Freight freight) {
+        List<Trip> completedTrips = tripRepository.findByFreightIdOrderByEndTimeDesc(freight.getId())
+                .stream()
+                .filter(trip -> trip.getTripStatus() == Trip.TripStatus.COMPLETED)
+                .toList();
+        if (completedTrips.stream().anyMatch(trip -> trip.getEndTime() == null)) {
+            return new TerminalEvent(null);
+        }
+        if (freight.getStatus() == Freight.FreightStatus.CANCELLED) {
+            return new TerminalEvent(freight.getUpdatedAt());
+        }
+        if (!completedTrips.isEmpty()) {
+            return new TerminalEvent(completedTrips.stream()
+                    .map(Trip::getEndTime)
+                    .max(java.util.Comparator.naturalOrder())
+                    .orElse(null));
+        }
+        List<Booking> terminalBookings = bookingRepo.findByCargoRequest_Id(freight.getId()).stream()
+                .filter(booking -> booking.getBookingStatus() == Booking.BookingStatus.CANCELLED
+                        || booking.getBookingStatus() == Booking.BookingStatus.COMPLETED)
+                .toList();
+        if (terminalBookings.stream().anyMatch(booking -> booking.getUpdatedAt() == null)) {
+            return new TerminalEvent(null);
+        }
+        if (!terminalBookings.isEmpty()) {
+            return new TerminalEvent(terminalBookings.stream()
+                    .map(Booking::getUpdatedAt)
+                    .max(java.util.Comparator.naturalOrder())
+                    .orElse(null));
+        }
+        if (freight.getStatus() == Freight.FreightStatus.COMPLETED) {
+            return new TerminalEvent(freight.getUpdatedAt());
+        }
+        return null;
+    }
+
+    private record TerminalEvent(LocalDateTime occurredAt) {
+    }
+
+    private LocalDateTime historyCutoff(long historyDays, LocalDateTime now) {
+        return historyDays > 0 ? now.minusDays(historyDays) : now.plusNanos(1);
     }
 
     // ════════════════════════════════════════════════════════════════════════════
@@ -316,14 +411,37 @@ public class DispatchServiceImpl implements DispatchService {
     @Override
     @Transactional(readOnly = true)
     public List<DispatchAssignmentResponse> getMyAssignments(User driver) {
-        return dispatchRepo.findByDriverUserIdOrderByAssignedAtDesc(driver.getId())
+        LocalDateTime now = LocalDateTime.now();
+        return dispatchRepo.findVisibleByDriverUserId(
+                        driver.getId(),
+                        List.of(DispatchStatus.ASSIGNED, DispatchStatus.DRIVER_ACCEPTED),
+                        DispatchStatus.DRIVER_ACCEPTED,
+                        List.of(Freight.FreightStatus.COMPLETED, Freight.FreightStatus.CANCELLED),
+                        Freight.FreightStatus.CANCELLED,
+                        Freight.FreightStatus.COMPLETED,
+                        Trip.TripStatus.COMPLETED,
+                        List.of(Booking.BookingStatus.CANCELLED, Booking.BookingStatus.COMPLETED),
+                        historyCutoff(visibilityProperties.getDriverHistoryDays(), now),
+                        now)
                 .stream().map(DispatchAssignmentResponse::from).collect(Collectors.toList());
     }
 
     @Override
     @Transactional(readOnly = true)
     public DispatchAssignmentResponse getMyAssignment(Long dispatchId, User driver) {
-        DispatchAssignment d = dispatchRepo.findByIdAndDriverUserId(dispatchId, driver.getId())
+        LocalDateTime now = LocalDateTime.now();
+        DispatchAssignment d = dispatchRepo.findVisibleByIdAndDriverUserId(
+                        dispatchId,
+                        driver.getId(),
+                        List.of(DispatchStatus.ASSIGNED, DispatchStatus.DRIVER_ACCEPTED),
+                        DispatchStatus.DRIVER_ACCEPTED,
+                        List.of(Freight.FreightStatus.COMPLETED, Freight.FreightStatus.CANCELLED),
+                        Freight.FreightStatus.CANCELLED,
+                        Freight.FreightStatus.COMPLETED,
+                        Trip.TripStatus.COMPLETED,
+                        List.of(Booking.BookingStatus.CANCELLED, Booking.BookingStatus.COMPLETED),
+                        historyCutoff(visibilityProperties.getDriverHistoryDays(), now),
+                        now)
                 .orElseThrow(() -> DispatchException.notFound(dispatchId));
         return DispatchAssignmentResponse.from(d);
     }
@@ -530,6 +648,15 @@ public class DispatchServiceImpl implements DispatchService {
                     "Dispatch requires CARRIER_OWNER, FLEET_MANAGER, or DISPATCHER role",
                     "DISPATCH_ROLE_REQUIRED", 403);
         }
+        if (ctx.company().getVerificationStatus() != VerificationStatus.APPROVED) {
+            throw new com.ethioloadai.carrier.team.exception.CompanyTeamException(
+                    "Company approval is required for dispatch operations",
+                    "COMPANY_NOT_APPROVED", 403);
+        }
+    }
+
+    private boolean canViewFinancials(CompanyRole role) {
+        return role == CompanyRole.CARRIER_OWNER || role == CompanyRole.FLEET_MANAGER;
     }
 
     private void updateAwardAssignmentStatus(Long offerId, CarrierAssignmentStatus status) {

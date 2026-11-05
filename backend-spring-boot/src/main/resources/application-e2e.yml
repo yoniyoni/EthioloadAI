@@ -1,17 +1,24 @@
 spring:
-  config:
-    # The mounted directory must contain SPRING_DATASOURCE_PASSWORD and JWT_SECRET files.
-    import: "configtree:/run/secrets/"
   mail:
+    host: ethioloadai-e2e-mail-capture
+    port: 12525
     username: ""
     password: ""
+    properties:
+      mail.smtp.auth: false
+      mail.smtp.ssl.enable: false
+      mail.smtp.starttls.enable: false
   datasource:
     url: ${E2E_DATASOURCE_URL:jdbc:postgresql://127.0.0.1:15433/ethioloadai_e2e}
     username: ${SPRING_DATASOURCE_USERNAME}
     password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
   flyway:
+    postgresql:
+      transactional-lock: false
     enabled: true
+    user: ${SPRING_FLYWAY_USER}
+    password: ${SPRING_FLYWAY_PASSWORD}
   sql:
     init:
       mode: never
@@ -28,6 +35,10 @@ app:
 e2e:
   datasource:
     mode: ${E2E_DATASOURCE_MODE:}
+  mail:
+    capture:
+      enabled: ${E2E_MAIL_CAPTURE_ENABLED:false}
+      sender: ${E2E_MAIL_CAPTURE_SENDER:}
   demo:
     admin-password: ${E2E_DEMO_ADMIN_PASSWORD:}
     shipper-password: ${E2E_DEMO_SHIPPER_PASSWORD:}
@@ -35,7 +46,8 @@ e2e:
 
 carrier:
   invitations:
-    email-from: ""
+    frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
+    email-from: ${E2E_MAIL_CAPTURE_SENDER:}
 
 ai-engine:
   enabled: false

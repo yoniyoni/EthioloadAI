@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../data/models/models.dart';
 import '../../data/providers/data_providers.dart';
 import '../../data/repositories/repositories.dart';
+import 'driver_navigation.dart';
 
 // ── Palette ───────────────────────────────────────────────────────────────
 const _green   = Color(0xFF0F3D1A);
@@ -70,32 +72,62 @@ class DriverDocumentsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final docsAsync = ref.watch(driverDocumentsProvider);
-
-    return Scaffold(
-      backgroundColor: _bg,
-      appBar: AppBar(
-        backgroundColor: _green,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text(
-          'My Documents / ሰነዶቼ',
-          style: TextStyle(
-              color: Colors.white, fontWeight: FontWeight.w600, fontSize: 16),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
-            tooltip: 'Refresh',
-            onPressed: () => ref.invalidate(driverDocumentsProvider),
-          ),
-        ],
+    final isVerified = ref.watch(
+      authNotifierProvider.select(
+        (state) => state.user?.verificationStatus ?? false,
       ),
-      body: docsAsync.when(
-        data:    (docs) => _Body(docs: docs),
-        loading: () => const _LoadingSkeleton(),
-        error:   (e, _) => _ErrorState(
-          message: e.toString(),
-          onRetry: () => ref.invalidate(driverDocumentsProvider),
+    );
+    final homePath = driverHomePath(isVerified);
+
+    return PopScope(
+      canPop: context.canPop(),
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) context.go(homePath);
+      },
+      child: Scaffold(
+        backgroundColor: _bg,
+        appBar: AppBar(
+          backgroundColor: _green,
+          elevation: 0,
+          iconTheme: const IconThemeData(color: Colors.white),
+          leading: IconButton(
+            icon: Icon(
+              context.canPop() ? Icons.arrow_back : Icons.home_outlined,
+              color: Colors.white,
+            ),
+            tooltip: context.canPop()
+                ? 'Back'
+                : isVerified
+                    ? 'Driver dashboard'
+                    : 'Onboarding home',
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop();
+              } else {
+                context.go(homePath);
+              }
+            },
+          ),
+          title: const Text(
+            'My Documents / ሰነዶቼ',
+            style: TextStyle(
+                color: Colors.white, fontWeight: FontWeight.w600, fontSize: 16),
+          ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh, color: Colors.white),
+              tooltip: 'Refresh',
+              onPressed: () => ref.invalidate(driverDocumentsProvider),
+            ),
+          ],
+        ),
+        body: docsAsync.when(
+          data:    (docs) => _Body(docs: docs),
+          loading: () => const _LoadingSkeleton(),
+          error:   (e, _) => _ErrorState(
+            message: e.toString(),
+            onRetry: () => ref.invalidate(driverDocumentsProvider),
+          ),
         ),
       ),
     );

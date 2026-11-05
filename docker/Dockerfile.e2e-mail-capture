@@ -1,0 +1,9 @@
+FROM python:3.12-alpine
+
+ENV PYTHONDONTWRITEBYTECODE=1
+WORKDIR /app
+COPY backend-spring-boot/scripts/capture-invitation-smtp.py /app/capture-invitation-smtp.py
+COPY backend-spring-boot/scripts/capture-invitation-smtp-client.py /app/capture-invitation-smtp-client.py
+USER 10001:10001
+EXPOSE 12525
+ENTRYPOINT ["python", "-B", "/app/capture-invitation-smtp.py"]

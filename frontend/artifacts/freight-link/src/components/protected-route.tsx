@@ -1,5 +1,6 @@
 import { useAuth } from "@/contexts/auth-context";
-import { useLocation } from "wouter";
+import { getLoginRedirect } from "@/lib/auth-redirect";
+import { useLocation, useSearch } from "wouter";
 import { useEffect } from "react";
 import { Loader2, Clock, AlertTriangle } from "lucide-react";
 
@@ -21,6 +22,7 @@ export function ProtectedRoute({
 }) {
   const { isAuthenticated, isLoading, user, membershipError, refreshMemberships } = useAuth();
   const [location, setLocation] = useLocation();
+  const search = useSearch();
 
   // A driver whose account is not yet verified (KYC pending) must not access
   // the normal driver workspace. They are redirected to /documents so they can
@@ -32,7 +34,7 @@ export function ProtectedRoute({
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      setLocation("/login");
+      setLocation(getLoginRedirect(`${location}${search}${window.location.hash}`));
     } else if (
       !isLoading &&
       isAuthenticated &&
@@ -52,7 +54,7 @@ export function ProtectedRoute({
     ) {
       setLocation("/documents");
     }
-  }, [isLoading, isAuthenticated, user, allowedRoles, setLocation, isPendingDriver, location]);
+  }, [isLoading, isAuthenticated, user, allowedRoles, setLocation, isPendingDriver, location, search]);
 
   if (isLoading) {
     return (

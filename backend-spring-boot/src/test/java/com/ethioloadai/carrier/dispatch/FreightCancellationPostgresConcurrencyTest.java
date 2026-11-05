@@ -1,5 +1,6 @@
 package com.ethioloadai.carrier.dispatch;
 
+import com.ethioloadai.e2e.PostgresConcurrencyDatasourceGuard;
 import com.ethioloadai.bid.entity.Bid;
 import com.ethioloadai.bid.repository.BidRepository;
 import com.ethioloadai.bid.service.BidService;
@@ -53,6 +54,7 @@ class FreightCancellationPostgresConcurrencyTest extends DispatchTestSupport {
 
     @DynamicPropertySource
     static void configurePostgres(DynamicPropertyRegistry registry) {
+        PostgresConcurrencyDatasourceGuard.validate();
         registry.add("spring.datasource.url",
                 () -> requiredEnvironment("ETHIOLOADAI_POSTGRES_TEST_URL"));
         registry.add("spring.datasource.username",

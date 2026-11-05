@@ -9,8 +9,10 @@ import com.ethioloadai.contract.exception.ContractException.ContractNotFoundExce
 import com.ethioloadai.contract.exception.ContractException.UnauthorizedContractAccessException;
 import com.ethioloadai.freight.entity.Freight;
 import com.ethioloadai.freight.repository.FreightRepository;
+import com.ethioloadai.freight.service.FreightVisibilityProperties;
 import com.ethioloadai.payment.entity.Payment;
 import com.ethioloadai.payment.repository.PaymentRepository;
+import com.ethioloadai.trip.repository.TripRepository;
 import com.ethioloadai.user.entity.User;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -19,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Service
@@ -30,6 +33,8 @@ public class ContractServiceImpl implements ContractService {
     private final FreightRepository freightRepository;
     private final BookingRepository bookingRepository;
     private final PaymentRepository paymentRepository;
+    private final TripRepository tripRepository;
+    private final FreightVisibilityProperties visibilityProperties;
 
     @Override
     @Transactional(readOnly = true)
@@ -47,6 +52,12 @@ public class ContractServiceImpl implements ContractService {
 
         // Verify authorization
         verifyParticipantAuthorization(freight, activeBooking.orElse(null), caller);
+        if (caller.getRole() == User.Role.DRIVER
+                && activeBooking.isPresent()
+                && !isDriverHistoryVisible(freight, activeBooking.get())) {
+            throw new UnauthorizedContractAccessException(
+                    "Historical freight access window has expired");
+        }
 
         // Ensure there is an agreement/counterparty (either an active booking or matched driver)
         User driverUser = activeBooking.map(Booking::getDriver).orElse(freight.getMatchedDriver());
@@ -75,10 +86,11 @@ public class ContractServiceImpl implements ContractService {
                 freight.getShipper() != null ? freight.getShipper().getEmail() : "No email"
         );
 
-        ContractPartyDto driverDto = new ContractPartyDto(
-                driverUser != null ? driverUser.getFullName() : "Unknown",
-                driverUser != null ? driverUser.getEmail() : "No email"
-        );
+        ContractPartyDto driverDto = activeBooking.isPresent()
+                ? new ContractPartyDto(
+                        driverUser != null ? driverUser.getFullName() : "Unknown",
+                        driverUser != null ? driverUser.getEmail() : "No email")
+                : new ContractPartyDto("Assigned driver", "Contact details unavailable");
 
         ContractFreightDto freightDto = new ContractFreightDto(
                 freight.getPickupLocation() != null ? freight.getPickupLocation() : "-",
@@ -108,11 +120,10 @@ public class ContractServiceImpl implements ContractService {
         }
 
         boolean isShipper = freight.getShipper() != null && freight.getShipper().getId().equals(caller.getId());
-        boolean isMatchedDriver = freight.getMatchedDriver() != null && freight.getMatchedDriver().getId().equals(caller.getId());
         boolean isBookedDriver = activeBooking != null && activeBooking.getDriver() != null &&
                 activeBooking.getDriver().getId().equals(caller.getId());
 
-        if (!isShipper && !isMatchedDriver && !isBookedDriver) {
+        if (!isShipper && !isBookedDriver) {
             log.warn("Unauthorized contract access attempt: freightId={} callerId={}", freight.getId(), caller.getId());
             throw new UnauthorizedContractAccessException("You are not authorized to view the contract for this freight");
         }
@@ -127,6 +138,36 @@ public class ContractServiceImpl implements ContractService {
             case FAILED -> "failed";
             default -> "pending";
         };
+    }
+
+    private boolean isDriverHistoryVisible(Freight freight, Booking booking) {
+        LocalDateTime terminalAt = null;
+        if (freight.getStatus() == Freight.FreightStatus.CANCELLED) {
+            terminalAt = freight.getUpdatedAt();
+        } else {
+            terminalAt = tripRepository.findByBooking_Id(booking.getId())
+                    .filter(trip -> trip.getTripStatus()
+                            == com.ethioloadai.trip.entity.Trip.TripStatus.COMPLETED)
+                    .map(com.ethioloadai.trip.entity.Trip::getEndTime)
+                    .orElse(null);
+            if (terminalAt == null
+                    && (booking.getBookingStatus() == Booking.BookingStatus.COMPLETED
+                    || booking.getBookingStatus() == Booking.BookingStatus.CANCELLED)) {
+                terminalAt = booking.getUpdatedAt();
+            }
+            if (terminalAt == null && freight.getStatus() == Freight.FreightStatus.COMPLETED) {
+                terminalAt = freight.getUpdatedAt();
+            }
+            if (terminalAt == null) {
+                return true;
+            }
+        }
+        LocalDateTime now = LocalDateTime.now();
+        long historyDays = visibilityProperties.getDriverHistoryDays();
+        return terminalAt != null
+                && historyDays > 0
+                && !terminalAt.isAfter(now)
+                && !terminalAt.isBefore(now.minusDays(historyDays));
     }
 
     private String resolveContractStatus(Freight freight, Booking booking, Payment payment) {

@@ -82,6 +82,41 @@ public class TripMapper {
         return builder.build();
     }
 
+    public TripResponse toCompanyResponse(Trip trip, Long companyId, boolean includeFinancial) {
+        TripResponse response = toResponse(trip);
+        response.setCarrierCompanyId(companyId);
+        if (response.getDriver() != null) {
+            response.getDriver().setPhone(null);
+        }
+        if (response.getShipper() != null) {
+            response.getShipper().setPhone(null);
+        }
+        if (!includeFinancial) {
+            if (response.getBooking() != null) {
+                response.getBooking().setEstimatedPrice(null);
+                response.getBooking().setCommissionFee(null);
+            }
+            if (response.getStops() != null) {
+                response.getStops().forEach(stop -> {
+                    stop.setAgreedPrice(null);
+                    if (stop.getCargoInfo() != null) {
+                        stop.getCargoInfo().setShipperName(null);
+                    }
+                });
+            }
+        }
+        return response;
+    }
+
+    public TripResponse toCallerResponse(Trip trip, boolean companyMember) {
+        return companyMember
+                ? toCompanyResponse(
+                        trip,
+                        trip.getBooking() == null ? null : trip.getBooking().getCarrierCompanyId(),
+                        false)
+                : toResponse(trip);
+    }
+
     public TripStopResponse toTripStopResponse(TripStop tripStop) {
         if (tripStop == null) {
             return null;

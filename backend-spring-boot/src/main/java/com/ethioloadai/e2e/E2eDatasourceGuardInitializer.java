@@ -10,6 +10,7 @@ import org.springframework.core.env.PropertySource;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 public final class E2eDatasourceGuardInitializer
         implements ApplicationContextInitializer<ConfigurableApplicationContext> {
@@ -21,6 +22,15 @@ public final class E2eDatasourceGuardInitializer
 
     private static final String E2E_PROFILE = "e2e";
     private static final String DATASOURCE_MODE_PROPERTY = "e2e.datasource.mode";
+    private static final String MAIL_CAPTURE_ENABLED_PROPERTY = "e2e.mail.capture.enabled";
+    private static final String MAIL_CAPTURE_SENDER_PROPERTY = "e2e.mail.capture.sender";
+    private static final String MAIL_CAPTURE_SMTP_HOST = "ethioloadai-e2e-mail-capture";
+    private static final String MAIL_CAPTURE_SMTP_PORT = "12525";
+    private static final String MAIL_CAPTURE_SENDER = "ethioloadai-test@example.test";
+    private static final Set<String> ALLOWED_E2E_SMTP_PROPERTIES = Set.of(
+            "springmailpropertiesmailsmtpauth",
+            "springmailpropertiesmailsmtpsslenable",
+            "springmailpropertiesmailsmtpstarttlsenable");
 
     private static final String[] ALTERNATE_DATASOURCE_PROPERTIES = {
             "spring.datasource.hikari.jdbc-url",
@@ -39,8 +49,6 @@ public final class E2eDatasourceGuardInitializer
 
     private static final String[] ALTERNATE_FLYWAY_PROPERTIES = {
             "spring.flyway.url",
-            "spring.flyway.user",
-            "spring.flyway.password",
             "spring.flyway.driver-class-name",
             "spring.flyway.jndi-name"
     };
@@ -75,6 +83,13 @@ public final class E2eDatasourceGuardInitializer
                 environment, "spring.datasource.driver-class-name", "org.postgresql.Driver");
         requireConfiguredProperty(environment, "spring.datasource.username");
         requireConfiguredProperty(environment, "spring.datasource.password");
+        requireConfiguredProperty(environment, "spring.flyway.user");
+        requireConfiguredProperty(environment, "spring.flyway.password");
+        requireDistinctCredentials(
+                environment.getProperty("spring.datasource.username"),
+                environment.getProperty("spring.datasource.password"),
+                environment.getProperty("spring.flyway.user"),
+                environment.getProperty("spring.flyway.password"));
         requireEffectivePropertyValue(environment, "ai-engine.enabled", "false");
         requireEffectivePropertyValue(environment, "routing.external-services.enabled", "false");
         requireEffectivePropertyValue(
@@ -82,9 +97,7 @@ public final class E2eDatasourceGuardInitializer
                 "cors.allowed-origins",
                 "http://localhost:5173,http://localhost:5174,http://127.0.0.1:5174,http://127.0.0.1:8765");
         requirePropertyAbsent(environment, new String[]{"cors.allowed-origin-patterns"});
-        requireBlankProperty(environment, "spring.mail.username");
-        requireBlankProperty(environment, "spring.mail.password");
-        requireBlankProperty(environment, "carrier.invitations.email-from");
+        validateE2eMailConfiguration(environment);
         requirePropertyAbsent(environment, ALTERNATE_DATASOURCE_PROPERTIES);
         requirePropertyPrefixAbsent(environment, "spring.datasource.hikari.data-source-properties.");
         requirePropertyAbsent(environment, ALTERNATE_FLYWAY_PROPERTIES);
@@ -223,12 +236,90 @@ public final class E2eDatasourceGuardInitializer
         requireEveryPropertySourceValue(environment, property, value);
     }
 
+    private static void requireDistinctCredentials(
+            String datasourceUsername,
+            String datasourcePassword,
+            String flywayUsername,
+            String flywayPassword) {
+        if (datasourceUsername.equals(flywayUsername)
+                || datasourcePassword.equals(flywayPassword)) {
+            throw unsafeConfiguration(
+                    "runtime and Flyway credentials must be distinct");
+        }
+    }
+
     private static void requireBlankProperty(
             ConfigurableEnvironment environment,
             String property) {
         String value = environment.getProperty(property);
         if (value != null && !value.isBlank()) {
             throw unsafeConfiguration(property + " must be blank for E2E");
+        }
+        if (value != null) {
+            requireEveryPropertySourceValue(environment, property, value);
+        }
+    }
+
+    private static void validateE2eMailConfiguration(ConfigurableEnvironment environment) {
+        String configuredCaptureEnabled = environment.getProperty(MAIL_CAPTURE_ENABLED_PROPERTY);
+        String captureEnabled = configuredCaptureEnabled == null
+                ? "false"
+                : configuredCaptureEnabled;
+        if (!"true".equals(captureEnabled) && !"false".equals(captureEnabled)) {
+            throw unsafeConfiguration(MAIL_CAPTURE_ENABLED_PROPERTY + " must be true or false");
+        }
+        if (configuredCaptureEnabled != null) {
+            requireEffectivePropertyValue(
+                    environment, MAIL_CAPTURE_ENABLED_PROPERTY, captureEnabled);
+            requireEveryPropertySourceValue(
+                    environment, MAIL_CAPTURE_ENABLED_PROPERTY, captureEnabled);
+        }
+        requireExactPropertyValue(environment, "spring.mail.host", MAIL_CAPTURE_SMTP_HOST);
+        requireExactPropertyValue(environment, "spring.mail.port", MAIL_CAPTURE_SMTP_PORT);
+        requireExactPropertyValue(environment, "spring.mail.properties.mail.smtp.auth", "false");
+        requireExactPropertyValue(environment, "spring.mail.properties.mail.smtp.ssl.enable", "false");
+        requireExactPropertyValue(
+                environment, "spring.mail.properties.mail.smtp.starttls.enable", "false");
+        requireBlankProperty(environment, "spring.mail.username");
+        requireBlankProperty(environment, "spring.mail.password");
+        requirePropertyAbsent(environment, new String[]{
+                "spring.mail.jndi-name",
+                "spring.mail.protocol",
+                "spring.mail.test-connection"
+        });
+        rejectUnapprovedSmtpProperties(environment);
+
+        if (Boolean.parseBoolean(captureEnabled)) {
+            requireExactPropertyValue(
+                    environment, MAIL_CAPTURE_SENDER_PROPERTY, MAIL_CAPTURE_SENDER);
+            requireExactPropertyValue(
+                    environment, "carrier.invitations.email-from", MAIL_CAPTURE_SENDER);
+        } else {
+            requireBlankProperty(environment, MAIL_CAPTURE_SENDER_PROPERTY);
+            requireBlankProperty(environment, "carrier.invitations.email-from");
+        }
+    }
+
+    private static void rejectUnapprovedSmtpProperties(ConfigurableEnvironment environment) {
+        for (PropertySource<?> propertySource : environment.getPropertySources()) {
+            rejectUnapprovedSmtpProperties(propertySource);
+        }
+    }
+
+    private static void rejectUnapprovedSmtpProperties(PropertySource<?> propertySource) {
+        if (propertySource instanceof CompositePropertySource composite) {
+            for (PropertySource<?> nested : composite.getPropertySources()) {
+                rejectUnapprovedSmtpProperties(nested);
+            }
+        } else if (propertySource instanceof EnumerablePropertySource<?> enumerable) {
+            for (String name : enumerable.getPropertyNames()) {
+                String normalizedName = normalizePropertyName(name);
+                if (normalizedName.startsWith("springmailpropertiesmailsmtp")
+                        && !ALLOWED_E2E_SMTP_PROPERTIES.contains(normalizedName)) {
+                    throw unsafeConfiguration(
+                            "alternate SMTP configuration is not allowed: " + name);
+                }
+            }
         }
     }
 

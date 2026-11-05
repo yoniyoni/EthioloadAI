@@ -41,7 +41,8 @@ import java.util.List;
  * <h2>Security</h2>
  * <ul>
  *   <li>Company ID is always from the URL path — never from request body.</li>
- *   <li>{@code @companySecurity.isMemberOf} gates carrier endpoints.</li>
+ *   <li>Company reads require active membership; dispatch writes also require an
+ *       operational role and approved company status.</li>
  *   <li>Driver endpoints gate on {@code hasRole('DRIVER')}.</li>
  *   <li>The service layer enforces winning-carrier company match, driver/vehicle
  *       company ownership, and IDOR (only assigned driver can accept/reject).</li>
@@ -79,7 +80,7 @@ public class DispatchController {
      * The company ID is taken from the URL (never from the request body).
      */
     @PostMapping("/carrier-companies/{companyId}/freight/{freightId}/dispatch")
-    @PreAuthorize("@companySecurity.canOperateDispatch(#companyId, authentication)")
+    @PreAuthorize("@companySecurity.canOperateApprovedDispatch(#companyId, authentication)")
     @Operation(summary = "Dispatch a driver and vehicle to an awarded freight")
     public ResponseEntity<DispatchAssignmentResponse> createDispatch(
             @PathVariable Long companyId,
@@ -126,7 +127,7 @@ public class DispatchController {
      * Only allowed when the assignment is in ASSIGNED status.
      */
     @PostMapping("/carrier-companies/{companyId}/dispatches/{dispatchId}/cancel")
-    @PreAuthorize("@companySecurity.canOperateDispatch(#companyId, authentication)")
+    @PreAuthorize("@companySecurity.canOperateApprovedDispatch(#companyId, authentication)")
     @Operation(summary = "Cancel a pending dispatch assignment (carrier operator only)")
     public ResponseEntity<DispatchAssignmentResponse> cancelDispatch(
             @PathVariable Long companyId,

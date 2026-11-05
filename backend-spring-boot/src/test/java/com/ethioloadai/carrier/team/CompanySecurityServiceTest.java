@@ -44,22 +44,26 @@ class CompanySecurityServiceTest {
         when(companies.findById(10L)).thenReturn(Optional.of(approvedCompany));
 
         assertThat(security.canOperateDispatch(10L, auth)).isTrue();
+        assertThat(security.canOperateApprovedDispatch(10L, auth)).isTrue();
         assertThat(security.canOperateAssignments(10L, auth)).isTrue();
         assertThat(security.canOperateFleet(10L, auth)).isTrue();
 
         when(memberships.findByCarrierCompanyIdAndUserId(10L, caller.getId()))
                 .thenReturn(Optional.of(activeMembership(CompanyRole.CARRIER_OWNER)));
         assertThat(security.canOperateDispatch(10L, auth)).isTrue();
+        assertThat(security.canOperateApprovedDispatch(10L, auth)).isTrue();
         assertThat(security.canOperateAssignments(10L, auth)).isTrue();
 
         when(memberships.findByCarrierCompanyIdAndUserId(10L, caller.getId()))
                 .thenReturn(Optional.of(activeMembership(CompanyRole.DISPATCHER)));
 
         assertThat(security.canOperateDispatch(10L, auth)).isTrue();
+        assertThat(security.canOperateApprovedDispatch(10L, auth)).isTrue();
         assertThat(security.canOperateAssignments(10L, auth)).isTrue();
         assertThat(security.canOperateFleet(10L, auth)).isFalse();
 
         approvedCompany.setVerificationStatus(VerificationStatus.PENDING);
+        assertThat(security.canOperateApprovedDispatch(10L, auth)).isFalse();
         assertThat(security.canOperateAssignments(10L, auth)).isFalse();
     }
 

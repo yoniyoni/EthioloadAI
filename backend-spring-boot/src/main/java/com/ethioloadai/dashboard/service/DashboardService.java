@@ -89,6 +89,8 @@ public class DashboardService {
                 freightRepository.countByShipper_IdAndStatus(userId, Freight.FreightStatus.COMPLETED),
                 freightRepository.countByShipper_IdAndStatus(userId, Freight.FreightStatus.CANCELLED),
                 shipper ? bookingRepository.countActiveByShipperId(userId, INACTIVE_BOOKING_STATUSES) : 0,
+                shipper ? bookingRepository.countByShipperIdAndStatus(
+                        userId, Booking.BookingStatus.CONFIRMED) : 0,
                 shipper ? tripRepository.countActiveByShipperId(userId, Trip.TripStatus.COMPLETED) : 0,
                 recentFreight,
                 recentOperationalFreight,

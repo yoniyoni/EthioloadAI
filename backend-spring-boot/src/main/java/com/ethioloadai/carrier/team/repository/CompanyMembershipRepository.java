@@ -15,7 +15,11 @@ public interface CompanyMembershipRepository extends JpaRepository<CompanyMember
  /** Phase 3: shortcut — all ACTIVE memberships for a user (non-paged). */
  @Query("select m from CompanyMembership m where m.userId = :userId and m.status = com.ethioloadai.carrier.team.entity.MembershipStatus.ACTIVE")
  List<CompanyMembership> findActiveByUserId(@Param("userId") Long userId);
+ @Query("select m.carrierCompanyId from CompanyMembership m, CarrierCompany c " +
+        "where c.id = m.carrierCompanyId and m.userId = :userId " +
+        "and m.status = com.ethioloadai.carrier.team.entity.MembershipStatus.ACTIVE " +
+        "and c.verificationStatus = com.ethioloadai.carrier.company.entity.VerificationStatus.APPROVED")
+ List<Long> findApprovedCompanyIdsByActiveMembershipUserId(@Param("userId") Long userId);
  @Query("select count(m) > 0 from CompanyMembership m, User u where m.userId = u.id and m.carrierCompanyId = :companyId and m.status = com.ethioloadai.carrier.team.entity.MembershipStatus.ACTIVE and lower(trim(u.email)) = :email")
  boolean activeEmailExists(@Param("companyId") Long companyId, @Param("email") String email);
 }
-

@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Truck, Loader2, Eye, EyeOff, ArrowLeft, CheckCircle2, Shield,
-  Headphones, Globe, Moon, Upload, AlertTriangle, FileText, Clock,
+  Headphones, Upload, AlertTriangle, FileText, Clock,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
@@ -342,19 +342,11 @@ export default function Register() {
         >
           {/* Top nav — hide on pending screen */}
           {step < 4 && (
-            <div className="flex items-center justify-between mb-6">
+            <div className="mb-6 flex items-center">
               <Link href="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
                 <ArrowLeft className="h-4 w-4" />
                 Back to home
               </Link>
-              <div className="flex items-center gap-2">
-                <button className="p-2 rounded-lg border border-border hover:bg-muted transition-colors">
-                  <Globe className="h-4 w-4" />
-                </button>
-                <button className="p-2 rounded-lg border border-border hover:bg-muted transition-colors">
-                  <Moon className="h-4 w-4" />
-                </button>
-              </div>
             </div>
           )}
 
@@ -439,7 +431,7 @@ export default function Register() {
                   )}
                   <Button
                     type="button"
-                    className="w-full h-11 rounded-lg font-semibold bg-primary hover:bg-primary/90 text-white"
+                    className="h-11 w-full rounded-lg font-semibold"
                     onClick={nextStep}
                   >
                     Next Step <ArrowLeft className="ml-2 h-4 w-4 rotate-180" />
@@ -473,7 +465,7 @@ export default function Register() {
                     <Button type="button" variant="outline" className="flex-1 h-11 rounded-lg" onClick={prevStep}>
                       <ArrowLeft className="mr-2 h-4 w-4" /> Back
                     </Button>
-                    <Button type="button" className="flex-1 h-11 rounded-lg font-semibold bg-primary hover:bg-primary/90 text-white" onClick={nextStep}>
+                    <Button type="button" className="flex-1 h-11 rounded-lg font-semibold" onClick={nextStep}>
                       Next <ArrowLeft className="ml-2 h-4 w-4 rotate-180" />
                     </Button>
                   </div>
@@ -493,15 +485,22 @@ export default function Register() {
                         onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
                         required
                         minLength={6}
-                        className="h-11 rounded-lg pr-10"
+                        className="h-11 rounded-lg pr-12"
                       />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(v => !v)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
+                      <div className="absolute right-2 top-1/2 z-10 -translate-y-1/2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={showPassword ? "Hide password" : "Show password"}
+                          aria-controls="password"
+                          aria-pressed={showPassword}
+                          onClick={() => setShowPassword(v => !v)}
+                          className="text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </Button>
+                      </div>
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Use 8+ characters with a mix of letters, numbers &amp; symbols.
@@ -513,7 +512,7 @@ export default function Register() {
                     </Button>
                     <Button
                       type="submit"
-                      className="flex-1 h-11 rounded-lg font-semibold bg-primary hover:bg-primary/90 text-white"
+                      className="flex-1 h-11 rounded-lg font-semibold"
                       disabled={loading}
                     >
                       {loading ? (

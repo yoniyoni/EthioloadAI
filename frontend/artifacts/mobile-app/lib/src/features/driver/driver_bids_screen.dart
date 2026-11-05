@@ -368,7 +368,7 @@ class _DriverBidCardState extends ConsumerState<_DriverBidCard> {
         border: Border.all(color: borderColor, width: needsAction ? 1.5 : 0.5),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // ── Cargo route row ─────────────────────────────────────────
+        // ── Cargo summary row ───────────────────────────────────────
         Row(children: [
           Container(
             width: 36,
@@ -386,7 +386,7 @@ class _DriverBidCardState extends ConsumerState<_DriverBidCard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '${b.cargoPickup ?? '?'} → ${b.cargoDestination ?? '?'}',
+                    'Freight #${b.cargoRequestId}',
                     style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -568,7 +568,7 @@ class _DriverBidCardState extends ConsumerState<_DriverBidCard> {
           ),
         ],
 
-        // ── Accepted: shipper contact ───────────────────────────────
+        // ── Accepted award status ───────────────────────────────────
         if (b.status == 'accepted') ...[
           const SizedBox(height: 10),
           Container(
@@ -590,34 +590,6 @@ class _DriverBidCardState extends ConsumerState<_DriverBidCard> {
                           color: _green,
                           fontWeight: FontWeight.w600)),
                 ]),
-                const SizedBox(height: 8),
-                if (b.shipperName != null) ...[
-                  Row(children: [
-                    const Icon(Icons.person_outline,
-                        size: 14, color: _textSecondary),
-                    const SizedBox(width: 6),
-                    Text(b.shipperName!,
-                        style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: _textPrimary)),
-                  ]),
-                  const SizedBox(height: 4),
-                ],
-                if (b.shipperPhone != null)
-                  Row(children: [
-                    const Icon(Icons.phone_outlined, size: 14, color: _green),
-                    const SizedBox(width: 6),
-                    Text(b.shipperPhone!,
-                        style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: _green)),
-                  ])
-                else
-                  Text('bid.shipper_contact_na'.tr(),
-                      style:
-                          const TextStyle(fontSize: 12, color: _textSecondary)),
               ],
             ),
           ),

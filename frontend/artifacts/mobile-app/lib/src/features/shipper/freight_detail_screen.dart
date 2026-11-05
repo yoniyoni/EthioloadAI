@@ -114,6 +114,12 @@ class _DetailScaffold extends ConsumerWidget {
     final isOwner = user != null && (user.id == cargo.userId || user.isAdmin);
     final canViewNearbyVehicles = isOwner;
     final canViewApplications = isOwner || user?.isShipper == true || user?.isAdmin == true;
+    final hasRouteDetails = cargo.pickupLocation.trim().isNotEmpty ||
+        cargo.destination.trim().isNotEmpty;
+    final routeSummary = hasRouteDetails
+        ? '${cargo.pickupLocation.isEmpty ? 'Pickup' : cargo.pickupLocation} → '
+            '${cargo.destination.isEmpty ? 'Delivery' : cargo.destination}'
+        : 'Route details shared after award';
 
     return Scaffold(
       backgroundColor: kBackground,
@@ -135,7 +141,7 @@ class _DetailScaffold extends ConsumerWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          '${cargo.pickupLocation} → ${cargo.destination}',
+                          routeSummary,
                           style: GoogleFonts.inter(
                               fontSize: 17,
                               fontWeight: FontWeight.bold,
@@ -167,7 +173,9 @@ class _DetailScaffold extends ConsumerWidget {
                         label: 'Budget',
                         value: cargo.budget != null
                             ? 'ETB ${cargo.budget!.toStringAsFixed(0)}'
-                            : 'Negotiable',
+                            : cargo.isFixed
+                                ? 'Fixed price'
+                                : 'Negotiable',
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -217,46 +225,52 @@ class _DetailScaffold extends ConsumerWidget {
                           fontWeight: FontWeight.w700,
                           color: kTextPrimary)),
                   const SizedBox(height: 10),
-                  _LocationCard(
-                      icon: Icons.trip_origin_rounded,
-                      title: 'Pickup',
-                      address: cargo.pickupLocation,
-                      color: kAmber),
-                  if (canViewNearbyVehicles) ...[
-                    const SizedBox(height: 16),
-                    if (cargo.pickupLatitude != null &&
-                        cargo.pickupLongitude != null)
-                      NearbyDriversMapWidget(
-                        key: const Key('freight-nearby-vehicles'),
-                        pickupLat: cargo.pickupLatitude!,
-                        pickupLng: cargo.pickupLongitude!,
-                        pickupName: cargo.pickupLocation,
-                      )
-                    else
-                      Container(
-                        key: const Key('freight-nearby-vehicles-unavailable'),
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: kSurface,
-                          border: Border.all(color: kBorder),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          'Nearby vehicles are unavailable because this freight has no pickup coordinates.',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: kTextMuted,
+                  if (hasRouteDetails) ...[
+                    _LocationCard(
+                        icon: Icons.trip_origin_rounded,
+                        title: 'Pickup',
+                        address: cargo.pickupLocation,
+                        color: kAmber),
+                    if (canViewNearbyVehicles) ...[
+                      const SizedBox(height: 16),
+                      if (cargo.pickupLatitude != null &&
+                          cargo.pickupLongitude != null)
+                        NearbyDriversMapWidget(
+                          key: const Key('freight-nearby-vehicles'),
+                          pickupLat: cargo.pickupLatitude!,
+                          pickupLng: cargo.pickupLongitude!,
+                          pickupName: cargo.pickupLocation,
+                        )
+                      else
+                        Container(
+                          key: const Key('freight-nearby-vehicles-unavailable'),
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: kSurface,
+                            border: Border.all(color: kBorder),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            'Nearby vehicles are unavailable because this freight has no pickup coordinates.',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: kTextMuted,
+                            ),
                           ),
                         ),
-                      ),
-                  ],
-                  const SizedBox(height: 10),
-                  _LocationCard(
-                      icon: Icons.location_on_rounded,
-                      title: 'Destination',
-                      address: cargo.destination,
-                      color: kGreen),
+                    ],
+                    const SizedBox(height: 10),
+                    _LocationCard(
+                        icon: Icons.location_on_rounded,
+                        title: 'Destination',
+                        address: cargo.destination,
+                        color: kGreen),
+                  ] else
+                    Text(
+                      'Exact pickup and delivery details are shared after award.',
+                      style: GoogleFonts.inter(fontSize: 13, color: kTextMuted),
+                    ),
 
                   // ── Applications (for shipper / owner / admin) ───────
                   if (canViewApplications) ...[

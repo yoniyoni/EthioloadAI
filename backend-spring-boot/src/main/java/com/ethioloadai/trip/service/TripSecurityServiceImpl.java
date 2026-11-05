@@ -4,6 +4,11 @@ import com.ethioloadai.trip.entity.Trip;
 import com.ethioloadai.trip.entity.TripStop;
 import com.ethioloadai.trip.repository.TripRepository;
 import com.ethioloadai.trip.repository.TripStopRepository;
+import com.ethioloadai.trip.repository.TripVisibilitySpecifications;
+import com.ethioloadai.booking.entity.Booking;
+import com.ethioloadai.carrier.team.service.FleetOwnerHistoryScopeService;
+import com.ethioloadai.freight.entity.Freight;
+import com.ethioloadai.freight.service.FreightVisibilityProperties;
 import com.ethioloadai.user.entity.User;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.Hibernate;
@@ -12,6 +17,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +34,8 @@ public class TripSecurityServiceImpl implements TripSecurityService {
 
     private final TripRepository tripRepository;
     private final TripStopRepository tripStopRepository;
+    private final FleetOwnerHistoryScopeService fleetOwnerHistoryScope;
+    private final FreightVisibilityProperties visibilityProperties;
 
     @Override
     @Transactional(readOnly = true)
@@ -59,13 +67,15 @@ public class TripSecurityServiceImpl implements TripSecurityService {
                 yield trip;
             }
             case FLEET_OWNER -> {
-                // Fleet owners can access trips for their fleet vehicles (PLACEHOLDER)
-                // TODO: Implement fleet relationship checking
-                Optional<Trip> trip = Optional.empty(); // tripRepository.findByIdAndFleetOwnerId(tripId, user.getId());
+                List<Long> companyIds = fleetOwnerHistoryScope.getApprovedCompanyIds(user);
+                Optional<Trip> trip = companyIds.isEmpty()
+                        ? Optional.empty()
+                        : tripRepository.findByIdAndCarrierCompanyIds(tripId, companyIds);
                 log.debug("Fleet owner access to trip {}: {}", tripId, trip.isPresent() ? "granted" : "denied/not found");
                 yield trip;
             }
         };
+        authorizedTrip = authorizedTrip.filter(trip -> hasHistoricalAccess(trip, user));
         authorizedTrip.ifPresent(this::initializeResponseGraph);
         return authorizedTrip;
     }
@@ -89,13 +99,7 @@ public class TripSecurityServiceImpl implements TripSecurityService {
         log.debug("Getting authorized trips for user {} (role: {}, page: {}, size: {})", 
                  user.getId(), user.getRole(), pageable.getPageNumber(), pageable.getPageSize());
 
-        Page<Trip> trips = switch (user.getRole()) {
-            case ADMIN -> tripRepository.findAllWithBasicDetails(pageable);
-            case DRIVER -> tripRepository.findByDriverId(user.getId(), pageable);
-            case SHIPPER -> tripRepository.findByShipperId(user.getId(), pageable);
-            case FLEET_OWNER -> Page.empty();
-        };
-
+        Page<Trip> trips = findVisibleTrips(user, pageable, Specification.where(null));
         loadStopsForPage(trips);
         log.debug("Found {} trips for user {}", trips.getTotalElements(), user.getId());
         return trips;
@@ -106,13 +110,8 @@ public class TripSecurityServiceImpl implements TripSecurityService {
     public Page<Trip> getAuthorizedTripsByStatus(User user, Trip.TripStatus status, Pageable pageable) {
         log.debug("Getting authorized trips with status {} for user {}", status, user.getId());
 
-        Page<Trip> trips = switch (user.getRole()) {
-            case ADMIN -> tripRepository.findByTripStatus(status, pageable);
-            case DRIVER -> tripRepository.findByDriverIdAndTripStatus(user.getId(), status, pageable);
-            case SHIPPER -> tripRepository.findByShipperIdAndTripStatus(user.getId(), status, pageable);
-            case FLEET_OWNER -> Page.empty();
-        };
-
+        Page<Trip> trips = findVisibleTrips(
+                user, pageable, TripVisibilitySpecifications.withStatus(status));
         loadStopsForPage(trips);
         log.debug("Found {} trips with status {} for user {}", trips.getTotalElements(), status, user.getId());
         return trips;
@@ -122,13 +121,8 @@ public class TripSecurityServiceImpl implements TripSecurityService {
     @Transactional(readOnly = true)
     public Page<Trip> getAuthorizedTripsByStatuses(
             User user, Collection<Trip.TripStatus> statuses, Pageable pageable) {
-        Page<Trip> trips = switch (user.getRole()) {
-            case ADMIN -> tripRepository.findByTripStatusIn(statuses, pageable);
-            case DRIVER -> tripRepository.findByDriverIdAndTripStatusIn(user.getId(), statuses, pageable);
-            case SHIPPER -> tripRepository.findByShipperIdAndTripStatusIn(user.getId(), statuses, pageable);
-            case FLEET_OWNER -> Page.empty(pageable);
-        };
-
+        Page<Trip> trips = findVisibleTrips(
+                user, pageable, TripVisibilitySpecifications.withStatuses(statuses));
         loadStopsForPage(trips);
         return trips;
     }
@@ -142,24 +136,37 @@ public class TripSecurityServiceImpl implements TripSecurityService {
         }
     }
 
+    private Page<Trip> findVisibleTrips(
+            User user, Pageable pageable, Specification<Trip> additionalFilters) {
+        List<Long> companyIds = user.getRole() == User.Role.FLEET_OWNER
+                ? fleetOwnerHistoryScope.getApprovedCompanyIds(user)
+                : List.of();
+        Specification<Trip> specification = TripVisibilitySpecifications.callerScope(user, companyIds)
+                .and(additionalFilters);
+        if (user.getRole() == User.Role.DRIVER || user.getRole() == User.Role.FLEET_OWNER) {
+            long historyDays = user.getRole() == User.Role.DRIVER
+                    ? visibilityProperties.getDriverHistoryDays()
+                    : visibilityProperties.getCarrierHistoryDays();
+            specification = specification.and(
+                    TripVisibilitySpecifications.withinHistoryWindow(historyDays, LocalDateTime.now()));
+        }
+        return tripRepository.findAll(specification, pageable);
+    }
+
     @Override
     @Transactional(readOnly = true)
     public Page<Trip> getAuthorizedTripsByDateRange(User user, LocalDateTime startDate, 
                                                    LocalDateTime endDate, Pageable pageable) {
         log.debug("Getting authorized trips between {} and {} for user {}", startDate, endDate, user.getId());
 
-        Page<Trip> trips = switch (user.getRole()) {
-            case ADMIN -> tripRepository.findByStartTimeBetween(startDate, endDate, pageable);
-            case DRIVER -> tripRepository.findByDriverIdAndStartTimeBetween(user.getId(), startDate, endDate, pageable);
-            case SHIPPER -> tripRepository.findByShipperIdAndStartTimeBetween(user.getId(), startDate, endDate, pageable);
-            case FLEET_OWNER -> Page.empty();
-        };
-
+        Page<Trip> trips = findVisibleTrips(user, pageable,
+                TripVisibilitySpecifications.startedBetween(startDate, endDate));
         log.debug("Found {} trips in date range for user {}", trips.getTotalElements(), user.getId());
         return trips;
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Page<Trip> getDriverActiveTrips(Long driverId, User user, Pageable pageable) {
         log.debug("Getting active trips for driver {} requested by user {}", driverId, user.getId());
 
@@ -169,7 +176,13 @@ public class TripSecurityServiceImpl implements TripSecurityService {
             return Page.empty(pageable);
         }
 
-        Page<Trip> trips = tripRepository.findByDriverIdAndTripStatus(driverId, Trip.TripStatus.ONGOING, pageable);
+        Specification<Trip> specification = TripVisibilitySpecifications.driverScope(driverId)
+                .and(TripVisibilitySpecifications.withStatus(Trip.TripStatus.ONGOING));
+        if (user.getRole() == User.Role.DRIVER) {
+            specification = specification.and(TripVisibilitySpecifications.withinHistoryWindow(
+                    visibilityProperties.getDriverHistoryDays(), LocalDateTime.now()));
+        }
+        Page<Trip> trips = tripRepository.findAll(specification, pageable);
         log.debug("Found {} active trips for driver {}", trips.getTotalElements(), driverId);
         return trips;
     }
@@ -227,6 +240,7 @@ public class TripSecurityServiceImpl implements TripSecurityService {
 
         // Apply search filters
         List<Trip> filteredTrips = allTrips.stream()
+                .filter(trip -> hasHistoricalAccess(trip, user))
                 .filter(trip -> matchesSearchCriteria(trip, criteria))
                 .collect(Collectors.toList());
 
@@ -254,6 +268,10 @@ public class TripSecurityServiceImpl implements TripSecurityService {
         }
 
         Trip trip = tripOpt.get();
+        if (!hasHistoricalAccess(trip, user)) {
+            return new TripAccessValidation(
+                    tripId, false, accessType, "Historical access window expired", List.of(), null);
+        }
         boolean hasAccess = false;
         List<String> permissions = new ArrayList<>();
         User.Role requiredRole = null;
@@ -293,11 +311,15 @@ public class TripSecurityServiceImpl implements TripSecurityService {
                 }
             }
             case FLEET_OWNER -> {
-                // Fleet owners can access trips for their fleet vehicles
-                // For now, implement similar to shipper (read-only access)
-                hasAccess = accessType == AccessType.READ;
-                permissions.add("READ");
-                reason = hasAccess ? "Fleet owner access" : "Fleet owners have read-only access";
+                List<Long> companyIds = fleetOwnerHistoryScope.getApprovedCompanyIds(user);
+                hasAccess = accessType == AccessType.READ && !companyIds.isEmpty()
+                        && tripRepository.findByIdAndCarrierCompanyIds(tripId, companyIds).isPresent();
+                if (hasAccess) {
+                    permissions.add("READ");
+                }
+                reason = hasAccess
+                        ? "Active membership in an approved carrier company"
+                        : "No approved company membership for this trip";
             }
         }
 
@@ -306,19 +328,18 @@ public class TripSecurityServiceImpl implements TripSecurityService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Page<Trip> getTripsRequiringAttention(User user, Pageable pageable) {
         log.debug("Getting trips requiring attention for user {} (role: {})", user.getId(), user.getRole());
 
         // Base criteria for attention: overdue trips, stuck trips, etc.
         LocalDateTime overdueThreshold = LocalDateTime.now().minusHours(48);
 
-        Page<Trip> trips = switch (user.getRole()) {
-            case ADMIN -> tripRepository.findTripsRequiringAdminAttention(overdueThreshold, pageable);
-            case DRIVER -> tripRepository.findDriverTripsRequiringAttention(user.getId(), overdueThreshold, pageable);
-            case SHIPPER -> tripRepository.findShipperTripsRequiringAttention(user.getId(), overdueThreshold, pageable);
-            case FLEET_OWNER -> Page.empty();
-        };
-
+        if (user.getRole() == User.Role.FLEET_OWNER) {
+            return Page.empty(pageable);
+        }
+        Page<Trip> trips = findVisibleTrips(user, pageable,
+                TripVisibilitySpecifications.startedBefore(overdueThreshold));
         log.debug("Found {} trips requiring attention for user {}", trips.getTotalElements(), user.getId());
         return trips;
     }
@@ -339,6 +360,7 @@ public class TripSecurityServiceImpl implements TripSecurityService {
             case FLEET_OWNER -> Collections.emptyList();
         };
 
+        trips = trips.stream().filter(trip -> hasHistoricalAccess(trip, user)).toList();
         return calculateTripAnalytics(trips, user);
     }
 
@@ -352,6 +374,42 @@ public class TripSecurityServiceImpl implements TripSecurityService {
     }
 
     // ── Private Helper Methods ───────────────────────────────────────────────
+
+    private boolean hasHistoricalAccess(Trip trip, User user) {
+        if (user.getRole() != User.Role.DRIVER && user.getRole() != User.Role.FLEET_OWNER) {
+            return true;
+        }
+
+        Booking booking = trip.getBooking();
+        Freight freight = booking == null ? null : booking.getCargoRequest();
+        if (trip.getTripStatus() == Trip.TripStatus.COMPLETED && trip.getEndTime() == null) {
+            return false;
+        }
+        LocalDateTime terminalAt = null;
+        if (freight != null && freight.getStatus() == Freight.FreightStatus.CANCELLED) {
+            terminalAt = freight.getUpdatedAt();
+        } else if (trip.getTripStatus() == Trip.TripStatus.COMPLETED) {
+            terminalAt = trip.getEndTime();
+        } else if (booking != null && (booking.getBookingStatus() == Booking.BookingStatus.CANCELLED
+                || booking.getBookingStatus() == Booking.BookingStatus.COMPLETED)) {
+            terminalAt = booking.getUpdatedAt();
+        } else if (freight != null && freight.getStatus() == Freight.FreightStatus.COMPLETED) {
+            terminalAt = freight.getUpdatedAt();
+        } else {
+            return true;
+        }
+        if (terminalAt == null) {
+            return false;
+        }
+
+        long historyDays = user.getRole() == User.Role.DRIVER
+                ? visibilityProperties.getDriverHistoryDays()
+                : visibilityProperties.getCarrierHistoryDays();
+        LocalDateTime now = LocalDateTime.now();
+        return historyDays > 0
+                && !terminalAt.isAfter(now)
+                && !terminalAt.isBefore(now.minusDays(historyDays));
+    }
 
     private boolean hasShipperAccess(Trip trip, Long shipperId) {
         // Check if shipper is the primary cargo owner

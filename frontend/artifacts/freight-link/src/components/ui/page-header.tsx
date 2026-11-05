@@ -10,16 +10,26 @@ type Props = {
 
 export function PageHeader({ title, breadcrumbs, actions }: Props) {
   return (
-    <div className="flex items-start justify-between mb-6">
-      <div>
+    <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
+      <div className="min-w-0">
         {breadcrumbs && breadcrumbs.length > 0 && (
-          <nav className="flex items-center gap-1 mb-1.5">
+          <nav aria-label="Breadcrumb" className="mb-1.5 flex flex-wrap items-center gap-1">
             {breadcrumbs.map((crumb, idx) => (
               <span key={idx} className="flex items-center gap-1">
-                {idx > 0 && <ChevronRight size={12} color="#B4C4B4" />}
+                {idx > 0 && (
+                  <ChevronRight
+                    aria-hidden="true"
+                    size={12}
+                    className="text-muted-foreground/60"
+                  />
+                )}
                 <span
-                  className="text-xs font-medium"
-                  style={{ color: idx === breadcrumbs.length - 1 ? '#0F3D1A' : '#8FA893' }}
+                  aria-current={idx === breadcrumbs.length - 1 ? "page" : undefined}
+                  className={
+                    idx === breadcrumbs.length - 1
+                      ? "text-caption font-label text-foreground"
+                      : "text-caption font-medium text-muted-foreground"
+                  }
                 >
                   {crumb.label}
                 </span>
@@ -27,12 +37,16 @@ export function PageHeader({ title, breadcrumbs, actions }: Props) {
             ))}
           </nav>
         )}
-        <h1 className="text-xl font-bold" style={{ color: '#0D1F12' }}>
+        <h1 className="text-page-title font-heading tracking-tight text-foreground">
           {title}
         </h1>
       </div>
 
-      {actions && <div className="flex items-center gap-2 flex-shrink-0">{actions}</div>}
-    </div>
+      {actions && (
+        <div className="flex max-w-full shrink-0 flex-wrap items-center gap-2">
+          {actions}
+        </div>
+      )}
+    </header>
   );
 }

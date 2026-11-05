@@ -44,7 +44,7 @@ public class BidResponse {
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime counterAt;
 
-    // Cargo summary fields (for driver bid cards)
+    // Marketplace-safe cargo summary; private route and shipper fields stay unset.
     private String pickupLocation;
     private String destination;
     private String materialType;

@@ -100,6 +100,11 @@ public class CompanySecurityService {
                 || hasActiveRole(companyId, caller.getId(), CompanyRole.DISPATCHER);
     }
 
+    /** Dispatch writes require an operational role and an approved company. */
+    public boolean canOperateApprovedDispatch(Long companyId, Authentication auth) {
+        return canOperateDispatch(companyId, auth) && isApprovedCompany(companyId);
+    }
+
     /** Driver/vehicle assignments require an approved company and an operational role. */
     public boolean canOperateAssignments(Long companyId, Authentication auth) {
         return canOperateDispatch(companyId, auth) && isApprovedCompany(companyId);

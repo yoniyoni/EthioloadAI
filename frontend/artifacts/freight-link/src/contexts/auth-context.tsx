@@ -1,6 +1,7 @@
 ﻿import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from "react";
 import { useRef } from "react";
 import { api, auth, ApiError, getToken } from "@/lib/api";
+import { getLoginRedirect } from "@/lib/auth-redirect";
 import { queryClient } from "@/lib/query-client";
 import { pendingInvitation } from "@/lib/invitation-session";
 export interface User {
@@ -8,11 +9,11 @@ export interface User {
   isVerified?: boolean; avatarUrl?: string | null; address?: string | null;
   businessName?: string | null; preferredLanguage?: string; createdAt?: string; updatedAt?: string;
 }
-export interface Membership { id: number; carrierCompanyId: number; role: string; status: string }
+export interface Membership { id: number; carrierCompanyId: number; companyName?: string; role: string; status: string }
 interface AuthContextType {
   user: User | null; token: string | null; isAuthenticated: boolean; isLoading: boolean;
   memberships: Membership[]; refreshMemberships: () => Promise<void>;
-  membershipError: string;
+  membershipError: string; membershipRevalidating: boolean;
   login: (token: string, user: User) => void; logout: () => void;
 }
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,6 +29,7 @@ export function AuthProvider({children}: {children: ReactNode}) {
   const [memberships,setMemberships] = useState<Membership[]>([]);
   const [membershipLoading,setMembershipLoading] = useState(false);
   const [membershipError,setMembershipError] = useState("");
+  const [membershipRevalidating,setMembershipRevalidating] = useState(false);
   const membershipRequest = useRef(0);
   const membershipReady = useRef(false);
   const refreshMemberships = useCallback(async () => {
@@ -35,6 +37,7 @@ export function AuthProvider({children}: {children: ReactNode}) {
     const request = ++membershipRequest.current;
     if (!currentToken) return;
     if (!membershipReady.current) setMembershipLoading(true);
+    else setMembershipRevalidating(true);
     setMembershipError("");
     try {
       const page = await api.get<{content:Membership[]}>("/company-memberships/me?size=100");
@@ -48,11 +51,14 @@ export function AuthProvider({children}: {children: ReactNode}) {
       }
       throw error;
     } finally {
-      if (request === membershipRequest.current) setMembershipLoading(false);
+      if (request === membershipRequest.current) {
+        setMembershipLoading(false);
+        setMembershipRevalidating(false);
+      }
     }
   },[]);
   const clear = useCallback(() => {
-    ++membershipRequest.current; membershipReady.current = false; setMembershipLoading(false); setMembershipError("");
+    ++membershipRequest.current; membershipReady.current = false; setMembershipLoading(false); setMembershipRevalidating(false); setMembershipError("");
     localStorage.removeItem(AUTH_KEY); queryClient.clear(); setUser(null); setToken(null); setMemberships([]);
   },[]);
   useEffect(()=>{
@@ -74,6 +80,7 @@ export function AuthProvider({children}: {children: ReactNode}) {
   },[clear,refreshMemberships]);
   const login=(nextToken:string,raw:User)=>{
     membershipReady.current = false;
+    setMembershipRevalidating(false);
     const current=normalize(raw);
     localStorage.setItem(AUTH_KEY,JSON.stringify({token:nextToken,user:current}));
     queryClient.clear();setUser(current);setToken(nextToken);setMemberships([]);setLoading(false);
@@ -81,7 +88,14 @@ export function AuthProvider({children}: {children: ReactNode}) {
   };
   const logout=()=>{ void auth.post("/auth/logout",{}).catch(()=>{});clear(); };
   useEffect(()=>{
-    const handle=()=>{clear();window.location.replace(pendingInvitation()?"/login?invitation=1":"/login");};
+    const handle=()=>{
+      const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      const loginPath = getLoginRedirect(returnTo);
+      clear();
+      window.location.replace(pendingInvitation()
+        ? `${loginPath}${loginPath.includes("?") ? "&" : "?"}invitation=1`
+        : loginPath);
+    };
     window.addEventListener("freightlink:unauthorized",handle);
     return ()=>window.removeEventListener("freightlink:unauthorized",handle);
   },[clear]);
@@ -91,6 +105,6 @@ export function AuthProvider({children}: {children: ReactNode}) {
     window.addEventListener("focus",reload);
     return ()=>window.removeEventListener("focus",reload);
   },[token,refreshMemberships]);
-  return <AuthContext.Provider value={{user,token,isAuthenticated:!!user && !!token,isLoading:isLoading || membershipLoading,memberships,membershipError,refreshMemberships,login,logout}}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{user,token,isAuthenticated:!!user && !!token,isLoading:isLoading || membershipLoading,memberships,membershipError,membershipRevalidating,refreshMemberships,login,logout}}>{children}</AuthContext.Provider>;
 }
 export function useAuth(){const context=useContext(AuthContext);if(!context)throw new Error("useAuth requires AuthProvider");return context;}

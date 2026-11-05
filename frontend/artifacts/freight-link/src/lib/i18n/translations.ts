@@ -5,6 +5,12 @@ export const translations: Record<Lang, Record<string, string>> = {
     // Navigation
     "nav.dashboard": "Dashboard",
     "nav.freight": "Freight",
+    "nav.marketplace": "Freight Marketplace",
+    "nav.section.explore": "Explore",
+    "nav.section.workspace": "Workspace",
+    "nav.section.operations": "Operations",
+    "nav.section.administration": "Administration",
+    "nav.section.account": "Account",
     "nav.drivers": "Drivers",
     "nav.vehicles": "My Vehicles",
     "nav.admin": "Admin",
@@ -15,11 +21,12 @@ export const translations: Record<Lang, Record<string, string>> = {
     "nav.back": "Back",
     "nav.backHome": "Back to home",
     "nav.backFreight": "Back to Freight",
+    "nav.history": "History",
 
     // Home
     "home.title": "The Smart Way to Move Cargo Across Ethiopia",
     "home.subtitle": "Connect with verified drivers, track shipments in real-time, and get AI-powered pricing for every load.",
-    "home.verifiedDrivers": "12,000+ verified drivers",
+    "home.verifiedDrivers": "Verified drivers",
     "home.gpsTracking": "Real-time GPS tracking",
     "home.aiPricing": "AI-powered price matching",
     "home.escrow": "Secure payments & escrow",
@@ -29,12 +36,13 @@ export const translations: Record<Lang, Record<string, string>> = {
     "home.step3": "Track delivery live",
     "home.step4": "Pay securely via escrow",
     "home.ctaTitle": "Ready to move your cargo?",
-    "home.ctaSubtitle": "Join thousands of shippers and drivers using Ethio-Freight Ethiopia.",
+    "home.ctaSubtitle": "Coordinate freight through the Ethio-Freight workspace.",
     "home.getStarted": "Get Started",
 
     // Freight
     "freight.title": "Freight Exchange",
     "freight.subtitle": "Browse and apply for freight loads",
+    "freight.totalPosts": "Total Freight Posted",
     "freight.search": "Search by location, cargo type...",
     "freight.allStatuses": "All Statuses",
     "freight.allTypes": "All Types",
@@ -66,6 +74,7 @@ export const translations: Record<Lang, Record<string, string>> = {
     "freight.create.volume": "Volume (m³)",
     "freight.create.description": "Cargo Description",
     "freight.create.budget": "Budget (ETB)",
+    "freight.create.budgetHelp": "Leave this blank to negotiate directly with carriers.",
     "freight.create.deadline": "Deadline",
     "freight.create.post": "Post Freight",
     "freight.create.posting": "Posting...",
@@ -80,6 +89,26 @@ export const translations: Record<Lang, Record<string, string>> = {
     "freight.create.aiVehicleTitle": "AI Vehicle Recommendation",
     "freight.create.aiRisk": "Risk",
     "freight.create.aiPriceHelp": "Enter weight and distance to get AI price prediction",
+    "dashboard.welcome": "Welcome back",
+    "dashboard.welcomeSubtitle": "Manage your freight and stay up to date on deliveries.",
+    "dashboard.myFreight": "My Freight",
+    "dashboard.totalFreightPostsHelp": "All your freight postings",
+    "dashboard.activeShipments": "Active Shipments",
+    "dashboard.activeShipmentsHelp": "Posted, matched, or on the way",
+    "dashboard.confirmedBookings": "Confirmed Bookings",
+    "dashboard.confirmedBookingsHelp": "Loads confirmed with a carrier",
+    "dashboard.completedDeliveries": "Completed Deliveries",
+    "dashboard.completedDeliveriesHelp": "Deliveries marked complete",
+    "dashboard.noFreightYet": "You haven't posted any freight yet.",
+    "dashboard.noFreightHelp": "Post a load to start connecting with carriers.",
+    "dashboard.noActiveShipments": "No freight is currently in progress.",
+    "dashboard.activeShipmentsEmptyHelp": "Once you post a load, you can monitor its progress here.",
+    "dashboard.recentActivity": "Recent Activity",
+    "dashboard.activityEmpty": "Booking and delivery updates will appear here as your freight moves.",
+    "dashboard.booking": "Booking",
+    "dashboard.delivery": "Delivery",
+    "dashboard.recentDeliveries": "Recent Deliveries",
+    "dashboard.deliveriesEmpty": "You don't have any completed deliveries yet.",
 
     // Freight Detail
     "freight.detail.pickup": "Pickup",
@@ -135,9 +164,6 @@ export const translations: Record<Lang, Record<string, string>> = {
     "auth.alreadyAccount": "Already have an account?",
     "auth.noAccount": "Don't have an account?",
     "auth.createOne": "Create one",
-    "auth.forgotPassword": "Forgot password?",
-    "auth.demoAccounts": "DEMO ACCOUNTS",
-    "auth.orContinueWith": "Or continue with",
 
     // Chat
     "chat.title": "Ethio-Freight AI",
@@ -178,6 +204,7 @@ export const translations: Record<Lang, Record<string, string>> = {
     "common.retry": "Retry",
     "common.goBack": "Go back",
     "common.viewAll": "View all",
+    "common.optional": "optional",
     "common.showMore": "Show more",
     "common.showLess": "Show less",
 
@@ -193,6 +220,12 @@ export const translations: Record<Lang, Record<string, string>> = {
     // Navigation
     "nav.dashboard": "ዳሽቦርድ",
     "nav.freight": "ጭነት",
+    "nav.marketplace": "የጭነት ገበያ",
+    "nav.section.explore": "አስስ",
+    "nav.section.workspace": "የስራ ቦታ",
+    "nav.section.operations": "ስራዎች",
+    "nav.section.administration": "አስተዳደር",
+    "nav.section.account": "መለያ",
     "nav.drivers": "አሽከርካሪዎች",
     "nav.vehicles": "ተሽከርካሪዬን",
     "nav.admin": "አስተዳዳሪ",
@@ -207,7 +240,7 @@ export const translations: Record<Lang, Record<string, string>> = {
     // Home
     "home.title": "በኢትዮጵያ ጭነትን ለማንቀሳቀስ ብልህ መንገድ",
     "home.subtitle": "ከተረጋገጡ አሽከርካሪዎች ጋር ይገናኙ፣ በቀጥታ GPS ጭነትን ይከታተሉ፣ እና ለእያንዳንዱ ጭነት በAI የተሟላ ዋጋ ያግኙ።",
-    "home.verifiedDrivers": "12,000+ የተረጋገጡ አሽከርካሪዎች",
+    "home.verifiedDrivers": "የተረጋገጡ አሽከርካሪዎች",
     "home.gpsTracking": "በቀጥታ GPS መከታተያ",
     "home.aiPricing": "በAI የተሟላ ዋጋ ማዋሀድ",
     "home.escrow": "ደህንነቱ የተጠበቅ ክፍያ እና ኢስክሮ",
@@ -217,7 +250,7 @@ export const translations: Record<Lang, Record<string, string>> = {
     "home.step3": "ማድረስ በቀጥታ ይከታተሉ",
     "home.step4": "በኢስክሮ በደህና ይክፈሉ",
     "home.ctaTitle": "ጭነትዎን ለማንቀሳቀስ ዝግጁ ነዎት?",
-    "home.ctaSubtitle": "ከሺህዎች የEthio-Freight ኢትዮጵያን የሚጠቀሙ ጭነት ሰጪዎች እና አሽከርካሪዎች ጋር ይቀላቀሉ።",
+    "home.ctaSubtitle": "በEthio-Freight የጭነት ስራዎችን ያስተባብሩ።",
     "home.getStarted": "ይጀምሩ",
 
     // Freight
@@ -254,6 +287,7 @@ export const translations: Record<Lang, Record<string, string>> = {
     "freight.create.volume": "መጠን (ካ.ሜ)",
     "freight.create.description": "የጭነት መግለጫ",
     "freight.create.budget": "በጀት (ብር)",
+    "freight.create.budgetHelp": "ከአጓጓዦች ጋር ለመደራደር ባዶውን ይተዉት።",
     "freight.create.deadline": "የሚያበቃበት ቀን",
     "freight.create.post": "ጭነት ይለጥፉ",
     "freight.create.posting": "በመለጠፍ ላይ...",
@@ -323,9 +357,6 @@ export const translations: Record<Lang, Record<string, string>> = {
     "auth.alreadyAccount": "አስቀድሞ መለያ አለዎት?",
     "auth.noAccount": "መለያ የሎትም?",
     "auth.createOne": "አዲስ ይፍጠሩ",
-    "auth.forgotPassword": "የይለፍ ቃልዎን ረሱ?",
-    "auth.demoAccounts": "የሙከራ መለያዎች",
-    "auth.orContinueWith": "ወይም ይቀጥሉ",
 
     // Chat
     "chat.title": "Ethio-Freight AI",
@@ -366,6 +397,7 @@ export const translations: Record<Lang, Record<string, string>> = {
     "common.retry": "እንደገና ይሞክሩ",
     "common.goBack": "ተመለስ",
     "common.viewAll": "ሁሉን ይመልከቱ",
+    "common.optional": "አማራጭ",
     "common.showMore": "ተጨማሪ ይመልከቱ",
     "common.showLess": "ትንሽ ይመልከቱ",
 
@@ -381,6 +413,12 @@ export const translations: Record<Lang, Record<string, string>> = {
     // Navigation
     "nav.dashboard": "Dashboorii",
     "nav.freight": "Qabeenya",
+    "nav.marketplace": "Gabaa fe'umsaa",
+    "nav.section.explore": "Sakatta'i",
+    "nav.section.workspace": "Bakka hojii",
+    "nav.section.operations": "Hojiiwwan",
+    "nav.section.administration": "Bulchiinsa",
+    "nav.section.account": "Herrega",
     "nav.drivers": "Konkolataa",
     "nav.vehicles": "Konkolaataa Koo",
     "nav.admin": "Bulchaa",
@@ -395,7 +433,7 @@ export const translations: Record<Lang, Record<string, string>> = {
     // Home
     "home.title": "Karaa Qabeenya Itoophiyaa Geesuuf",
     "home.subtitle": "Waliin konkolataa mirkaneessaa, GPS fayyadamiin qabeenya hordofi, AI fayyadamiin gatii argadhu.",
-    "home.verifiedDrivers": "Konkolataa 12,000+",
+    "home.verifiedDrivers": "Konkolataa mirkaneeffaman",
     "home.gpsTracking": "GPS fayyadamiin hordoffii",
     "home.aiPricing": "AI gatii michuumsa",
     "home.escrow": "Kaffaltii nageenya qabu",
@@ -405,7 +443,7 @@ export const translations: Record<Lang, Record<string, string>> = {
     "home.step3": "Qabeenya ilaali",
     "home.step4": "Kaffaltii escrow fayyadamiin kaffali",
     "home.ctaTitle": "Qabeenya geesuuf qophii dhuftaa?",
-    "home.ctaSubtitle": "Konkolataa fi qabeenya geesitoota waliin qabnee.",
+    "home.ctaSubtitle": "Hojii fe'umsa Ethio-Freight keessatti qindeessi.",
     "home.getStarted": "Jalqabi",
 
     // Freight
@@ -442,6 +480,7 @@ export const translations: Record<Lang, Record<string, string>> = {
     "freight.create.volume": "Hamma (m³)",
     "freight.create.description": "Ibsa Qabeenya",
     "freight.create.budget": "Bajata (Birr)",
+    "freight.create.budgetHelp": "Daldaltoota waliin mari'achuuf duwwaa dhiisi.",
     "freight.create.deadline": "Yeroo Xumuraa",
     "freight.create.post": "Qabeenya Maxxansi",
     "freight.create.posting": "Maxxansuuf...",
@@ -511,9 +550,6 @@ export const translations: Record<Lang, Record<string, string>> = {
     "auth.alreadyAccount": "Galmeen qabda?",
     "auth.noAccount": "Galmeen hin qabdu?",
     "auth.createOne": "Haaraa ijaadi",
-    "auth.forgotPassword": "Jecha darbii dagatte?",
-    "auth.demoAccounts": "GALMEE WALIIGALAA",
-    "auth.orContinueWith": "Yookaan itti fufi",
 
     // Chat
     "chat.title": "Ethio-Freight AI",
@@ -554,6 +590,7 @@ export const translations: Record<Lang, Record<string, string>> = {
     "common.retry": "Irra deebi'ii yaali",
     "common.goBack": "Deebi'i",
     "common.viewAll": "Hunduu Ilaali",
+    "common.optional": "filannoo",
     "common.showMore": "Dabalataa Ilaali",
     "common.showLess": "Xiqqaa Ilaali",
 
@@ -569,6 +606,12 @@ export const translations: Record<Lang, Record<string, string>> = {
     // Navigation
     "nav.dashboard": "Dashiborid",
     "nav.freight": "Freight",
+    "nav.marketplace": "Freight Marketplace",
+    "nav.section.explore": "ኣስስ",
+    "nav.section.workspace": "ቦታ ስራሕ",
+    "nav.section.operations": "ኣሰራርሓ",
+    "nav.section.administration": "ምምሕዳር",
+    "nav.section.account": "መለያ",
     "nav.drivers": "ሓkamቕ",
     "nav.vehicles": "ማሽነነ",
     "nav.admin": "Admin",
@@ -583,7 +626,7 @@ export const translations: Record<Lang, Record<string, string>> = {
     // Home
     "home.title": "Smart Way to Move Cargo Across Ethiopia",
     "home.subtitle": "Connect with verified drivers, track shipments in real-time, and get AI-powered pricing for every load.",
-    "home.verifiedDrivers": "12,000+ verified drivers",
+    "home.verifiedDrivers": "Verified drivers",
     "home.gpsTracking": "Real-time GPS tracking",
     "home.aiPricing": "AI-powered price matching",
     "home.escrow": "Secure payments & escrow",
@@ -593,7 +636,7 @@ export const translations: Record<Lang, Record<string, string>> = {
     "home.step3": "Track delivery live",
     "home.step4": "Pay securely via escrow",
     "home.ctaTitle": "Ready to move your cargo?",
-    "home.ctaSubtitle": "Join thousands of shippers and drivers using Ethio-Freight Ethiopia.",
+    "home.ctaSubtitle": "Coordinate freight through the Ethio-Freight workspace.",
     "home.getStarted": "Get Started",
 
     // Freight
@@ -630,6 +673,7 @@ export const translations: Record<Lang, Record<string, string>> = {
     "freight.create.volume": "Volume (m³)",
     "freight.create.description": "Cargo Description",
     "freight.create.budget": "Budget (ETB)",
+    "freight.create.budgetHelp": "Leave this blank to negotiate directly with carriers.",
     "freight.create.deadline": "Deadline",
     "freight.create.post": "Post Freight",
     "freight.create.posting": "Posting...",
@@ -699,9 +743,6 @@ export const translations: Record<Lang, Record<string, string>> = {
     "auth.alreadyAccount": "Already have an account?",
     "auth.noAccount": "Don't have an account?",
     "auth.createOne": "Create one",
-    "auth.forgotPassword": "Forgot password?",
-    "auth.demoAccounts": "DEMO ACCOUNTS",
-    "auth.orContinueWith": "Or continue with",
 
     // Chat
     "chat.title": "Ethio-Freight AI",
@@ -742,6 +783,7 @@ export const translations: Record<Lang, Record<string, string>> = {
     "common.retry": "Retry",
     "common.goBack": "Go back",
     "common.viewAll": "View all",
+    "common.optional": "optional",
     "common.showMore": "Show more",
     "common.showLess": "Show less",
 
@@ -755,5 +797,9 @@ export const translations: Record<Lang, Record<string, string>> = {
 };
 
 export function t(key: string, lang: Lang = "en"): string {
-  return translations[lang]?.[key] ?? translations["en"][key] ?? key;
+  const fallback = (key.split(".").pop() ?? key)
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b[a-z]/g, character => character.toUpperCase());
+  return translations[lang]?.[key] ?? translations["en"][key] ?? fallback;
 }

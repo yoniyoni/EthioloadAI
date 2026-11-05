@@ -8,8 +8,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Repository;
 import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
@@ -19,7 +21,15 @@ import java.util.Collection;
 import java.util.Optional;
 
 @Repository
-public interface BookingRepository extends JpaRepository<Booking, Long> {
+public interface BookingRepository extends JpaRepository<Booking, Long>, JpaSpecificationExecutor<Booking> {
+
+    @Override
+    @EntityGraph(attributePaths = {"cargoRequest", "vehicle", "driver", "bid", "trip"})
+    Page<Booking> findAll(Specification<Booking> specification, Pageable pageable);
+
+    @Override
+    @EntityGraph(attributePaths = {"cargoRequest", "vehicle", "driver", "bid", "trip"})
+    List<Booking> findAll(Specification<Booking> specification, org.springframework.data.domain.Sort sort);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT b FROM Booking b WHERE b.id = :bookingId")
@@ -88,6 +98,42 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
             @Param("shipperId") Long shipperId, Pageable pageable);
 
     Slice<BookingIdProjection> findPageIdsByDriver_Id(Long driverId, Pageable pageable);
+
+    @Query("SELECT b.id AS id FROM Booking b " +
+           "WHERE b.carrierCompanyId IN :companyIds " +
+           "OR (b.carrierCompanyId IS NULL AND (" +
+           "EXISTS (SELECT o.id FROM CarrierOffer o " +
+           "WHERE o.id = b.carrierOfferId AND o.status = 'ACCEPTED' " +
+           "AND o.carrierCompany.id IN :companyIds) " +
+           "OR (b.carrierOfferId IS NULL AND EXISTS (SELECT d.id FROM DispatchAssignment d " +
+           "WHERE d.id = b.dispatchAssignmentId AND d.carrierCompanyId IN :companyIds))))")
+    Slice<BookingIdProjection> findPageIdsByCarrierCompanyIds(
+            @Param("companyIds") Collection<Long> companyIds, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"cargoRequest", "vehicle", "driver", "bid"})
+    @Query("SELECT b FROM Booking b " +
+           "WHERE b.carrierCompanyId IN :companyIds " +
+           "OR (b.carrierCompanyId IS NULL AND (" +
+           "EXISTS (SELECT o.id FROM CarrierOffer o " +
+           "WHERE o.id = b.carrierOfferId AND o.status = 'ACCEPTED' " +
+           "AND o.carrierCompany.id IN :companyIds) " +
+           "OR (b.carrierOfferId IS NULL AND EXISTS (SELECT d.id FROM DispatchAssignment d " +
+           "WHERE d.id = b.dispatchAssignmentId AND d.carrierCompanyId IN :companyIds)))) " +
+           "ORDER BY b.createdAt DESC, b.id DESC")
+    List<Booking> findByCarrierCompanyIds(@Param("companyIds") Collection<Long> companyIds);
+
+    @Query("SELECT COUNT(b) > 0 FROM Booking b " +
+           "WHERE b.id = :bookingId AND (" +
+           "b.carrierCompanyId IN :companyIds " +
+           "OR (b.carrierCompanyId IS NULL AND (" +
+           "EXISTS (SELECT o.id FROM CarrierOffer o " +
+           "WHERE o.id = b.carrierOfferId AND o.status = 'ACCEPTED' " +
+           "AND o.carrierCompany.id IN :companyIds) " +
+           "OR (b.carrierOfferId IS NULL AND EXISTS (SELECT d.id FROM DispatchAssignment d " +
+           "WHERE d.id = b.dispatchAssignmentId AND d.carrierCompanyId IN :companyIds)))))")
+    boolean existsByIdAndCarrierCompanyIds(
+            @Param("bookingId") Long bookingId,
+            @Param("companyIds") Collection<Long> companyIds);
 
     @Query("SELECT b.id AS id FROM Booking b")
     Slice<BookingIdProjection> findAllPageIds(Pageable pageable);
@@ -266,6 +312,7 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
            "LEFT JOIN FETCH b.driver " +
            "LEFT JOIN FETCH b.vehicle " +
            "LEFT JOIN FETCH b.bid " +
+           "LEFT JOIN FETCH b.trip " +
            "WHERE b.id = :id")
     Optional<Booking> findByIdWithAssociations(@Param("id") Long id);
 

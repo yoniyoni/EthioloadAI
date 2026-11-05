@@ -97,7 +97,8 @@ public class TripController {
             return ResponseEntity.notFound().build();
         }
         
-        TripResponse response = tripMapper.toResponse(trip.get());
+        TripResponse response = tripMapper.toCallerResponse(
+                trip.get(), user.getRole() == User.Role.FLEET_OWNER);
         return ResponseEntity.ok(response);
     }
 
@@ -201,7 +202,8 @@ public class TripController {
             trips = tripSecurityService.getAuthorizedTrips(user, pageable);
         }
         
-        Page<TripResponse> response = trips.map(tripMapper::toResponse);
+        Page<TripResponse> response = trips.map(trip ->
+                tripMapper.toCallerResponse(trip, user.getRole() == User.Role.FLEET_OWNER));
         return ResponseEntity.ok(response);
     }
 

@@ -3,14 +3,23 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import { captureCursor, capturedMessage } from '../scripts/e2e-mail-capture.mjs';
 const mode=process.argv[2] || 'baseline';
 const root='local-run-checks/';
 const fixturePath=root+'onboarding-fixtures.json';
 const origin='http://localhost:5174';
 const stamp=String(Date.now());
-if(mode==='init' && fs.existsSync(fixturePath))fs.copyFileSync(fixturePath,root+'onboarding-fixtures-archive-'+stamp+'.json');
+if(mode==='init' && fs.existsSync(fixturePath)){
+ const previous=JSON.parse(fs.readFileSync(fixturePath));
+ delete previous.edgeTokens;
+ for(const value of Object.values(previous))if(value&&typeof value==='object')delete value.url;
+ fs.writeFileSync(root+'onboarding-fixtures-archive-'+stamp+'.json',JSON.stringify(previous));
+}
 const f=mode!=='init' && fs.existsSync(fixturePath)?JSON.parse(fs.readFileSync(fixturePath)): {stamp,password:crypto.randomBytes(18).toString('base64url')+'aA1!',users:{}};
-const save=()=>fs.writeFileSync(fixturePath,JSON.stringify(f));
+const legacyInvitationUrls=Object.fromEntries(Object.entries(f)
+ .filter(([,value])=>value && typeof value.url==='string')
+ .map(([name,value])=>[name,value.url]));
+const save=()=>{delete f.edgeTokens;for(const value of Object.values(f))if(value&&typeof value==='object')delete value.url;fs.writeFileSync(fixturePath,JSON.stringify(f));};
 const targets=await(await fetch('http://127.0.0.1:9232/json')).json();
 const ws=new WebSocket(targets.find(t=>t.type==='page').webSocketDebuggerUrl);
 await new Promise(r=>ws.onopen=r);
@@ -42,6 +51,7 @@ async function register(name,role='shipper') {
  f.users[name]={email,phone,session:await evaluate("JSON.parse(localStorage.getItem('freightlink_auth'))")};save();checks.push('Browser registration '+name);
 }
 async function api(path,body,method=body===undefined?'GET':'POST') {return evaluate(`(async()=>{const a=JSON.parse(localStorage.getItem('freightlink_auth')||'null');const r=await fetch('/api'+${JSON.stringify(path)},{method:${JSON.stringify(method)},headers:{'Content-Type':'application/json',...(a?{Authorization:'Bearer '+a.token}:{})},${body===undefined?'':`body:JSON.stringify(${JSON.stringify(body)}),`}});const text=await r.text();return {status:r.status,data:text?JSON.parse(text):null};})()`);}
+function invitationUrl(message){const url=message.text.match(/http[^\s]+\/invitations\/accept#token=[A-Za-z0-9_-]{43}/)?.[0];assert.ok(url?.startsWith(origin));return url;}
 async function company(name) {
  if(!f[name]?.id) {
  await go('/fleet/companies/new');await wait("!!document.querySelector('#companyName')",'Company registration accessible');
@@ -61,8 +71,8 @@ async function company(name) {
  checks.push('Company '+name+' DRAFT, three document uploads, PENDING; early invitations denied');return id;
 }
 async function approve(id,name){await login('admin');await go('/admin/companies');await wait(`document.body.innerText.includes('Onboarding ${name} ${f.stamp}')`);await evaluate(`([...document.querySelectorAll('button')].find(e=>e.textContent.includes('Onboarding ${name} ${f.stamp}'))).click()`);await wait("[...document.querySelectorAll('button')].some(e=>e.textContent==='Approve company' && !e.disabled)");await click('Download document');await click('Approve company');await wait("document.body.innerText.includes('Review saved')");checks.push('Admin browser document download and approval '+name);}
-async function invite(name,role){await login('owner');await go(`/company/${f.ABC.id}`);await wait("!!document.querySelector('#invite-email')");const email=f.users[name]?.email || `onboarding-${f.stamp}-${name}@example.test`;await fill('#invite-email',email);await fill('#invite-role',role);await click('Send invitation');await wait("document.body.innerText.includes('Invitation sent.')");const key=fs.readFileSync(root+'onboarding-mail-key','utf8').trim();const mail=(await(await fetch('http://127.0.0.1:12526/',{headers:{'X-Test-Key':key}})).json()).latest;assert.equal(mail.recipient,email);assert.ok(mail.subject.includes('Freight-Link'));assert.ok(mail.text.includes(role.replaceAll('_',' ')));const url=mail.text.match(/http[^\s]+\/invitations\/accept#token=[A-Za-z0-9_-]{43}/)?.[0];assert.ok(url?.startsWith(origin));f[name]={email,role,url};save();checks.push('Browser invitation and captured SMTP '+name);}
-async function accept(name,isNew){await clear();await go(f[name].url);await wait("!!document.querySelector('#invitation-password')");assert.equal(await evaluate("document.querySelector('#invited-email').value"),f[name].email);assert.equal(await evaluate("document.querySelector('#invited-email').readOnly"),true);assert.equal(await evaluate('location.hash'),'');await send('Page.reload');await pause(400);await wait("!!document.querySelector('#invitation-password')");if(isNew){await fill('#invitation-name','Onboarding '+name);const phone='+2519'+String((Number(f.stamp)+Object.keys(f.users).length)%100000000).padStart(8,'0');await fill('#invitation-phone',phone);await fill('#invitation-confirm-password',f.password);f.users[name]={email:f[name].email,phone};}await fill('#invitation-password',f.password);await evaluate("document.querySelector('main form').requestSubmit()");await wait(`location.pathname==='/company/${f.ABC.id}' && document.body.innerText.includes('${f[name].role.replaceAll('_',' ')}')`,'Invitation accepted '+name);f.users[name].session=await evaluate("JSON.parse(localStorage.getItem('freightlink_auth'))");save();assert.equal(await evaluate("sessionStorage.getItem('freightlink_pending_invitation')"),null);await send('Page.reload');await pause(400);await wait(`document.body.innerText.includes('${f[name].role.replaceAll('_',' ')}')`);await login(name);await wait(`document.body.innerText.includes('${f[name].role.replaceAll('_',' ')}')`,'Normal login resolves membership '+name);checks.push('Browser '+name+' '+(isNew?'account creation':'existing login')+', automatic acceptance, refresh, fresh login');}
+async function invite(name,role){await login('owner');await go(`/company/${f.ABC.id}`);await wait("!!document.querySelector('#invite-email')");const email=f.users[name]?.email || `onboarding-${f.stamp}-${name}@example.test`;await fill('#invite-email',email);await fill('#invite-role',role);const cursor=await captureCursor();await click('Send invitation');await wait("document.body.innerText.includes('Invitation sent.')");const mail=await capturedMessage(cursor,email);assert.ok(mail.subject.includes('Freight-Link'));assert.ok(mail.text.includes(role.replaceAll('_',' ')));invitationUrl(mail);f[name]={email,role,captureCursor:cursor,messageCursor:mail.cursor};save();checks.push('Browser invitation and captured SMTP '+name);}
+async function accept(name,isNew){await clear();const saved=f[name];const legacyUrl=legacyInvitationUrls[name];const mail=legacyUrl?null:await capturedMessage(saved.captureCursor,saved.email,saved.messageCursor);await go(legacyUrl||invitationUrl(mail));await wait("!!document.querySelector('#invitation-password')");assert.equal(await evaluate("document.querySelector('#invited-email').value"),f[name].email);assert.equal(await evaluate("document.querySelector('#invited-email').readOnly"),true);assert.equal(await evaluate('location.hash'),'');await send('Page.reload');await pause(400);await wait("!!document.querySelector('#invitation-password')");if(isNew){await fill('#invitation-name','Onboarding '+name);const phone='+2519'+String((Number(f.stamp)+Object.keys(f.users).length)%100000000).padStart(8,'0');await fill('#invitation-phone',phone);await fill('#invitation-confirm-password',f.password);f.users[name]={email:f[name].email,phone};}await fill('#invitation-password',f.password);await evaluate("document.querySelector('main form').requestSubmit()");await wait(`location.pathname==='/company/${f.ABC.id}' && document.body.innerText.includes('${f[name].role.replaceAll('_',' ')}')`,'Invitation accepted '+name);f.users[name].session=await evaluate("JSON.parse(localStorage.getItem('freightlink_auth'))");save();assert.equal(await evaluate("sessionStorage.getItem('freightlink_pending_invitation')"),null);await send('Page.reload');await pause(400);await wait(`document.body.innerText.includes('${f[name].role.replaceAll('_',' ')}')`);await login(name);await wait(`document.body.innerText.includes('${f[name].role.replaceAll('_',' ')}')`,'Normal login resolves membership '+name);checks.push('Browser '+name+' '+(isNew?'account creation':'existing login')+', automatic acceptance, refresh, fresh login');}
 await send('Runtime.enable');await send('Page.enable');await send('Network.enable');
 try {
  if(mode==='init') {save();checks.push('Fresh isolated audit fixture initialized');}

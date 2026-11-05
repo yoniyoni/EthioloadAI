@@ -77,6 +77,7 @@ class DashboardSummaryIntegrationTest {
                 .andExpect(jsonPath("$.totalBookings").value(0))
                 .andExpect(jsonPath("$.pendingBookings").value(0))
                 .andExpect(jsonPath("$.activeBookings").value(0))
+                .andExpect(jsonPath("$.confirmedBookings").value(0))
                 .andExpect(jsonPath("$.activeTrips").value(0))
                 .andExpect(jsonPath("$.recentBookings.length()").value(0))
                 .andExpect(jsonPath("$.recentTrips.length()").value(0));
@@ -119,6 +120,7 @@ class DashboardSummaryIntegrationTest {
         mvc.perform(get("/dashboard/summary").header("Authorization", bearer(shipper)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.activeBookings").value(2))
+                .andExpect(jsonPath("$.confirmedBookings").value(1))
                 .andExpect(jsonPath("$.activeTrips").value(2))
                 .andExpect(jsonPath("$.recentBookings.length()").value(3))
                 .andExpect(jsonPath("$.recentBookings[0].id").value(bookings.get(3).getId()))
@@ -147,13 +149,15 @@ class DashboardSummaryIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalBookings").value(4))
                 .andExpect(jsonPath("$.pendingBookings").value(1))
-                .andExpect(jsonPath("$.activeBookings").value(2));
+                .andExpect(jsonPath("$.activeBookings").value(2))
+                .andExpect(jsonPath("$.confirmedBookings").value(1));
 
         mvc.perform(get("/dashboard/summary").header("Authorization", bearer(user(User.Role.ADMIN))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalBookings").value(0))
                 .andExpect(jsonPath("$.pendingBookings").value(0))
-                .andExpect(jsonPath("$.activeBookings").value(0));
+                .andExpect(jsonPath("$.activeBookings").value(0))
+                .andExpect(jsonPath("$.confirmedBookings").value(0));
     }
 
     @Test

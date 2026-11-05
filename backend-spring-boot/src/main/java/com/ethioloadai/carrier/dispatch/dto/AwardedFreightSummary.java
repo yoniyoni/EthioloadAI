@@ -15,6 +15,7 @@ import java.time.LocalDateTime;
 public class AwardedFreightSummary {
 
     private Long freightId;
+    private Long carrierCompanyId;
     private String pickupLocation;
     private String destination;
     private String materialType;

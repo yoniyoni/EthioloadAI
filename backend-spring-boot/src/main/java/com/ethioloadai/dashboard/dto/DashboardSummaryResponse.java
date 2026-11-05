@@ -10,6 +10,7 @@ public record DashboardSummaryResponse(
         long completedFreight,
         long cancelledFreight,
         long activeBookings,
+        long confirmedBookings,
         long activeTrips,
         List<FreightResponse> recentFreight,
         List<FreightResponse> recentOperationalFreight,

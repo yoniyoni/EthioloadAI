@@ -63,7 +63,7 @@ class AdminBookingServiceTest {
 
     @BeforeEach
     void setUp() {
-        bookingService = new BookingServiceImpl(null, bookingRepository, null, commissionService);
+        bookingService = new BookingServiceImpl(null, bookingRepository, null, commissionService, null, null);
         paymentService = new PaymentServiceImpl(paymentRepository, bookingRepository, commissionService, entityManager);
 
         admin = User.builder().id(99L).fullName("System Admin").role(Role.ADMIN).phone("+251911000000").build();

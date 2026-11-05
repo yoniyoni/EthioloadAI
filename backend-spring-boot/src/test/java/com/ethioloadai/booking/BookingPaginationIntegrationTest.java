@@ -153,7 +153,7 @@ class BookingPaginationIntegrationTest {
     }
 
     @Test
-    void fleetOwnerPagePreservesLegacySelfAsDriverPredicate() throws Exception {
+    void fleetOwnerPageExcludesLegacyBookingsWithoutCompanyOwnership() throws Exception {
         User fleetOwner = user(User.Role.FLEET_OWNER);
         User fleetDriver = user(User.Role.DRIVER);
         Vehicle ownerVehicle = vehicle(fleetOwner);
@@ -164,8 +164,9 @@ class BookingPaginationIntegrationTest {
 
         mvc.perform(get("/bookings/page").header("Authorization", bearer(fleetOwner)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content.length()").value(1))
-                .andExpect(jsonPath("$.content[0].id").value(directlyAssigned.getId()));
+                .andExpect(jsonPath("$.content.length()").value(0))
+                .andExpect(jsonPath("$.hasNext").value(false));
+        assertThat(directlyAssigned.getId()).isNotNull();
     }
 
     @Test

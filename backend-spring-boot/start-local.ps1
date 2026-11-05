@@ -1,10 +1,12 @@
 [CmdletBinding()]
 param(
-    [switch]$UseJar
+    [switch]$UseJar,
+    [string]$ShutdownEventName
 )
 
 $ErrorActionPreference = 'Stop'
 $backendDirectory = $PSScriptRoot
+. (Join-Path $backendDirectory '..\scripts\dev-process-job.ps1')
 $dotenvPath = Join-Path $backendDirectory '.env'
 if (-not (Test-Path -LiteralPath $dotenvPath -PathType Leaf)) {
     throw 'Create backend-spring-boot/.env with your database connection settings first.'
@@ -102,14 +104,43 @@ else {
 Write-Host 'Starting the backend with the database settings saved in .env.'
 $backendProcess = New-Object System.Diagnostics.Process
 $backendProcess.StartInfo = $backendStartInfo
+$backendJob = New-DevProcessJob
+$shutdownEvent = $null
+$shutdownHandled = $false
+if (-not [string]::IsNullOrWhiteSpace($ShutdownEventName)) {
+    $createdNew = $false
+    $shutdownEvent = [System.Threading.EventWaitHandle]::new(
+        $false, [System.Threading.EventResetMode]::ManualReset, $ShutdownEventName, [ref]$createdNew
+    )
+    if (-not $createdNew) {
+        $backendJob.Dispose()
+        $shutdownEvent.Dispose()
+        throw 'The backend shutdown event name is already in use.'
+    }
+}
 try {
     [void]$backendProcess.Start()
+    try {
+        $backendJob.Assign($backendProcess.Id)
+    }
+    catch {
+        if (-not $backendProcess.HasExited) {
+            $backendProcess.Kill()
+            $backendProcess.WaitForExit()
+        }
+        throw
+    }
     # Keep both pipes draining concurrently, including when the caller redirects
     # this script's output to a log file. Merge stderr into the output stream so
     # ordinary Maven diagnostics do not become terminating PowerShell errors.
     $stdoutRead = $backendProcess.StandardOutput.ReadLineAsync()
     $stderrRead = $backendProcess.StandardError.ReadLineAsync()
     while ($null -ne $stdoutRead -or $null -ne $stderrRead) {
+        if ($shutdownEvent -and -not $shutdownHandled -and $shutdownEvent.WaitOne(0)) {
+            $shutdownHandled = $true
+            Write-Host 'Stopping the owned Maven/Java process job.'
+            $backendJob.Terminate(1)
+        }
         if ($null -ne $stdoutRead -and $stdoutRead.IsCompleted) {
             $outputLine = $stdoutRead.GetAwaiter().GetResult()
             if ($null -eq $outputLine) {
@@ -143,5 +174,9 @@ try {
 }
 finally {
     $backendProcess.Dispose()
+    if ($shutdownEvent) {
+        $shutdownEvent.Dispose()
+    }
+    $backendJob.Dispose()
 }
 exit $backendExitCode

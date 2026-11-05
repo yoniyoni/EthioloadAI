@@ -42,6 +42,7 @@ class DemoAccountBootstrapTest {
         encoder = new BCryptPasswordEncoder();
         environment = new MockEnvironment();
         environment.setActiveProfiles("e2e");
+        environment.setProperty("e2e.datasource.mode", "host-loopback");
         usersByEmail = new HashMap<>();
         usersByPhone = new HashMap<>();
         ids = new AtomicLong();
@@ -89,6 +90,43 @@ class DemoAccountBootstrapTest {
         assertAccount("bekele@driver.et", "+251911000013", User.Role.DRIVER,
                 false, false, driverPassword);
         verify(users, times(3)).saveAndFlush(any(User.class));
+    }
+
+    @Test
+    void skipsOptionalAccountsWhenTheirPasswordsAreBlank() {
+        DemoAccountBootstrap withoutOptionalAccounts = new DemoAccountBootstrap(
+                users, encoder, DemoAccountBootstrap.ALLOWED_E2E_DATASOURCE_URL,
+                environment, adminPassword, false, " ", "");
+
+        withoutOptionalAccounts.run(null);
+
+        verify(users).saveAndFlush(any(User.class));
+        verify(users, never()).findByEmail("tigist@shipper.et");
+        verify(users, never()).findByPhone("+251911000012");
+        verify(users, never()).findByEmail("bekele@driver.et");
+        verify(users, never()).findByPhone("+251911000013");
+    }
+
+    @Test
+    void rerunningConfiguredAccountsDoesNotCreateDuplicatesOrChangeEligibility() {
+        String shipperPassword = UUID.randomUUID().toString();
+        String driverPassword = UUID.randomUUID().toString();
+        DemoAccountBootstrap configured = new DemoAccountBootstrap(
+                users, encoder, DemoAccountBootstrap.ALLOWED_E2E_DATASOURCE_URL,
+                environment, adminPassword, false, shipperPassword, driverPassword);
+
+        configured.run(null);
+        configured.run(null);
+
+        assertAccount("admin@freightlink.et", "+251911000001", User.Role.ADMIN,
+                true, true, adminPassword);
+        assertAccount("tigist@shipper.et", "+251911000012", User.Role.SHIPPER,
+                true, true, shipperPassword);
+        assertAccount("bekele@driver.et", "+251911000013", User.Role.DRIVER,
+                false, false, driverPassword);
+        verify(users, times(3)).saveAndFlush(any(User.class));
+        verify(users, never()).updateBootstrapAccountPassword(
+                any(), anyString(), anyString(), any(User.Role.class), anyString());
     }
 
     @Test
@@ -397,6 +435,7 @@ class DemoAccountBootstrapTest {
                 DemoAccountBootstrap.class.getAnnotation(ConditionalOnProperty.class);
         assertThat(condition.name()).containsExactly("app.demo-seed.enabled");
         assertThat(condition.havingValue()).isEqualTo("true");
+        assertThat(condition.matchIfMissing()).isFalse();
         var constructor = DemoAccountBootstrap.class.getDeclaredConstructor(
                 UserRepository.class,
                 PasswordEncoder.class,
@@ -422,6 +461,7 @@ class DemoAccountBootstrapTest {
     void e2eTargetIsAcceptedOnlyForTheE2eProfile() {
         MockEnvironment e2eEnvironment = new MockEnvironment();
         e2eEnvironment.setActiveProfiles("e2e");
+        e2eEnvironment.setProperty("e2e.datasource.mode", "host-loopback");
         assertThat(DemoAccountBootstrap.ALLOWED_E2E_DATASOURCE_URL)
                 .isEqualTo("jdbc:postgresql://127.0.0.1:15433/ethioloadai_e2e");
         DemoAccountBootstrap e2e = new DemoAccountBootstrap(
@@ -434,18 +474,90 @@ class DemoAccountBootstrapTest {
     }
 
     @Test
+    void acceptsTheExactDockerNetworkE2eDatasource() {
+        MockEnvironment e2eEnvironment = new MockEnvironment();
+        e2eEnvironment.setActiveProfiles("e2e");
+        e2eEnvironment.setProperty("e2e.datasource.mode", "docker-network");
+        DemoAccountBootstrap e2e = new DemoAccountBootstrap(
+                users, encoder, DemoAccountBootstrap.ALLOWED_DOCKER_E2E_DATASOURCE_URL,
+                e2eEnvironment, adminPassword, false);
+
+        e2e.run(null);
+
+        verify(users).saveAndFlush(any(User.class));
+    }
+
+    @Test
+    void rejectsMissingUnknownAndMismatchedDatasourceModesBeforeRepositoryAccess() {
+        MockEnvironment missingMode = new MockEnvironment();
+        missingMode.setActiveProfiles("e2e");
+        MockEnvironment unknownMode = new MockEnvironment();
+        unknownMode.setActiveProfiles("e2e");
+        unknownMode.setProperty("e2e.datasource.mode", "remote");
+        MockEnvironment hostModeWithDockerUrl = new MockEnvironment();
+        hostModeWithDockerUrl.setActiveProfiles("e2e");
+        hostModeWithDockerUrl.setProperty("e2e.datasource.mode", "host-loopback");
+        MockEnvironment dockerModeWithHostUrl = new MockEnvironment();
+        dockerModeWithHostUrl.setActiveProfiles("e2e");
+        dockerModeWithHostUrl.setProperty("e2e.datasource.mode", "docker-network");
+
+        for (MockEnvironment candidate : new MockEnvironment[]{
+                missingMode, unknownMode, hostModeWithDockerUrl, dockerModeWithHostUrl}) {
+            String url = candidate == hostModeWithDockerUrl
+                    ? DemoAccountBootstrap.ALLOWED_DOCKER_E2E_DATASOURCE_URL
+                    : DemoAccountBootstrap.ALLOWED_E2E_DATASOURCE_URL;
+            DemoAccountBootstrap unsafe = new DemoAccountBootstrap(
+                    users, encoder, url, candidate, adminPassword, false);
+
+            assertThatThrownBy(() -> unsafe.run(null))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("approved profile and datasource");
+        }
+
+        verifyNoInteractions(users);
+    }
+
+    @Test
     void e2eBootstrapRejectsNonExactDatabaseTargetsBeforeRepositoryAccess() {
         MockEnvironment e2eEnvironment = new MockEnvironment();
         e2eEnvironment.setActiveProfiles("e2e");
+        e2eEnvironment.setProperty("e2e.datasource.mode", "host-loopback");
         for (String datasource : new String[] {
                 "jdbc:postgresql://localhost:15433/ethioloadai_e2e",
                 "jdbc:postgresql://127.0.0.1:15432/ethioloadai_e2e",
                 "jdbc:postgresql://127.0.0.1:15433/other_database",
                 "jdbc:postgresql://127.0.0.1:5433/ethioloadai_e2e",
-                "jdbc:postgresql://db.example.test:15433/ethioloadai_e2e"
+                "jdbc:postgresql://localhost:5432/ethioloadai_e2e",
+                "jdbc:postgresql://ethioloadai-e2e-db:5433/ethioloadai_e2e",
+                "jdbc:postgresql://db.example.test:15433/ethioloadai_e2e",
+                "jdbc:postgresql://ethioloadai-e2e-db:5432/other_database",
+                "jdbc:postgresql://ethioloadai-e2e-db:5432/ethioloadai_e2e?sslmode=disable"
         }) {
             DemoAccountBootstrap unsafe = new DemoAccountBootstrap(
                     users, encoder, datasource, e2eEnvironment, adminPassword, true);
+
+            assertThatThrownBy(() -> unsafe.run(null))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("approved profile and datasource");
+        }
+
+        verifyNoInteractions(users);
+    }
+
+    @Test
+    void dockerNetworkModeRejectsNonExactDatabaseTargetsBeforeRepositoryAccess() {
+        MockEnvironment e2eEnvironment = new MockEnvironment();
+        e2eEnvironment.setActiveProfiles("e2e");
+        e2eEnvironment.setProperty("e2e.datasource.mode", "docker-network");
+        for (String datasource : new String[] {
+                "jdbc:postgresql://localhost:5432/ethioloadai_e2e",
+                "jdbc:postgresql://ethioloadai-e2e-db:5433/ethioloadai_e2e",
+                "jdbc:postgresql://ethioloadai-e2e-db:5432/other_database",
+                "jdbc:postgresql://db.example.test:5432/ethioloadai_e2e",
+                "jdbc:postgresql://ethioloadai-e2e-db:5432/ethioloadai_e2e?sslmode=disable"
+        }) {
+            DemoAccountBootstrap unsafe = new DemoAccountBootstrap(
+                    users, encoder, datasource, e2eEnvironment, adminPassword, false);
 
             assertThatThrownBy(() -> unsafe.run(null))
                     .isInstanceOf(IllegalStateException.class)
@@ -466,6 +578,51 @@ class DemoAccountBootstrapTest {
         assertThatThrownBy(() -> unsafe.run(null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("approved profile and datasource");
+        verifyNoInteractions(users);
+    }
+
+    @Test
+    void productionProfileIsRejected() {
+        MockEnvironment prodEnvironment = new MockEnvironment();
+        prodEnvironment.setActiveProfiles("prod");
+        prodEnvironment.setProperty("e2e.datasource.mode", "host-loopback");
+        DemoAccountBootstrap unsafe = new DemoAccountBootstrap(
+                users, encoder, DemoAccountBootstrap.ALLOWED_E2E_DATASOURCE_URL,
+                prodEnvironment, adminPassword, false);
+
+        assertThatThrownBy(() -> unsafe.run(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("approved profile and datasource");
+        verifyNoInteractions(users);
+    }
+
+    @Test
+    void e2eBootstrapRejectsAdditionalActiveProfiles() {
+        MockEnvironment mixedEnvironment = new MockEnvironment();
+        mixedEnvironment.setActiveProfiles("e2e", "dev");
+        mixedEnvironment.setProperty("e2e.datasource.mode", "docker-network");
+        DemoAccountBootstrap unsafe = new DemoAccountBootstrap(
+                users, encoder, DemoAccountBootstrap.ALLOWED_DOCKER_E2E_DATASOURCE_URL,
+                mixedEnvironment, adminPassword, false);
+
+        assertThatThrownBy(() -> unsafe.run(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("approved profile and datasource");
+        verifyNoInteractions(users);
+    }
+
+    @Test
+    void passwordRotationRemainsRestrictedToTheHostLoopbackE2eDatasource() {
+        MockEnvironment dockerEnvironment = new MockEnvironment();
+        dockerEnvironment.setActiveProfiles("e2e");
+        dockerEnvironment.setProperty("e2e.datasource.mode", "docker-network");
+        DemoAccountBootstrap rotatingAdmin = new DemoAccountBootstrap(
+                users, encoder, DemoAccountBootstrap.ALLOWED_DOCKER_E2E_DATASOURCE_URL,
+                dockerEnvironment, adminPassword, true);
+
+        assertThatThrownBy(() -> rotatingAdmin.run(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("host-loopback E2E datasource");
         verifyNoInteractions(users);
     }
 

@@ -6,7 +6,7 @@ import com.ethioloadai.carrier.offer.dto.NegotiationEntryResponse;
 import com.ethioloadai.carrier.offer.dto.SubmitOfferRequest;
 import com.ethioloadai.carrier.offer.service.CarrierOfferService;
 import com.ethioloadai.freight.dto.FreightFilterRequest;
-import com.ethioloadai.freight.dto.FreightResponse;
+import com.ethioloadai.freight.dto.MarketplaceFreightResponse;
 import com.ethioloadai.freight.service.FreightService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -19,6 +19,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import com.ethioloadai.user.entity.User;
@@ -69,17 +70,20 @@ public class CarrierOfferController {
     @GetMapping("/carrier-companies/{companyId}/available-freight")
     @PreAuthorize("@companySecurity.isMemberOf(#companyId, authentication)")
     @Operation(summary = "Browse posted freight available to an active company member")
-    public ResponseEntity<Page<FreightResponse>> listAvailableFreight(
+    public ResponseEntity<Page<MarketplaceFreightResponse>> listAvailableFreight(
             @PathVariable Long companyId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            Authentication authentication) {
         FreightFilterRequest filter = FreightFilterRequest.builder()
                 .status("posted")
                 .bidsOpen(true)
                 .build();
         Pageable pageable = PageRequest.of(Math.max(0, page), Math.max(1, Math.min(size, MAX_PAGE_SIZE)),
                 Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
-        return ResponseEntity.ok(freightService.searchFreightsPaged(filter, pageable));
+        User caller = (User) authentication.getPrincipal();
+        return ResponseEntity.ok(freightService.searchAvailableCarrierFreight(
+                companyId, filter, pageable, caller));
     }
 
     // ════════════════════════════════════════════════════════════════════════════
@@ -185,7 +189,7 @@ public class CarrierOfferController {
             @PathVariable Long companyId,
             @PathVariable Long offerId,
             @AuthenticationPrincipal User caller) {
-        return ResponseEntity.ok(offerService.getOffer(offerId, caller));
+        return ResponseEntity.ok(offerService.getOfferForCompany(companyId, offerId, caller));
     }
 
     /**
@@ -198,7 +202,8 @@ public class CarrierOfferController {
             @PathVariable Long companyId,
             @PathVariable Long offerId,
             @AuthenticationPrincipal User caller) {
-        return ResponseEntity.ok(offerService.getNegotiationHistory(offerId, caller));
+        return ResponseEntity.ok(
+                offerService.getNegotiationHistoryForCompany(companyId, offerId, caller));
     }
 
     // ════════════════════════════════════════════════════════════════════════════
@@ -228,7 +233,7 @@ public class CarrierOfferController {
             @PathVariable Long freightId,
             @PathVariable Long offerId,
             @AuthenticationPrincipal User caller) {
-        return ResponseEntity.ok(offerService.getOffer(offerId, caller));
+        return ResponseEntity.ok(offerService.getOfferForFreight(freightId, offerId, caller));
     }
 
     /**
@@ -282,6 +287,7 @@ public class CarrierOfferController {
             @PathVariable Long freightId,
             @PathVariable Long offerId,
             @AuthenticationPrincipal User caller) {
-        return ResponseEntity.ok(offerService.getNegotiationHistory(offerId, caller));
+        return ResponseEntity.ok(
+                offerService.getNegotiationHistoryForFreight(freightId, offerId, caller));
     }
 }

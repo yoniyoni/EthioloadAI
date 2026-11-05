@@ -28,7 +28,9 @@ import com.ethioloadai.carrier.team.service.CompanyContext;
 import com.ethioloadai.carrier.team.service.CompanyContextService;
 import com.ethioloadai.freight.entity.Freight;
 import com.ethioloadai.freight.repository.FreightRepository;
+import com.ethioloadai.freight.service.FreightVisibilityProperties;
 import com.ethioloadai.notification.service.NotificationStoreService;
+import com.ethioloadai.trip.repository.TripRepository;
 import com.ethioloadai.user.entity.User;
 import com.ethioloadai.user.repository.UserRepository;
 import com.ethioloadai.vehicle.entity.Vehicle;
@@ -41,6 +43,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -67,6 +72,8 @@ class CarrierOfferServiceTest {
     @Mock CarrierOfferRepository offerRepo;
     @Mock OfferNegotiationEntryRepository historyRepo;
     @Mock FreightRepository freightRepo;
+    @Mock TripRepository tripRepository;
+    @Mock FreightVisibilityProperties visibilityProperties;
     @Mock CarrierCompanyRepository companyRepo;
     @Mock CompanyMembershipRepository membershipRepo;
     @Mock CompanyContextService companyContextService;
@@ -181,6 +188,8 @@ class CarrierOfferServiceTest {
                     offerRequest(new BigDecimal("44000"), null));
 
             assertThat(resp.status()).isEqualTo(OfferStatus.PENDING);
+            assertThat(resp.currentAmount()).isNull();
+            assertThat(resp.agreedAmount()).isNull();
         }
 
         @Test @DisplayName("FLEET_MANAGER denied from submitting offer")
@@ -728,7 +737,282 @@ class CarrierOfferServiceTest {
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // 6 — Negotiation history
+    // 6 — Freight offer privacy
+    // ════════════════════════════════════════════════════════════════════════════
+
+    @Nested @DisplayName("Freight Offer Privacy")
+    class FreightOfferPrivacyTests {
+
+        @Test @DisplayName("Carrier with its own offer sees no route before award")
+        void carrierSeesOwnOfferWithoutPrivateRoute() {
+            CarrierOffer ownOffer = pendingOffer(1L, abcCompany, negotiableFreight,
+                    new BigDecimal("45000"), ActorType.SHIPPER);
+            CarrierOffer competingOffer = pendingOffer(2L, xyzCompany, negotiableFreight,
+                    new BigDecimal("46000"), ActorType.SHIPPER);
+            CompanyMembership membership = new CompanyMembership();
+            membership.setCarrierCompanyId(10L);
+            membership.setUserId(abcOwner.getId());
+            membership.setRole(CompanyRole.CARRIER_OWNER);
+            membership.setStatus(MembershipStatus.ACTIVE);
+
+            when(freightRepo.findById(100L)).thenReturn(Optional.of(negotiableFreight));
+            when(offerRepo.findByFreightId(100L)).thenReturn(List.of(ownOffer, competingOffer));
+            when(membershipRepo.findActiveByUserId(abcOwner.getId())).thenReturn(List.of(membership));
+            when(membershipRepo.findByCarrierCompanyIdAndUserId(10L, abcOwner.getId()))
+                    .thenReturn(Optional.of(membership));
+            when(historyRepo.findByCarrierOfferIdOrderByCreatedAtAsc(1L)).thenReturn(List.of());
+
+            List<CarrierOfferResponse> responses = service.getOffersForFreight(100L, abcOwner);
+
+            assertThat(responses).hasSize(2);
+            assertThat(responses.get(0).freightPickupLocation()).isNull();
+            assertThat(responses.get(0).freightDestination()).isNull();
+            assertThat(responses.get(1).freightPickupLocation()).isNull();
+            assertThat(responses.get(1).freightDestination()).isNull();
+            assertThat(responses.get(1).proposedDriverUserId()).isNull();
+        }
+
+        @Test @DisplayName("Awarded carrier sees route while freight is operational")
+        void awardedCarrierSeesOperationalRoute() {
+            CarrierOffer acceptedOffer = acceptedOffer(1L, abcCompany, negotiableFreight,
+                    new BigDecimal("45000"));
+            CompanyMembership membership = new CompanyMembership();
+            membership.setCarrierCompanyId(10L);
+            membership.setUserId(abcOwner.getId());
+            membership.setRole(CompanyRole.CARRIER_OWNER);
+            membership.setStatus(MembershipStatus.ACTIVE);
+
+            when(freightRepo.findById(100L)).thenReturn(Optional.of(negotiableFreight));
+            when(offerRepo.findByFreightId(100L)).thenReturn(List.of(acceptedOffer));
+            when(membershipRepo.findActiveByUserId(abcOwner.getId())).thenReturn(List.of(membership));
+            when(membershipRepo.findByCarrierCompanyIdAndUserId(10L, abcOwner.getId()))
+                    .thenReturn(Optional.of(membership));
+            when(historyRepo.findByCarrierOfferIdOrderByCreatedAtAsc(1L)).thenReturn(List.of());
+
+            CarrierOfferResponse response = service.getOffersForFreight(100L, abcOwner).get(0);
+
+            assertThat(response.freightPickupLocation()).isEqualTo("Addis Ababa");
+            assertThat(response.freightDestination()).isEqualTo("Dire Dawa");
+        }
+
+        @Test @DisplayName("Dispatcher offer detail redacts amounts in offer and negotiation history")
+        void dispatcherOfferDetailRedactsFinancialFields() {
+            CarrierOffer acceptedOffer = acceptedOffer(1L, abcCompany, negotiableFreight,
+                    new BigDecimal("45000"));
+            CompanyMembership membership = new CompanyMembership();
+            membership.setCarrierCompanyId(10L);
+            membership.setUserId(abcDispatcher.getId());
+            membership.setRole(CompanyRole.DISPATCHER);
+            membership.setStatus(MembershipStatus.ACTIVE);
+            OfferNegotiationEntry entry = historyEntry(
+                    1L, acceptedOffer, ActorType.CARRIER,
+                    OfferNegotiationEntry.NegotiationAction.OFFER, new BigDecimal("45000"));
+
+            when(offerRepo.findByIdEager(1L)).thenReturn(Optional.of(acceptedOffer));
+            when(membershipRepo.findByCarrierCompanyIdAndUserId(10L, abcDispatcher.getId()))
+                    .thenReturn(Optional.of(membership));
+            when(historyRepo.findByCarrierOfferIdOrderByCreatedAtAsc(1L)).thenReturn(List.of(entry));
+            when(tripRepository.findByFreightIdOrderByEndTimeDesc(100L)).thenReturn(List.of());
+
+            CarrierOfferResponse response = service.getOffer(1L, abcDispatcher);
+
+            assertThat(response.currentAmount()).isNull();
+            assertThat(response.agreedAmount()).isNull();
+            assertThat(response.negotiationHistory()).singleElement()
+                    .extracting(com.ethioloadai.carrier.offer.dto.NegotiationEntryResponse::amount)
+                    .isNull();
+        }
+
+        @Test @DisplayName("Dispatcher negotiation-history endpoint redacts amounts")
+        void dispatcherNegotiationHistoryRedactsAmounts() {
+            CarrierOffer offer = pendingOffer(1L, abcCompany, negotiableFreight,
+                    new BigDecimal("45000"), ActorType.SHIPPER);
+            CompanyMembership membership = new CompanyMembership();
+            membership.setCarrierCompanyId(10L);
+            membership.setUserId(abcDispatcher.getId());
+            membership.setRole(CompanyRole.DISPATCHER);
+            membership.setStatus(MembershipStatus.ACTIVE);
+            OfferNegotiationEntry entry = historyEntry(
+                    1L, offer, ActorType.CARRIER,
+                    OfferNegotiationEntry.NegotiationAction.OFFER, new BigDecimal("45000"));
+
+            when(offerRepo.findByIdEager(1L)).thenReturn(Optional.of(offer));
+            when(membershipRepo.findByCarrierCompanyIdAndUserId(10L, abcDispatcher.getId()))
+                    .thenReturn(Optional.of(membership));
+            when(historyRepo.findByCarrierOfferIdOrderByCreatedAtAsc(1L)).thenReturn(List.of(entry));
+            when(tripRepository.findByFreightIdOrderByEndTimeDesc(100L)).thenReturn(List.of());
+
+            var history = service.getNegotiationHistory(1L, abcDispatcher);
+
+            assertThat(history).singleElement()
+                    .extracting(com.ethioloadai.carrier.offer.dto.NegotiationEntryResponse::amount)
+                    .isNull();
+        }
+
+        @Test @DisplayName("Awarded carrier route is hidden after configured history window")
+        void awardedCarrierRouteExpiresAfterConfiguredHistoryWindow() {
+            CarrierOffer acceptedOffer = acceptedOffer(1L, abcCompany, negotiableFreight,
+                    new BigDecimal("45000"));
+            negotiableFreight.setStatus(Freight.FreightStatus.COMPLETED);
+            CompanyMembership membership = new CompanyMembership();
+            membership.setCarrierCompanyId(10L);
+            membership.setUserId(abcOwner.getId());
+            membership.setStatus(MembershipStatus.ACTIVE);
+            when(freightRepo.findById(100L)).thenReturn(Optional.of(negotiableFreight));
+            when(offerRepo.findByFreightId(100L)).thenReturn(List.of(acceptedOffer));
+            when(membershipRepo.findActiveByUserId(abcOwner.getId())).thenReturn(List.of(membership));
+            when(historyRepo.findByCarrierOfferIdOrderByCreatedAtAsc(1L)).thenReturn(List.of());
+            when(tripRepository.findByFreightIdOrderByEndTimeDesc(100L)).thenReturn(List.of(
+                    com.ethioloadai.trip.entity.Trip.builder()
+                            .endTime(LocalDateTime.now().minusDays(91))
+                            .build()));
+            when(visibilityProperties.getCarrierHistoryDays()).thenReturn(90L);
+
+            assertThatThrownBy(() -> service.getOffersForFreight(100L, abcOwner))
+                    .isInstanceOf(CarrierOfferException.class)
+                    .hasMessageContaining("Freight not found");
+            verify(historyRepo, never()).findByCarrierOfferIdOrderByCreatedAtAsc(1L);
+        }
+
+        @Test
+        void expiredCarrierOfferDetailIsDeniedRatherThanOnlyRedacted() {
+            CarrierOffer acceptedOffer = acceptedOffer(1L, abcCompany, negotiableFreight,
+                    new BigDecimal("45000"));
+            negotiableFreight.setStatus(Freight.FreightStatus.COMPLETED);
+            activeMembershipFor(abcOwner, 10L);
+            when(offerRepo.findByIdEager(1L)).thenReturn(Optional.of(acceptedOffer));
+            when(membershipRepo.findByCarrierCompanyIdAndUserId(10L, abcOwner.getId()))
+                    .thenReturn(Optional.of(activeMembership(abcOwner, 10L)));
+            when(tripRepository.findByFreightIdOrderByEndTimeDesc(100L)).thenReturn(List.of(
+                    com.ethioloadai.trip.entity.Trip.builder()
+                            .endTime(LocalDateTime.now().minusDays(91))
+                            .build()));
+            when(visibilityProperties.getCarrierHistoryDays()).thenReturn(90L);
+
+            assertThatThrownBy(() -> service.getOffer(1L, abcOwner))
+                    .isInstanceOf(CarrierOfferException.class);
+            verify(historyRepo, never()).findByCarrierOfferIdOrderByCreatedAtAsc(1L);
+        }
+
+        @Test
+        void completedTripExpiresOfferEvenWhenFreightStatusIsStale() {
+            CarrierOffer acceptedOffer = acceptedOffer(1L, abcCompany, negotiableFreight,
+                    new BigDecimal("45000"));
+            negotiableFreight.setStatus(Freight.FreightStatus.IN_TRANSIT);
+            when(offerRepo.findByIdEager(1L)).thenReturn(Optional.of(acceptedOffer));
+            when(membershipRepo.findByCarrierCompanyIdAndUserId(10L, abcOwner.getId()))
+                    .thenReturn(Optional.of(activeMembership(abcOwner, 10L)));
+            when(tripRepository.findByFreightIdOrderByEndTimeDesc(100L)).thenReturn(List.of(
+                    com.ethioloadai.trip.entity.Trip.builder()
+                            .tripStatus(com.ethioloadai.trip.entity.Trip.TripStatus.COMPLETED)
+                            .endTime(LocalDateTime.now().minusDays(91))
+                            .build()));
+            when(visibilityProperties.getCarrierHistoryDays()).thenReturn(90L);
+
+            assertThatThrownBy(() -> service.getOffer(1L, abcOwner))
+                    .isInstanceOf(CarrierOfferException.class);
+            verify(historyRepo, never()).findByCarrierOfferIdOrderByCreatedAtAsc(1L);
+        }
+
+        @Test
+        void expiredNegotiationHistoryIsDenied() {
+            CarrierOffer acceptedOffer = acceptedOffer(1L, abcCompany, negotiableFreight,
+                    new BigDecimal("45000"));
+            negotiableFreight.setStatus(Freight.FreightStatus.COMPLETED);
+            when(offerRepo.findByIdEager(1L)).thenReturn(Optional.of(acceptedOffer));
+            when(membershipRepo.findByCarrierCompanyIdAndUserId(10L, abcOwner.getId()))
+                    .thenReturn(Optional.of(activeMembership(abcOwner, 10L)));
+            when(tripRepository.findByFreightIdOrderByEndTimeDesc(100L)).thenReturn(List.of(
+                    com.ethioloadai.trip.entity.Trip.builder()
+                            .endTime(LocalDateTime.now().minusDays(91))
+                            .build()));
+            when(visibilityProperties.getCarrierHistoryDays()).thenReturn(90L);
+
+            assertThatThrownBy(() -> service.getNegotiationHistory(1L, abcOwner))
+                    .isInstanceOf(CarrierOfferException.class);
+            verify(historyRepo, never()).findByCarrierOfferIdOrderByCreatedAtAsc(1L);
+        }
+
+        @Test
+        void offerIdentifierCannotCrossFreightOrCompanyPathScope() {
+            when(companyContextService.resolveForCompany(20L, xyzOwner))
+                    .thenReturn(new CompanyContext(activeMembership(xyzOwner, 20L), xyzCompany));
+            when(offerRepo.findByIdAndCarrierCompanyId(1L, 20L)).thenReturn(Optional.empty());
+            when(offerRepo.findByIdAndFreightId(1L, 999L)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.getOfferForCompany(20L, 1L, xyzOwner))
+                    .isInstanceOf(CarrierOfferException.class);
+            assertThatThrownBy(() -> service.getOfferForFreight(999L, 1L, shipper))
+                    .isInstanceOf(CarrierOfferException.class);
+            verify(offerRepo, never()).findByIdEager(1L);
+        }
+
+        @Test
+        void inactiveCompanyMembershipCannotReadOfferArchive() {
+            when(companyContextService.resolveForCompany(10L, abcOwner))
+                    .thenThrow(CarrierOfferException.forbidden());
+
+            assertThatThrownBy(() -> service.getCompanyOffers(
+                    10L, abcOwner, PageRequest.of(0, 20)))
+                    .isInstanceOf(CarrierOfferException.class);
+            verify(offerRepo, never()).findVisibleByCarrierCompanyId(
+                    anyLong(), any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
+        void companyOfferArchiveUsesHistoryFilteredRepositoryQuery() {
+            when(companyContextService.resolveForCompany(10L, abcOwner))
+                    .thenReturn(new CompanyContext(activeMembership(abcOwner, 10L), abcCompany));
+            when(visibilityProperties.getCarrierHistoryDays()).thenReturn(90L);
+            when(offerRepo.findVisibleByCarrierCompanyId(
+                    eq(10L), eq(Freight.FreightStatus.COMPLETED),
+                    eq(Freight.FreightStatus.CANCELLED),
+                    eq(com.ethioloadai.trip.entity.Trip.TripStatus.COMPLETED),
+                    any(LocalDateTime.class),
+                    any(LocalDateTime.class), any(Pageable.class)))
+                    .thenReturn(Page.empty(PageRequest.of(0, 20)));
+
+            service.getCompanyOffers(10L, abcOwner, PageRequest.of(0, 20));
+
+            verify(offerRepo).findVisibleByCarrierCompanyId(
+                    eq(10L), eq(Freight.FreightStatus.COMPLETED),
+                    eq(Freight.FreightStatus.CANCELLED),
+                    eq(com.ethioloadai.trip.entity.Trip.TripStatus.COMPLETED),
+                    any(LocalDateTime.class),
+                    any(LocalDateTime.class), any(Pageable.class));
+            verify(offerRepo, never()).findByCarrierCompanyId(eq(10L), any(Pageable.class));
+        }
+
+        @Test @DisplayName("Carrier without an offer cannot enumerate competing offers")
+        void carrierWithoutOfferCannotViewOffers() {
+            User unrelatedCarrier = user(98L, User.Role.SHIPPER);
+            CarrierOffer existingOffer = pendingOffer(1L, abcCompany, negotiableFreight,
+                    new BigDecimal("45000"), ActorType.SHIPPER);
+            when(freightRepo.findById(100L)).thenReturn(Optional.of(negotiableFreight));
+            when(offerRepo.findByFreightId(100L)).thenReturn(List.of(existingOffer));
+            when(membershipRepo.findActiveByUserId(unrelatedCarrier.getId())).thenReturn(List.of());
+
+            assertThatThrownBy(() -> service.getOffersForFreight(100L, unrelatedCarrier))
+                    .isInstanceOf(CarrierOfferException.class);
+        }
+
+        private CompanyMembership activeMembership(User user, Long companyId) {
+            CompanyMembership membership = new CompanyMembership();
+            membership.setCarrierCompanyId(companyId);
+            membership.setUserId(user.getId());
+            membership.setRole(CompanyRole.CARRIER_OWNER);
+            membership.setStatus(MembershipStatus.ACTIVE);
+            return membership;
+        }
+
+        private void activeMembershipFor(User user, Long companyId) {
+            when(membershipRepo.findActiveByUserId(user.getId()))
+                    .thenReturn(List.of(activeMembership(user, companyId)));
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // 7 — Negotiation history
     // ════════════════════════════════════════════════════════════════════════════
 
     @Nested @DisplayName("Negotiation History")
@@ -777,7 +1061,7 @@ class CarrierOfferServiceTest {
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-    // 7 — Money validation
+    // 8 — Money validation
     // ════════════════════════════════════════════════════════════════════════════
 
     @Nested @DisplayName("Money Validation")
