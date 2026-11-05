@@ -6,6 +6,7 @@ import com.ethioloadai.carrier.company.exception.CarrierCompanyException;
 import com.ethioloadai.carrier.company.mapper.CarrierCompanyMapper;
 import com.ethioloadai.carrier.company.repository.*;
 import com.ethioloadai.document.storage.DocumentStorage;
+import com.ethioloadai.document.storage.DocumentStorageObjectNotFoundException;
 import com.ethioloadai.exception.AuthorizationException;
 import com.ethioloadai.user.entity.User;
 import lombok.RequiredArgsConstructor;
@@ -164,6 +165,8 @@ public class CarrierCompanyServiceImpl implements CarrierCompanyService {
             .orElseThrow(CarrierCompanyException::missing);
         try {
             return storage.get(document.getStorageKey(), document.getOriginalName(), document.getContentType());
+        } catch (DocumentStorageObjectNotFoundException ex) {
+            throw CarrierCompanyException.missing();
         } catch (RuntimeException ex) {
             throw new CarrierCompanyException("Company document is temporarily unavailable", "CARRIER_STORAGE_ERROR", 503);
         }

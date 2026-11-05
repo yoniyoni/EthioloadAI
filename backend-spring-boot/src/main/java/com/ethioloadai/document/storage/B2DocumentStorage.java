@@ -7,11 +7,15 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 
 import java.io.IOException;
 
-public class B2DocumentStorage implements DocumentStorage {
+public class B2DocumentStorage implements DocumentStorage, AutoCloseable {
     private final S3Client client;
     private final String bucket;
 
@@ -27,11 +31,31 @@ public class B2DocumentStorage implements DocumentStorage {
 
     @Override
     public StoredDocument get(String objectKey, String filename, String contentType) {
-        ResponseBytes<GetObjectResponse> bytes = client.getObjectAsBytes(GetObjectRequest.builder().bucket(bucket).key(objectKey).build());
-        String resolvedType = bytes.response().contentType() == null ? contentType : bytes.response().contentType();
-        return new StoredDocument(new ByteArrayResource(bytes.asByteArray()), filename, resolvedType);
+        try {
+            ResponseBytes<GetObjectResponse> bytes = client.getObjectAsBytes(
+                    GetObjectRequest.builder().bucket(bucket).key(objectKey).build());
+            String resolvedType = bytes.response().contentType() == null ? contentType : bytes.response().contentType();
+            return new StoredDocument(new ByteArrayResource(bytes.asByteArray()), filename, resolvedType);
+        } catch (S3Exception e) {
+            if (e instanceof NoSuchKeyException
+                    || (e.awsErrorDetails() != null && "NoSuchKey".equals(e.awsErrorDetails().errorCode()))) {
+                throw new DocumentStorageObjectNotFoundException(objectKey);
+            }
+            throw e;
+        }
     }
 
     @Override
-    public void delete(String objectKey) { client.deleteObject(builder -> builder.bucket(bucket).key(objectKey)); }
+    public boolean exists(String objectKey) {
+        client.headObject(HeadObjectRequest.builder().bucket(bucket).key(objectKey).build());
+        return true;
+    }
+
+    @Override
+    public void delete(String objectKey) {
+        client.deleteObject(DeleteObjectRequest.builder().bucket(bucket).key(objectKey).build());
+    }
+
+    @Override
+    public void close() { client.close(); }
 }

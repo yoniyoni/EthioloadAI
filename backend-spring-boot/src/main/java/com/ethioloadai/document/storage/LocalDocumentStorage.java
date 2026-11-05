@@ -24,16 +24,31 @@ public class LocalDocumentStorage implements DocumentStorage {
     @Override
     public StoredDocument get(String objectKey, String filename, String contentType) {
         Resource resource = new FileSystemResource(resolve(objectKey));
-        if (!resource.exists() || !resource.isReadable()) throw new IllegalStateException("Document object not found");
+        if (!resource.exists() || !resource.isReadable()) {
+            throw new DocumentStorageObjectNotFoundException(objectKey);
+        }
         return new StoredDocument(resource, filename, contentType);
     }
 
     @Override
+    public boolean exists(String objectKey) {
+        Path path = resolve(objectKey);
+        return Files.isRegularFile(path) && Files.isReadable(path);
+    }
+
+    @Override
     public void delete(String objectKey) {
-        try { Files.deleteIfExists(resolve(objectKey)); } catch (IOException ignored) { }
+        try {
+            Files.deleteIfExists(resolve(objectKey));
+        } catch (IOException e) {
+            throw new IllegalStateException("Unable to delete document object", e);
+        }
     }
 
     private Path resolve(String objectKey) {
+        if (objectKey == null || objectKey.isBlank()) {
+            throw new IllegalArgumentException("Invalid document object key");
+        }
         Path resolved = root.resolve(objectKey).normalize();
         if (!resolved.startsWith(root)) throw new IllegalArgumentException("Invalid document object key");
         return resolved;

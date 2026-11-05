@@ -7,6 +7,7 @@ import com.ethioloadai.document.entity.DriverDocument.DocumentType;
 import com.ethioloadai.document.exception.DocumentException;
 import com.ethioloadai.document.repository.DriverDocumentRepository;
 import com.ethioloadai.document.storage.DocumentStorage;
+import com.ethioloadai.document.storage.DocumentStorageObjectNotFoundException;
 import com.ethioloadai.user.entity.User;
 import com.ethioloadai.user.repository.UserRepository;
 import jakarta.persistence.EntityManager;
@@ -396,6 +397,8 @@ public class DriverDocumentServiceImpl implements DriverDocumentService {
         try {
             stored = documentStorage.get(objectKey, filename,
                     document.getMimeType() == null ? "application/octet-stream" : document.getMimeType());
+        } catch (DocumentStorageObjectNotFoundException e) {
+            throw new DocumentException.DocumentNotFoundException("Document not found on storage: " + documentId);
         } catch (IllegalStateException e) {
             if (!"Document object not found".equals(e.getMessage())) throw e;
             throw new DocumentException.DocumentNotFoundException("Document not found on storage: " + documentId);

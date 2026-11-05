@@ -9,6 +9,7 @@ import com.ethioloadai.delivery.entity.ProofOfDelivery.ProofStatus;
 import com.ethioloadai.delivery.exception.ProofOfDeliveryException;
 import com.ethioloadai.delivery.repository.ProofOfDeliveryRepository;
 import com.ethioloadai.document.storage.DocumentStorage;
+import com.ethioloadai.document.storage.DocumentStorageObjectNotFoundException;
 import com.ethioloadai.freight.entity.Freight;
 import com.ethioloadai.notification.service.NotificationStoreService;
 import com.ethioloadai.settlement.service.SettlementOutboxService;
@@ -247,7 +248,11 @@ public class ProofOfDeliveryServiceImpl implements ProofOfDeliveryService {
 
         authorizeProofAccess(proof, caller);
 
-        return documentStorage.get(proof.getStorageKey(), proof.getFileName(), proof.getContentType());
+        try {
+            return documentStorage.get(proof.getStorageKey(), proof.getFileName(), proof.getContentType());
+        } catch (DocumentStorageObjectNotFoundException e) {
+            throw ProofOfDeliveryException.notFound(proofId);
+        }
     }
 
     // ── Get proof metadata ────────────────────────────────────────────────────

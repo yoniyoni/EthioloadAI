@@ -11,12 +11,15 @@ import com.ethioloadai.vehicle.document.repository.VehicleDocumentRepository;
 import com.ethioloadai.vehicle.entity.Vehicle;
 import com.ethioloadai.vehicle.repository.VehicleRepository;
 import com.ethioloadai.document.storage.DocumentStorage;
+import com.ethioloadai.document.storage.DocumentStorageObjectNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -97,6 +100,7 @@ public class VehicleDocumentServiceImpl implements VehicleDocumentService {
         VehicleDocument existing = vehicleDocumentRepository.findByVehicle_IdAndDocumentType(vehicleId, documentType).orElse(null);
         String previousObjectKey = existing != null ? existing.getFilePath() : null;
         String objectKey = "vehicle-documents/" + vehicleId + "/" + documentType.name().toLowerCase(Locale.ROOT) + "/" + UUID.randomUUID() + extension;
+        registerStorageCompensation(objectKey, previousObjectKey);
 
         try {
             documentStorage.put(objectKey, file);
@@ -104,37 +108,20 @@ public class VehicleDocumentServiceImpl implements VehicleDocumentService {
             throw new ValidationException("Document storage failed", "file", "Document storage failed");
         }
 
-        try {
-            VehicleDocument target = existing != null ? existing : new VehicleDocument();
-            target.setVehicle(vehicle);
-            target.setDocumentType(documentType);
-            target.setDocumentLabel(documentType.getLabel());
-            target.setFilePath(objectKey);
-            target.setOriginalName(file.getOriginalFilename() == null || file.getOriginalFilename().isBlank() ? objectKey : file.getOriginalFilename());
-            target.setMimeType(contentType);
-            target.setFileSize(file.getSize());
-            target.setStatus(VehicleDocument.DocumentStatus.PENDING);
-            target.setRejectionReason(null);
-            target.setReviewedBy(null);
-            target.setReviewedAt(null);
+        VehicleDocument target = existing != null ? existing : new VehicleDocument();
+        target.setVehicle(vehicle);
+        target.setDocumentType(documentType);
+        target.setDocumentLabel(documentType.getLabel());
+        target.setFilePath(objectKey);
+        target.setOriginalName(file.getOriginalFilename() == null || file.getOriginalFilename().isBlank() ? objectKey : file.getOriginalFilename());
+        target.setMimeType(contentType);
+        target.setFileSize(file.getSize());
+        target.setStatus(VehicleDocument.DocumentStatus.PENDING);
+        target.setRejectionReason(null);
+        target.setReviewedBy(null);
+        target.setReviewedAt(null);
 
-            VehicleDocument saved = vehicleDocumentRepository.save(target);
-            if (previousObjectKey != null && !previousObjectKey.equals(objectKey)) {
-                try {
-                    documentStorage.delete(previousObjectKey);
-                } catch (RuntimeException ignored) {
-                    log.warn("Previous vehicle document storage object could not be removed after replacement: {}", previousObjectKey);
-                }
-            }
-            return VehicleDocumentResponse.from(saved);
-        } catch (RuntimeException ex) {
-            try {
-                documentStorage.delete(objectKey);
-            } catch (RuntimeException ignored) {
-                log.warn("Vehicle document upload failed and cleanup could not remove the newly uploaded object: {}", objectKey);
-            }
-            throw ex;
-        }
+        return VehicleDocumentResponse.from(vehicleDocumentRepository.saveAndFlush(target));
     }
 
     @Override
@@ -194,8 +181,45 @@ public class VehicleDocumentServiceImpl implements VehicleDocumentService {
         try {
             DocumentStorage.StoredDocument storedDocument = documentStorage.get(document.getFilePath(), document.getOriginalName(), document.getMimeType());
             return new DocumentFile(storedDocument.resource(), storedDocument.filename(), storedDocument.contentType());
-        } catch (IllegalStateException e) {
+        } catch (DocumentStorageObjectNotFoundException e) {
             throw new AuthorizationException.ResourceNotFoundException("Vehicle document file");
+        }
+    }
+
+    private void registerStorageCompensation(String newObjectKey, String previousObjectKey) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            throw new IllegalStateException("Vehicle document upload requires an active transaction");
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_COMMITTED) {
+                    if (previousObjectKey != null && !previousObjectKey.equals(newObjectKey)) {
+                        deleteAfterCommit(previousObjectKey);
+                    }
+                } else if (status == STATUS_ROLLED_BACK) {
+                    deleteAfterRollback(newObjectKey);
+                } else {
+                    log.warn("Vehicle document transaction outcome unknown; retaining objects for reconciliation");
+                }
+            }
+        });
+    }
+
+    private void deleteAfterCommit(String objectKey) {
+        try {
+            documentStorage.delete(objectKey);
+        } catch (RuntimeException e) {
+            log.error("Committed vehicle document replacement left an obsolete object; reconciliation required");
+        }
+    }
+
+    private void deleteAfterRollback(String objectKey) {
+        try {
+            documentStorage.delete(objectKey);
+        } catch (RuntimeException e) {
+            log.error("Rolled-back vehicle document upload left an orphaned object; reconciliation required");
         }
     }
 
